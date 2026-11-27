@@ -254,7 +254,8 @@ export class Game {
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.questTracker = new QuestTracker(this);
-    this.tutorial = new TutorialUI(this, (id) => this.hud.openNpcWindow(id));
+    // The merchant's button on a quest card opens the shop inside the talk window too (npcShopPane.ts), when /admin has it on.
+    this.tutorial = new TutorialUI(this, (id) => (id === 'merchant' && this.npcDialog.shopInTalk ? this.npcDialog.openShop(id) : this.hud.openNpcWindow(id)));
     this.navigator = new NavigatorUI(this);
     this.npcDialog = new NpcDialog(this);
     this.mailUI = new MailUI(this);

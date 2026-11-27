@@ -1215,6 +1215,8 @@ export class Hud {
   closePanels(): void {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
+    // A prompt inside the merchant's shop in the talk window: Esc closes just that.
+    if (this.g.npcDialog.dismissPrompt()) return;
     if (this.detail.isOpen) return this.detail.closeDetail();
     if (this.linkPop.isOpen) return this.linkPop.close();
     this.closeChat();

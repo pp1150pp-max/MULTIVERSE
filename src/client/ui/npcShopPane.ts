@@ -409,6 +409,13 @@ export class NpcShopPane {
 
   // ------------------------------------------------------------ prompts inside the window
 
+  /** Closes an open prompt; false when none was open. */
+  dismissPrompt(): boolean {
+    if (this.modal.classList.contains('hidden')) return false;
+    this.closeModal();
+    return true;
+  }
+
   private closeModal(): void {
     this.modal.classList.add('hidden');
     this.card.replaceChildren();

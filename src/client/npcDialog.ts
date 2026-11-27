@@ -157,6 +157,23 @@ export class NpcDialog {
     }
   }
 
+  /** Whether the merchant's shop shows inside this window (/admin: talk window on and "ร้านพ่อค้าในหน้าต่างคุย" on). */
+  get shopInTalk(): boolean {
+    const t = currentBalance().npcTalk;
+    return t.on && t.shopPane;
+  }
+
+  /** Closes a prompt open inside the shop (Esc); false when there was none. */
+  dismissPrompt(): boolean {
+    return this.shopping && this.shopPane.dismissPrompt();
+  }
+
+  /** Opens this window on the merchant's shop straight away (the quest card's button). */
+  openShop(id: NpcId): void {
+    this.show(id);
+    this.enterShop(id, 'buy');
+  }
+
   /** "ซื้อ/ขายของ": the window grows into the merchant's shop (owner 2026-11-27, layout A). */
   private enterShop(id: NpcId, tab: 'buy' | 'bb'): void {
     this.g.hud.openShopInTalk();
