@@ -421,6 +421,12 @@ export class Db {
     if (!cols.includes('vip_until')) this.db.exec('ALTER TABLE accounts ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('trade_day')) this.db.exec('ALTER TABLE accounts ADD COLUMN trade_day INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('trade_n')) this.db.exec('ALTER TABLE accounts ADD COLUMN trade_n INTEGER NOT NULL DEFAULT 0');
+    // When the username was last changed by its owner (server/account-api.ts, once per N days); NULL = never.
+    if (!cols.includes('username_changed_at')) this.db.exec('ALTER TABLE accounts ADD COLUMN username_changed_at INTEGER');
+    // When a login token came from a Google login (ms); NULL = a password login. Lets a fresh Google login set a new password.
+    if (!(this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).some((c) => c.name === 'google_at')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN google_at INTEGER');
+    }
     // Cards listed before the market's "การ์ด" category (owner 2026-11-25) were filed under blacksmith stones: move them over.
     this.db.exec("UPDATE market_listings SET kind = 'card' WHERE kind = 'stone' AND json_extract(entry, '$.stone') LIKE 'card\\_%' ESCAPE '\\'");
     // Every cash shop purchase (also what the per-account limits count).
@@ -964,6 +970,11 @@ export class Db {
     return this.db.prepare('DELETE FROM account_google WHERE account_id = ?').run(accountId).changes > 0;
   }
 
+  /** Ids of every account that can log in with a password (the admin accounts table's 🔑). */
+  passwordAccounts(): Set<number> {
+    return new Set((this.db.prepare("SELECT id FROM accounts WHERE is_guest = 0 AND pass_hash LIKE 'scrypt$%'").all() as { id: number }[]).map((r) => r.id));
+  }
+
   /** True when the account can log in with a password (Google-only accounts and guests have none). */
   hasPassword(accountId: number): boolean {
     const r = this.db.prepare('SELECT pass_hash FROM accounts WHERE id = ?').get(accountId) as { pass_hash: string } | undefined;
@@ -1069,8 +1080,62 @@ export class Db {
 
   // ------------------------------------------------------------ sessions
 
-  createSession(token: string, accountId: number, expiresAt: number): void {
-    this.db.prepare('INSERT INTO sessions (token, account_id, expires_at) VALUES (?, ?, ?)').run(token, accountId, expiresAt);
+  /** `googleAt`: the token came from a Google login at that time (a fresh one may set a new password without the old). */
+  createSession(token: string, accountId: number, expiresAt: number, googleAt: number | null = null): void {
+    this.db.prepare('INSERT INTO sessions (token, account_id, expires_at, google_at) VALUES (?, ?, ?, ?)').run(token, accountId, expiresAt, googleAt);
+  }
+
+  /** When this token's Google login happened (null = not a Google login, or already used for a password reset). */
+  sessionGoogleAt(token: string): number | null {
+    const r = this.db.prepare('SELECT google_at FROM sessions WHERE token = ?').get(token) as { google_at: number | null } | undefined;
+    return r?.google_at ?? null;
+  }
+
+  // ------------------------------------------------------------ account settings by the player (server/account-api.ts)
+
+  /** The stored password hash ('' = none), or undefined for no such real account. */
+  passHash(accountId: number): string | undefined {
+    const r = this.db.prepare('SELECT pass_hash FROM accounts WHERE id = ? AND is_guest = 0').get(accountId) as { pass_hash: string } | undefined;
+    return r?.pass_hash;
+  }
+
+  /**
+   * A new password for a real account. `expect`: 'none' = only while it has none (a Google-only account's
+   * first one), else the hash it must still have (so two changes at once can't both win). Every other login
+   * token of the account ends; `keepToken` (the one asking) stays, no longer counting as a fresh Google login.
+   */
+  replacePassword(accountId: number, passHash: string, expect: 'none' | string, keepToken: string): boolean {
+    return this.transaction(() => {
+      const n = expect === 'none'
+        ? this.db.prepare("UPDATE accounts SET pass_hash = ? WHERE id = ? AND is_guest = 0 AND pass_hash NOT LIKE 'scrypt$%'").run(passHash, accountId).changes
+        : this.db.prepare('UPDATE accounts SET pass_hash = ? WHERE id = ? AND is_guest = 0 AND pass_hash = ?').run(passHash, accountId, expect).changes;
+      if (!n) return false;
+      this.db.prepare('DELETE FROM sessions WHERE account_id = ? AND token != ?').run(accountId, keepToken);
+      this.db.prepare('UPDATE sessions SET google_at = NULL WHERE token = ?').run(keepToken);
+      return true;
+    });
+  }
+
+  usernameChangedAt(accountId: number): number | null {
+    const r = this.db.prepare('SELECT username_changed_at FROM accounts WHERE id = ?').get(accountId) as { username_changed_at: number | null } | undefined;
+    return r?.username_changed_at ?? null;
+  }
+
+  /**
+   * The owner of a real account renames it (in one transaction: the name is checked again there; the
+   * account's own name in other letter case counts as free). 'taken' = someone has it.
+   */
+  renameAccount(accountId: number, username: string, now = Date.now()): 'ok' | 'taken' | 'gone' {
+    return this.transaction(() => {
+      if (this.db.prepare('SELECT 1 FROM accounts WHERE username = ? AND id != ?').get(username, accountId)) return 'taken';
+      try {
+        const n = this.db.prepare('UPDATE accounts SET username = ?, username_changed_at = ? WHERE id = ? AND is_guest = 0').run(username, now, accountId).changes;
+        return n ? 'ok' : 'gone';
+      } catch (e) {
+        if (/UNIQUE/i.test((e as Error).message)) return 'taken';
+        throw e;
+      }
+    });
   }
 
   /** The account behind a login token, if the token exists and hasn't expired. */

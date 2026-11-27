@@ -41,6 +41,8 @@ export interface Backend {
   readonly online: boolean;
   /** Playing a guest character: no stash, deleted after a day offline. */
   readonly guest: boolean;
+  /** The character playing (its id in the account), or null when not known. */
+  readonly characterId: number | null;
   readonly zone: ZoneDef;
   /** The channel of that zone you are in (1 on a map without channels). */
   readonly channel: number;

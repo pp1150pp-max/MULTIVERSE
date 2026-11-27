@@ -208,7 +208,7 @@ function decodeJwt(jwt: string): Record<string, unknown> | null {
 /** What a ticket gives the page. `needName`: a new account; the page asks for a username and finishes with it. */
 export type GoogleResult =
   | { kind: 'session'; token: string; username: string }
-  | { kind: 'needName'; email: string; guest: boolean }
+  | { kind: 'needName'; email: string; guest: boolean; mode: 'login' | 'upgrade'; guestChar: { name: string; level: number } | null }
   | { kind: 'linked'; email: string }
   | { kind: 'error'; message: string };
 

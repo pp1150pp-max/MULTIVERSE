@@ -11,6 +11,7 @@ import type { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { ownerToolsApi } from './admin-tools';
 import { googleAdminApi } from './google-api';
+import { accountAdminApi } from './account-api';
 import { mailAdminApi } from './admin-mail';
 import { newsAdminApi } from './admin-news';
 import { cashAdminApi } from './admin-cash';
@@ -132,6 +133,7 @@ export async function adminApi(
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (await ownerToolsApi(req, res, path, method, url, db, world, backups)) return;
   if (await googleAdminApi(req, res, path, db)) return;
+  if (await accountAdminApi(req, res, path, db)) return;
   if (await mailAdminApi(req, res, path, method, db, world)) return;
   if (await newsAdminApi(req, res, path, method, db, world)) return;
   if (await cashAdminApi(req, res, path, method, db, world)) return;

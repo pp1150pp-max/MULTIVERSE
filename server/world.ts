@@ -1012,6 +1012,11 @@ export class GameWorld {
     console.log(`[world] ${s.username} (${s.player.name}) left: ${note ?? how} (${this.onlineText()})`);
   }
 
+  /** The account's username changed (renamed, or a guest saved itself): the chat log, reports and admin lists use the new one. */
+  renameAccount(accountId: number, username: string): void {
+    for (const s of this.sessions) if (s.accountId === accountId) s.username = username;
+  }
+
   /** Ends the game of whoever plays on this account (saving it first), e.g. before the account changes. */
   kickAccount(accountId: number, msg: string): void {
     for (const s of [...this.sessions]) {
