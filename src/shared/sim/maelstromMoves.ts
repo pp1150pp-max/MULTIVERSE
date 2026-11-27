@@ -153,10 +153,10 @@ function surface(sim: Sim, m: Monster): void {
 // ---- tentacle
 
 /** The line numbers of a slam: a field tentacle's, or the kraken's own arms in its room (their /admin card). */
-function slamNums(m: Monster): { cd: number; len: number; warn: number; mult: number } {
+function slamNums(m: Monster): { cd: number; len: number; warn: number; mult: number; width: number } {
   return m.summoned && m.def.id === 'kraken_arm'
-    ? { cd: mv('kraken.armCd'), len: mv('kraken.armLen'), warn: mv('kraken.armWarn'), mult: mv('kraken.armMult') }
-    : { cd: mv('tentacle.cd'), len: mv('tentacle.len'), warn: mv('tentacle.warn'), mult: mv('tentacle.mult') };
+    ? { cd: mv('kraken.armCd'), len: mv('kraken.armLen'), warn: mv('kraken.armWarn'), mult: mv('kraken.armMult'), width: mv('kraken.armWidth') }
+    : { cd: mv('tentacle.cd'), len: mv('tentacle.len'), warn: mv('tentacle.warn'), mult: mv('tentacle.mult'), width: mv('tentacle.width') };
 }
 
 /** Not hit and nobody in reach this long, a hurt field tentacle heals back up (it can't walk home like other monsters). */
@@ -180,7 +180,7 @@ export function tentacleTick(dt: number, sim: Sim, m: Monster): void {
     g.kind = null;
     sim.fx('sprite', 'fx_slam_splash', m.x + Math.cos(g.angle) * n.len * 0.75, m.z + Math.sin(g.angle) * n.len * 0.75, 1.3, 0.45);
     sim.shake(0.15, m);
-    for (const q of playersOnLine(sim, m.x, m.z, g.angle, n.len, mv('tentacle.width'))) {
+    for (const q of playersOnLine(sim, m.x, m.z, g.angle, n.len, n.width)) {
       sim.hitPlayer(m, q, n.mult, { kb: 3, fromX: m.x, fromZ: m.z });
     }
     return;
@@ -220,6 +220,6 @@ export function tentacleTick(dt: number, sim: Sim, m: Monster): void {
   g.kind = 'slam';
   g.t = n.warn * m.skillMult();
   g.angle = Math.atan2(p.z - m.z, p.x - m.x);
-  sim.fx('lineTelegraph', m.x, m.z, g.angle, n.len, mv('tentacle.width'), g.t);
+  sim.fx('lineTelegraph', m.x, m.z, g.angle, n.len, n.width, g.t);
   sim.anim(m.id, 'attack', { duration: g.t });
 }

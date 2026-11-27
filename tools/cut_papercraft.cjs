@@ -105,6 +105,8 @@ const MAPS = {
     ['ground_water.png', 'ground', { out: 'harbor_water' }],
     ['buildings_a.png', 'props', { blobs: true, cols: 2, rows: 2, height: 384, names: ['hb_supply', 'hb_broker', 'hb_forge', 'hb_warehouse'] }],
     ['buildings_b.png', 'props', { blobs: true, cols: 2, rows: 2, height: 448, bg: 'green', names: ['hb_smuggler', 'hb_lighthouse', 'hb_shipyard', 'hb_rowboat'] }],
+    // The smuggler's stall again, nobody in it (owner 2026-11-27, FLOOR2_HUB.md 8.5): after buildings_b, it wins.
+    ['smuggler_stall.png', 'props', { cols: 1, rows: 1, height: 448, bg: 'green', names: ['hb_smuggler'] }],
     ['props.png', 'props', { cols: 4, rows: 3, height: 256, names: ['hb_wheel_fountain', 'hb_brass_globe', 'hb_lamp_post', 'hb_banner_pole', 'hb_bench_a', 'hb_bench_b', 'hb_bunting_post', 'hb_barrels', 'hb_crates', 'hb_sacks', 'hb_rope_coil', 'hb_palm_pot'] }],
     ['docks.png', 'props', { blobs: true, cols: 4, rows: 2, height: 256, names: ['hb_dock_a', 'hb_dock_b', 'hb_dock_end', 'hb_bollard', 'hb_rail_a', 'hb_rail_b', 'hb_edge_a', 'hb_edge_b'] }],
     ['ships.png', 'props', { blobs: true, cols: 2, rows: 2, height: 384, names: ['hb_ship_red', 'hb_ship_blue', 'hb_ship_green', 'hb_ship_white'] }],

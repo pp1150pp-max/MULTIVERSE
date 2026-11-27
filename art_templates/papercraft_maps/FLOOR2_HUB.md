@@ -158,6 +158,23 @@ Each object has crisp clean outer edges with no glow or halo outside the portal 
 
 ---
 
+## 8.5 เต็นท์พ่อค้าของเถื่อนแบบไม่มีคน → `smuggler_stall.png` (ภาพเดี่ยว **พื้นเขียว**)
+
+เจ้าของ 2026-11-27: เต็นท์จากข้อ 3 มีคนคลุมผ้าวาดติดมาในร้าน ซ้ำกับตัว NPC จริง ให้เจนเต็นท์เดิมใหม่โดยไม่มีคน
+
+- **เปิดแชทใหม่** แล้วแนบ `public/assets/sprites/paper/props/hb_smuggler.png` (ภาพเต็นท์ที่ใช้ในเกมตอนนี้) ภาพเดียว
+- เซฟผลเป็น `art_templates/papercraft_maps/raw/floor2_hub/smuggler_stall.png` (ไม่ commit)
+
+```
+The attached image is a market stall from my game. Redraw this EXACT stall with ONE change: remove the hooded person completely. Nobody is in the stall: no person, no figure, no face, no eyes, no hood, no cloak, no hands, no silhouette, no mannequin. Where the person was, show the inside of the tent: the dark plum back cloth hanging in folds, and the counter top continuing, with the crystals on it.
+
+Keep EVERYTHING else the same as the attached image: the same shape and size of the tent, the same isometric camera angle, the same open front facing the same way, the purple and dark plum canopy with gold tassels and hanging gold beads, the wooden posts and plank floor, the counter with the blue bottle and the pink and violet crystals, the hanging lantern, the locked treasure chest, the sack, the wooden crates, the stacked barrels and the leaves behind. Same handmade papercraft style: layered cut coloured paper and card, visible paper fibre, slightly uneven scissor-cut edges, small drop shadows between paper layers, warm soft light from the upper left. NOT pixel art.
+
+Generate an image: the stall alone, centred, filling most of the image with clear empty space around it, nothing cut off. Crisp clean outer edges with no glow or halo. Background ONE perfectly flat solid pure bright green (#00FF00) everywhere, no gradient, no paper texture on the background, no ground patches, no cast shadows on the background, no text, no letters, no labels. Do not use bright green anywhere on the object; the leaves must be a dull dark olive green.
+```
+
+---
+
 ## 9. NPC 6 ตัว → `raw/floor2_hub/npc/<ชื่อ>.png`
 
 ใช้รูปแบบเดียวกับ `art_templates/papercraft_chars/NPC.md`: ยืนหายใจ 4 เฟรม 3 มุม (หน้า ข้างหันซ้าย หลัง) ตัวละ 1 ภาพ ตาราง 3 แถว × 4 เฟรม

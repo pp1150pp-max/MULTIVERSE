@@ -47,7 +47,7 @@ function build(): HTMLDivElement | null {
     { label: 'คุณภาพอนุภาค', opts: [q(3), q(2), q(1), q(0)],
       note: () => (gfxMax() < 3 ? `เซิร์ฟเวอร์ให้เลือกได้ถึง "${['ปิด', 'ต่ำ', 'กลาง', 'สูง'][gfxMax()]}"` : 'ปิด = ไม่มีอนุภาคเสริม ภาพสกิลหลักยังอยู่') },
     { label: 'น้ำ ลม และแสง', opts: [sh(2), sh(1), sh(0)], show: () => currentBalance().fxLayer.shader,
-      note: () => (isSoftwareRender() ? 'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้' : 'ปิด = ภาพนิ่งแบบเดิม · ตอนนี้มีผลกับน้ำและทะเลเมฆ') },
+      note: () => (isSoftwareRender() ? 'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้' : 'ปิด = ภาพแบบเดิม · ตอนนี้มีผลกับน้ำ ทะเลเมฆ และแสง') },
     { label: 'อนุภาคของผู้เล่นคนอื่น', opts: [o(2), o(1), o(0)] },
     { label: 'จอสั่น', opts: [['เปิด', () => gfxShakeOn(), () => setGfxPrefs({ shake: true })], ['ปิด', () => !gfxShakeOn(), () => setGfxPrefs({ shake: false })]] },
     { label: 'ภาพค้างตอนตีโดน', opts: [['เปิด', () => gfxHitstopOn(), () => setGfxPrefs({ hitstop: true })], ['ปิด', () => !gfxHitstopOn(), () => setGfxPrefs({ hitstop: false })]] },

@@ -41,7 +41,7 @@ export const EN_MISC: Record<string, string> = {
   'คุณภาพอนุภาค': 'Particle quality',
   'น้ำ ลม และแสง': 'Water, wind and light',
   'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้': 'Off: the browser is drawing on the CPU',
-  'ปิด = ภาพนิ่งแบบเดิม · ตอนนี้มีผลกับน้ำและทะเลเมฆ': 'Off = the old still picture · for now it changes the water and the cloud sea',
+  'ปิด = ภาพแบบเดิม · ตอนนี้มีผลกับน้ำ ทะเลเมฆ และแสง': 'Off = the old picture · for now it changes the water, the cloud sea and the light',
   'เซิร์ฟเวอร์ให้เลือกได้ถึง "{0}"': 'The server allows up to "{0}"',
   'ปิด = ไม่มีอนุภาคเสริม ภาพสกิลหลักยังอยู่': 'Off = no extra particles, the main skill visuals stay',
   'อนุภาคของผู้เล่นคนอื่น': "Other players' particles",

@@ -1,9 +1,10 @@
 // Floor 2, map 4: Kraken Maelstrom (docs/plans/FLOOR2_PLAN.md 2, 5.4, 6, owner 2026-11-24). The map and its pier, the whirlpool nobody
 // can walk into, the boss room with its own whirlpool, the Kraken Eye key and the navigator's key quest, the Lv80 gate, the four new
-// monster moves (dive, bubble, wave, tentacle), the Kraken's moves (arms then head, ink, suction) and their /admin numbers.
+// monster moves (dive, bubble, wave, tentacle), the Kraken's room (a floor in the middle of a great whirlpool, owner 2026-11-27) and
+// moves (arms then head, phases by HP: ink, bursting tentacles, sweep, pull out, grab, wave, sharks, frenzy) and their /admin numbers.
 // On real Sims, no server.
 import { finish, ok } from './check';
-import { BOSS_ROOMS, MAELSTROM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
+import { BOSS_ROOMS, KRAKEN_SPOT, MAELSTROM_ISLAND, ROOM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, inWhirlpoolCircle, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
 import { HARBOR_ID } from '../src/shared/data/harbor';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_DESC, STONE_NAME } from '../src/shared/data/stones';
@@ -68,7 +69,9 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   ok(SEA.lair?.boss === 'kraken' && ROOM?.boss?.monster === 'kraken' && floorOf(ROOM) === 2, 'its summoner opens the kraken\'s room, on floor 2');
   const w = SEA.whirlpools?.[0];
   ok(!!w && w.x === 0 && w.z === 0 && w.r * 2 >= SEA.half * 0.8, `a whirlpool in the middle, about half the map across (r ${w?.r})`);
-  ok(ROOM.whirlpools?.[0]?.r === ROOM_WHIRLPOOL, 'the boss room has its own whirlpool in the middle (owner 2026-11-24)');
+  const rw = ROOM.whirlpools?.[0];
+  ok(rw?.r === ROOM_WHIRLPOOL && rw.island === ROOM_ISLAND && rw.keepIn === true && rw.r >= (ROOM.arenaRadius ?? 0),
+    'the boss room is a round floor in the middle of a great whirlpool all round it (owner 2026-11-27)');
   for (const id of ['kraken_maelstrom', 'kraken_maelstrom_room']) {
     const map = MapRegistry.get(id)!;
     const issues = validateMap(map, { propKeys: new Set(map.props.map((p) => p.key)), baseline: MapRegistry.bundled(id) }).filter((i) => i.severity === 'error');
@@ -94,11 +97,20 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   ok(['storm_rock_0', 'wreck_0', 'coral_0', 'kraken_flag', 'storm_lamp'].every((k) => sim.terrain.props.some((p) => p.key === k)), 'storm rocks, wrecks, coral, kraken flags and lamps');
   ok(!sim.terrain.props.some((p) => p.key.startsWith('rim_')), 'no foam waves round the whirlpool (owner 2026-11-26)');
   ok(sim.terrain.props.every((p) => Math.hypot(p.x, p.z) > w!.r + 1 || (p.key === 'summoner_kraken' && p.x === 0 && p.z === 0)), 'nothing stands in the whirlpool but the summoner on its island');
+  // The browser's scattered ground details (world.ts addDecor) skip the whole circle, island included (owner 2026-11-27).
+  ok(inWhirlpoolCircle(SEA, 0, 0) && inWhirlpoolCircle(SEA, w!.r - 0.5, 0) && inWhirlpoolCircle(SEA, w!.r + 0.5, 0, 1) && !inWhirlpoolCircle(SEA, w!.r + 1.5, 0, 1), 'no ground details on the whirlpool, its island or its rim');
   const masts = sim.terrain.props.filter((p) => p.key === 'broken_mast').length;
   ok(masts > 0 && masts < 70, `far fewer broken masts (${masts}, was 224)`);
   const rs = new Sim(ROOM);
   ok(rs.terrain.props.some((p) => p.key === 'room_kraken_coral') && rs.terrain.props.every((p) => !/^room_kraken_(rune_stone|tree)$/.test(p.key)), 'the room uses the maelstrom\'s own kit');
-  ok(!whirlpoolAt(ROOM, ROOM.start.x, ROOM.start.z, 2), 'players come into the room well clear of its whirlpool');
+  const sp = rs.spawnPoint();
+  ok(!whirlpoolAt(ROOM, sp.x, sp.z, 2) && Math.hypot(sp.x, sp.z) < ROOM_ISLAND - 2, 'players come into the room on its floor, well clear of the water');
+  ok(rs.terrain.props.every((p) => Math.hypot(p.x, p.z) >= ROOM_WHIRLPOOL - 0.5), 'nothing stands on the floor or in the water but the foam on the far shore');
+  // A knockback off the floor never strands anyone on the far shore (keepIn): back onto the floor every time.
+  const u = { x: ROOM_ISLAND + 5, z: 0, radius: 0.4 };
+  rs.terrain.resolve(u);
+  ok(Math.hypot(u.x, u.z) <= ROOM_ISLAND, `knocked far into the water: back on the floor (${Math.hypot(u.x, u.z).toFixed(2)})`);
+  ok(rs.terrain.isBlocked(ROOM_ISLAND + 2, 0, 0.3) && !rs.terrain.isBlocked(ROOM_ISLAND - 2, 0, 0.3), 'nobody walks into the water');
 
   const harbor = new Sim(ZONE_HARBOR);
   const p = harbor.addPlayer(hero({ unlocks: ['floor2'] }));
@@ -284,17 +296,21 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   ok(p.hp < 1e9, 'the wave hits along the line');
 }
 
-// ---- the Kraken: arms first, then its head; ink; suction
+// ---- the Kraken (owner 2026-11-27): in its corner, arms round the floor, head up until it has lost 20%, phases by HP
 {
   const sim = new Sim(ROOM, { bossDelay: 0 });
   run(sim, 0.2);
   const k = sim.monsters.find((m) => m.isBoss)!;
-  const p = tough(sim, ROOM.start.x - 3, ROOM.start.z - 3);
+  const p = tough(sim, 3, 3);
   run(sim, 2.5);
-  ok(k.x === 0 && k.z === 0 && k.untargetable, 'it lies under the whirlpool and can\'t be hit while its arms are up');
+  ok(Math.abs(k.x - KRAKEN_SPOT.x) < 1e-6 && Math.abs(k.z - KRAKEN_SPOT.z) < 1e-6 && k.x < 0 && k.z < 0, 'it rises at the room\'s top corner (−x −z), not in the middle');
+  ok(Math.hypot(k.x, k.z) > ROOM_ISLAND && Math.hypot(k.x, k.z) - k.def.radius < ROOM_ISLAND, 'in the water, its body reaching over the floor\'s shore (melee can hit its head)');
+  ok(k.untargetable, 'it can\'t be hit while its arms are up');
   const arms = sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive);
-  ok(arms.length === mv('kraken.arms'), `${arms.length} arms rose round the rim`);
-  ok(arms.every((a) => Math.abs(Math.hypot(a.x, a.z) - ROOM_WHIRLPOOL) < 2 && a.summoned), 'on the rim, as summons (no rewards)');
+  ok(arms.length === mv('kraken.arms'), `${arms.length} arms rose`);
+  ok(arms.every((a) => Math.abs(Math.hypot(a.x, a.z) - (ROOM_ISLAND + mv('kraken.armOut'))) < 0.01 && a.summoned), 'round the floor\'s shore, in the water, as summons (no rewards)');
+  ok(arms.every((a) => Math.hypot(a.x - k.x, a.z - k.z) > 4), 'none right in front of the kraken');
+  ok(mv('kraken.armLen') >= ROOM_ISLAND + mv('kraken.armOut'), `their slam reaches the middle of the floor (${mv('kraken.armLen')})`);
   ok(arms.every((a) => Math.abs(a.maxHp - Math.round(k.maxHp * mv('kraken.armHp'))) <= 1), 'each with a share of its HP (/admin)');
   const hp0 = k.hp;
   sim.hitMonster(p, k, 100);
@@ -302,41 +318,128 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   for (const a of arms) sim.hitMonster(p, a, 1e6);
   run(sim, 0.2);
   ok(!k.untargetable && k.kraken?.headUp === true, 'every arm cut: its head comes up');
+  run(sim, 30);
+  ok(k.kraken?.headUp === true, 'and stays up however long it takes (no timer)');
+  const hpUp = k.hp;
   sim.hitMonster(p, k, 5);
-  ok(k.hp < hp0, 'and it can be hit');
-  ok(k.x === 0 && k.z === 0, 'it still has not moved');
-  run(sim, mv('kraken.headSec') + 0.5);
-  ok(k.untargetable && k.kraken?.headUp === false, 'it sinks again when its time is up');
+  ok(k.hp < hpUp, 'and it can be hit');
+  k.hp = hpUp - k.maxHp * 0.1;
+  run(sim, 0.1);
+  ok(k.kraken?.headUp === true, 'still up after 10%');
+  k.hp = hpUp - k.maxHp * 0.21;
+  run(sim, 0.1);
+  ok(k.untargetable && k.kraken?.headUp === false, 'it sinks once it has lost 20% of its max HP');
   run(sim, 3);
   ok(sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive).length === mv('kraken.arms'), 'and its arms grow back');
 
-  // ink and suction come round on their own
+  // 100–50%: ink and tentacles bursting up come round on their own; no pull yet.
   let ink = false;
-  let suck = false;
-  let pulled = 0;
-  const d0 = () => Math.hypot(p.x, p.z);
-  for (let i = 0; i < 40 * 30 && !(ink && suck && pulled > 1); i++) {
-    const before = d0();
+  let pullEarly = false;
+  for (let i = 0; i < 30 * 20 && !ink; i++) {
     run(sim, TICK);
     if (sim.hazards.some((h) => h.k === 'ink')) ink = true;
-    if (suctionSpeed(sim.hazards, sim.time) > 0) {
-      suck = true;
-      pulled += before - d0();
-    }
+    if (suctionSpeed(sim.hazards, sim.time) > 0) pullEarly = true;
     p.hp = 1e9;
   }
   ok(ink, 'it spits ink: an ink hazard on the player hit');
-  ok(suck && pulled > 1, `the whirlpool pulls players towards it (${pulled.toFixed(2)})`);
-  ok(d0() >= ROOM_WHIRLPOOL + p.radius - 0.01, 'and never into it');
+  ok(!pullEarly && k.kraken?.phaseBand === 0, 'above 50% there is no pull yet');
 
-  // dead: arms and hazards go with it
-  k.kraken!['phase' as never] = 'head' as never;
+  // Into 50–30%: head up, then down past the line: it sinks at once and the pull, sweep and grab join in.
+  for (const a of sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive)) sim.hitMonster(p, a, 1e6);
+  run(sim, 0.2);
+  k.hp = k.maxHp * 0.49;
+  run(sim, 0.2);
+  ok(k.kraken?.phaseBand === 1 && k.kraken.headUp === false, `below 50%: phase 2, and its head goes down at the line (${(k.hp / k.maxHp).toFixed(2)})`);
+  let sweep = false;
+  let pulled = 0;
+  let grabbed = false;
+  p.x = 2;
+  p.z = 2;
+  for (let i = 0; i < 30 * 45 && !(sweep && pulled > 0.5 && grabbed); i++) {
+    const before = Math.hypot(p.x, p.z);
+    run(sim, TICK);
+    if (sim.hazards.some((h) => h.k === 'sweep')) sweep = true;
+    const sh = sim.hazards.find((h) => h.k === 'suction' && !('pid' in h && h.pid !== undefined));
+    if (sh && sim.time >= sh.hit) pulled += Math.hypot(p.x, p.z) - before;
+    if (sim.hazards.some((h) => h.k === 'suction' && 'pid' in h && h.pid === p.id)) grabbed = true;
+    p.hp = 1e9;
+    p.stunT = 0;
+  }
+  ok(sweep, 'the giant arm sweeps a fan from its corner');
+  ok(pulled > 0.5, `the whirlpool drags players out towards the shore (${pulled.toFixed(2)})`);
+  ok(Math.hypot(p.x, p.z) <= ROOM_ISLAND, 'and never into the water');
+  ok(grabbed, 'an arm grabs a player (a pull on that player only)');
+
+  // Into 30%: frenzy, sharks, wave.
+  for (const a of sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive)) sim.hitMonster(p, a, 1e6);
+  run(sim, 0.2);
+  if (!k.kraken?.headUp) {
+    for (const a of sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive)) sim.hitMonster(p, a, 1e6);
+    run(sim, 3);
+    for (const a of sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive)) sim.hitMonster(p, a, 1e6);
+    run(sim, 0.2);
+  }
+  ok(k.kraken?.headUp === true, 'its head comes up again once its arms are cut');
+  k.hp = k.maxHp * 0.29;
+  run(sim, 0.2);
+  ok(k.kraken?.phaseBand === 2, 'below 30%: frenzy');
+  run(sim, 3);
+  const arms3 = sim.monsters.filter((m) => m.def.id === 'kraken_arm' && m.alive && !(m.pinnedUntil > sim.time));
+  ok(arms3.length === mv('kraken.arms') + mv('kraken.rageArms'), `frenzy: one arm more (${arms3.length})`);
+  let sharks = 0;
+  let waveHit = false;
+  const exp0 = p.exp;
+  for (let i = 0; i < 30 * 20 && !(sharks > 0 && waveHit); i++) {
+    const hpBefore = p.hp;
+    run(sim, TICK);
+    sharks = Math.max(sharks, k.kraken!.sharksAlive.length);
+    if (p.hp < hpBefore) waveHit = true;
+    p.hp = 1e9;
+  }
+  ok(sharks === mv('kraken.sharks'), `shark knights leap out onto the floor (${sharks})`);
+  ok(k.kraken!.sharksAlive.every((s) => s.summoned && Math.hypot(s.x, s.z) <= ROOM_ISLAND), 'on the floor, as summons');
+  for (const s of k.kraken!.sharksAlive) sim.hitMonster(p, s, 1e9);
+  run(sim, 0.1);
+  ok(p.exp === exp0, 'the sharks give no EXP');
+
+  // dead: arms, sharks and hazards go with it; its drop washes up on the floor
   k.noHit = false;
   k.fade = false;
   sim.hitMonster(p, k, 1e9);
   run(sim, 0.2);
-  ok(!k.alive && sim.cleared && sim.hazards.length === 0, 'dead: the room is cleared, no ink or suction left');
-  ok(!sim.monsters.some((m) => m.summoned && m.alive), 'its arms sink with it');
+  ok(!k.alive && sim.cleared && sim.hazards.length === 0, 'dead: the room is cleared, no hazards left');
+  ok(!sim.monsters.some((m) => m.summoned && m.alive), 'its arms and sharks sink with it');
+}
+
+// ---- a sweep only hits inside its fan; the wave pushes away from the kraken; a cut arm frees its grab
+{
+  const sim = new Sim(ROOM, { bossDelay: 0 });
+  run(sim, 0.2);
+  const k = sim.monsters.find((m) => m.isBoss)!;
+  const near = tough(sim, KRAKEN_SPOT.x * 0.3, KRAKEN_SPOT.z * 0.3);
+  const far = tough(sim, -KRAKEN_SPOT.x * 0.6, -KRAKEN_SPOT.z * 0.6);
+  run(sim, 0.2);
+  const brain = k.kraken! as unknown as { startSweep(s: Sim, m: Monster, p: Player[]): void; startWave(s: Sim, m: Monster): void; startGrab(s: Sim, m: Monster, p: Player[]): void };
+  brain.startSweep(sim, k, [near]);
+  run(sim, mv('kraken.sweepWarn') + 0.1);
+  ok(near.hp < 1e9 && far.hp === 1e9, 'the sweep hits near the kraken, the far side of the floor is safe');
+  near.hp = far.hp = 1e9;
+  const fx = far.x;
+  brain.startWave(sim, k);
+  run(sim, mv('kraken.waveWarn') + 3);
+  ok(near.hp < 1e9 && far.hp < 1e9, 'the wave rolls over the whole floor');
+  ok(far.x >= fx - 0.01 && Math.hypot(far.x, far.z) <= ROOM_ISLAND, 'it pushes away from the kraken, never off the floor');
+  near.hp = far.hp = 1e9;
+  near.stunT = far.stunT = 0;
+  brain.startGrab(sim, k, [far]);
+  run(sim, mv('kraken.grabWarn') + 0.1);
+  const hold = sim.hazards.find((h) => h.k === 'suction' && 'pid' in h && h.pid === far.id);
+  ok(!!hold, 'still in the mark: an arm grabs them');
+  ok(suctionSpeed(sim.hazards, sim.time, near.id) === 0 && suctionSpeed(sim.hazards, sim.time, far.id) > 0, 'the drag is that player\'s alone');
+  const arm = sim.monsters.find((m) => m.def.id === 'kraken_arm' && m.alive && m.pinnedUntil > sim.time)!;
+  sim.hitMonster(near, arm, 1e9);
+  run(sim, 0.2);
+  ok(!sim.hazards.some((h) => h.k === 'suction' && 'pid' in h && h.pid === far.id), 'cut the arm: they are free');
 }
 
 // ---- the kraken's room drop (10 keys) lands round the rim, none in the whirlpool
@@ -355,7 +458,7 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
 // ---- /admin numbers
 {
   const code = codeMoves();
-  ok(code['kraken.arms'] === 4 && code['kraken.headSec'] === 12 && code['kraken.inkSec'] === 3 && code['kraken.suckSec'] === 3, 'the kraken\'s numbers have their code values');
+  ok(code['kraken.arms'] === 4 && code['kraken.headShare'] === 0.2 && code['kraken.inkSec'] === 3 && code['kraken.suckSec'] === 3, 'the kraken\'s numbers have their code values');
   ok(code['dive.mult'] === 1.8 && code['bubble.sec'] === 1.2 && code['wave.len'] === 10 && code['tentacle.len'] === 7 && code['tentacle.warn'] === 0.9, 'the maelstrom monsters\' too');
   const b = mergeBalance({});
   b.moves['kraken.hpMult'] = 2;

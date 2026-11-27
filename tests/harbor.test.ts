@@ -4,7 +4,8 @@
 import { finish, ok } from './check';
 import { HUB_ID, ZONES, ZONE_HARBOR, ZONE_HUB, hubOf, inSafeArea, isHub } from '../src/shared/data/zones';
 import { HARBOR_ID, HARBOR_PIER, onDeck } from '../src/shared/data/harbor';
-import { NPC_IDS, npcLook } from '../src/shared/data/npcs';
+import { NPC_IDS, NPC_TALK_RANGE, npcLook } from '../src/shared/data/npcs';
+import { NpcWalk, WalkTarget } from '../src/client/walkTo';
 import { applyBalance, balanceChanges, checkBalance, currentBalance } from '../src/shared/balance';
 import { codeFloorGate, FLOOR2_UNLOCK, navState } from '../src/shared/floorGate';
 import { loginHub } from '../src/shared/floors';
@@ -50,6 +51,36 @@ const run = (sim: Sim, secs: number) => {
   for (let i = 0; i < 5; i++) {
     const s = sim.spawnPoint();
     ok(onDeck(s.x, s.z) && !t.isBlocked(s.x, s.z, 0.4), 'spawn by the fountain, on the planks');
+  }
+}
+
+// ---- the keepers: drawn in front of their shop, and a click from anywhere round the plaza walks to them
+{
+  const shops = { keeper: 'hb_warehouse', crystal: 'hb_smuggler', blacksmith: 'hb_forge', merchant: 'hb_supply', broker: 'hb_broker' } as const;
+  for (const [id, key] of Object.entries(shops) as [keyof typeof shops, string][]) {
+    const sim = new Sim(ZONE_HARBOR);
+    const t = sim.terrain;
+    const n = t.npcPos[id]!;
+    const house = t.props.find((p) => p.key === key)!;
+    ok(n.x + n.z > house.x + house.z && onDeck(n.x, n.z, 0.5), `${id} stands in front of ${key}'s picture, on the planks`);
+    const walk = new NpcWalk();
+    const missed: number[] = [];
+    for (let a = 0; a < 360; a += 30) {
+      const p = sim.addPlayer(hero());
+      p.x = Math.cos((a * Math.PI) / 180) * 5;
+      p.z = Math.sin((a * Math.PI) / 180) * 5;
+      t.resolve(p);
+      const click = { x: n.x, z: n.z };
+      const target = new WalkTarget();
+      for (let i = 0; i < 300 && Math.hypot(p.x - n.x, p.z - n.z) >= NPC_TALK_RANGE - 0.4; i++) {
+        target.aim(p, walk.aim(t, p, click), t);
+        const to = p.moveTarget!;
+        const l = Math.hypot(to.x - p.x, to.z - p.z);
+        if (l > 0.01) p.walkStep((to.x - p.x) / l, (to.z - p.z) / l, l, TICK, t);
+      }
+      if (Math.hypot(p.x - n.x, p.z - n.z) >= NPC_TALK_RANGE - 0.4) missed.push(a);
+    }
+    ok(!missed.length, `${id}: a click walks there from all round the plaza (missed from ${missed.join()})`);
   }
 }
 

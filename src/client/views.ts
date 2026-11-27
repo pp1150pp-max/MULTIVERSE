@@ -38,6 +38,14 @@ const CRATER_SIZE = 3.2;
  * the crater moves back to sit under it.
  */
 const craterBack = (): number => currentBalance().fxLayer.craterBack;
+/**
+ * How much bigger a monster is drawn than its def says: the kraken and its arms in its room (/admin card "คราเคน (บอส)", owner
+ * 2026-11-27: bigger arms). Read when its view is made.
+ */
+const drawScale = (m: Monster): number => {
+  const mv = currentBalance().moves;
+  return m.def.id === 'kraken_arm' ? mv['kraken.armSize'] ?? 1 : m.def.id === 'kraken' ? mv['kraken.bossSize'] ?? 1 : 1;
+};
 
 const AURA: { color: string; size: number; sparks: number }[] = [
   { color: '', size: 0, sparks: 0 },
@@ -390,7 +398,8 @@ export class MonsterView {
   private opacity = 1;
 
   constructor(readonly m: Monster, private readonly scene: THREE.Scene) {
-    this.actor = new SpriteActor(sheets[m.def.id], m.def.height, m.def.radius * 1.1);
+    const scale = drawScale(m);
+    this.actor = new SpriteActor(sheets[m.def.id], m.def.height * scale, m.def.radius * 1.1 * scale);
     // Over its own skill pictures (Effects: `under`), which go after the ground layer.
     if (m.isBoss) this.actor.sprite.renderOrder = BOSS_ORDER;
     this.debuffFx = new DebuffFx(this.actor.group);

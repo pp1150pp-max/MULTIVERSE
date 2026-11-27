@@ -601,11 +601,11 @@
  "walkable": {"half":27},
  "npcs": [
   {"id":"seeker","x":-4.2,"z":-12.4},
-  {"id":"merchant","x":-3.375,"z":7.900000000000001},
-  {"id":"blacksmith","x":3.75,"z":-10.1},
-  {"id":"keeper","x":-10.1,"z":-3.75},
-  {"id":"broker","x":7.900000000000001,"z":3.375},
-  {"id":"crystal","x":-10.1,"z":4.125}
+  {"id":"merchant","x":-2.75,"z":16},
+  {"id":"blacksmith","x":9,"z":-11.75},
+  {"id":"keeper","x":-9.75,"z":-3},
+  {"id":"broker","x":16,"z":5.75},
+  {"id":"crystal","x":-12.5,"z":9.75}
  ],
  "rest": [
   {"kind":"fountain","x":0,"z":0}

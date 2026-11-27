@@ -11,7 +11,8 @@ import {
 } from './data/items';
 import { CODE_POTIONS, CODE_POTION_DROP, CODE_SWORD_POTION_BONUS, POTION_RANGE, type PotionNums } from './data/potionTable';
 import { MONSTERS, type MonsterDef } from './data/monsters';
-import { FARM_IDS, ZONES } from './data/zones';
+import { FARM_IDS, GENERATED_ZONES, ZONES } from './data/zones';
+import { checkSceneGrade, mergeSceneGrade, sceneGradeChanges, type SceneGradeTuning } from './sceneGrade';
 import { customDef } from './customZones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer, type FxLayerConfig, type FxLayerTuning } from './fxLayerTuning';
 import { checkMenuLayoutTuning, codeMenuLayout, mergeMenuLayout, menuLayoutChanges, type MenuLayoutConfig, type MenuLayoutTuning } from './menuLayout';
@@ -220,6 +221,8 @@ export interface Balance {
   mobPack: Record<string, number>;
   /** Spawn-spot radius × (the circle monsters appear and wander in), by map id (a built-in map or an editor-made one); a map left out is ×1. */
   spawnRadius: Record<string, number>;
+  /** Each map's tone, mist and sun shafts (sceneGrade.ts): only what differs from the code. */
+  sceneGrade: SceneGradeTuning;
   /**
    * Floor-1 farm maps (FARM_IDS): % of the map's spawn spots in use, by map id; a map left out is 100 (owner 2026-11-25). The spots
    * switched off are spread evenly over the map and over each kind (packCount).
@@ -367,6 +370,7 @@ export interface BalanceTuning {
   mobPack?: Record<string, number>;
   /** Spawn-spot radius multipliers that are not ×1, by map id. */
   spawnRadius?: Record<string, number>;
+  sceneGrade?: SceneGradeTuning;
   /** Farm maps' % of spawn spots in use that are not 100, by map id. */
   farmSpots?: Record<string, number>;
   /** EXP multipliers per 10 levels that are not ×1. */
@@ -545,6 +549,7 @@ export function codeBalance(): Balance {
     monsters: {},
     mobPack: {},
     spawnRadius: {},
+    sceneGrade: {},
     farmSpots: {},
     expMult: {},
     potions: codePotions(),
@@ -635,6 +640,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.monsters) b.monsters = structuredClone(t.monsters);
   if (t.mobPack) b.mobPack = { ...t.mobPack };
   if (t.spawnRadius) b.spawnRadius = { ...t.spawnRadius };
+  b.sceneGrade = mergeSceneGrade(t.sceneGrade);
   if (t.farmSpots) b.farmSpots = { ...t.farmSpots };
   if (t.expMult) b.expMult = { ...t.expMult };
   if (t.potions) {
@@ -839,7 +845,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1290,6 +1296,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (Object.keys(res).length) out.spawnRadius = res;
     return null;
   };
+  // Each map's tone, mist and sun shafts: the built-in maps (not boss rooms), plus any editor-made map the server knows.
+  const sceneGrade = (): string | null => {
+    const c = checkSceneGrade(o.sceneGrade, (id) => Object.hasOwn(GENERATED_ZONES, id) || !!customDef(id), strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.sceneGrade = c.tuning;
+    return null;
+  };
   // Farm maps' % of spawn spots in use, in FARM_IDS order.
   const farmSpots = (): string | null => {
     const x = o.farmSpots;
@@ -1577,7 +1590,8 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     hudLayout() ??
     sets() ??
     moves() ??
-    petLoot();
+    petLoot() ??
+    sceneGrade();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -1666,6 +1680,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
     const q = b.spawnRadius[id] ?? 1;
     if (p !== q) out.push(`รัศมีจุดเกิด ${ZONES[id]?.nameTh ?? customDef(id)?.nameTh ?? id} ×${p} → ×${q}`);
   }
+  out.push(...sceneGradeChanges(a.sceneGrade, b.sceneGrade, (id) => ZONES[id]?.nameTh ?? customDef(id)?.nameTh ?? id));
   for (const id of FARM_IDS) {
     const p = a.farmSpots[id] ?? 100;
     const q = b.farmSpots[id] ?? 100;

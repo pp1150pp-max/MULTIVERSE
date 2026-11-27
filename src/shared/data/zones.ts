@@ -70,6 +70,11 @@ export interface Whirlpool {
    * (ZoneDef.warps): the water round it is still blocked. None = water all the way in.
    */
   island?: number;
+  /**
+   * Anyone in its water always goes back onto the island, never out to the far shore (the kraken's room, owner 2026-11-27: the
+   * players' floor is the island, a knockback must not strand them outside).
+   */
+  keepIn?: boolean;
 }
 
 /**
@@ -932,8 +937,16 @@ const BOSS_ROOM_NAME: Record<string, [string, string]> = {
   ghost_captain: ["Ghost Captain's Dead Ship", 'เรือคนตายของกัปตันผี'],
   kraken: ["Kraken's Maelstrom", 'วังวนของคราเคน'],
 };
-/** The kraken's room: a whirlpool in the middle (owner 2026-11-24) that the kraken rises from; players fight round its rim. */
-export const ROOM_WHIRLPOOL = 4.5;
+/**
+ * The kraken's room (owner 2026-11-27): a great whirlpool all round the room with a round floor in its middle (ROOM_ISLAND) where
+ * the players stand; nobody walks into the water. The kraken rises from the water at the room's top corner on screen (KRAKEN_SPOT),
+ * its arms round the floor's shore.
+ */
+export const ROOM_WHIRLPOOL = 16;
+/** Radius of the players' floor in the middle of the kraken's room. */
+export const ROOM_ISLAND = 9;
+/** Where the kraken rises: the top corner on screen (−x −z; players come in at +x +z), its body just reaching over the shore. */
+export const KRAKEN_SPOT = { x: -(ROOM_ISLAND + 2.8) * Math.SQRT1_2, z: -(ROOM_ISLAND + 2.8) * Math.SQRT1_2 };
 
 /**
  * A map's boss room: a small island the size of the old boss clearing, drawn with the map's own look,
@@ -949,7 +962,8 @@ function bossRoom(field: ZoneDef): ZoneDef {
   // and nobody can walk out of the arena (Terrain.isBlocked). There is no portal (owner 2026-11-12):
   // once the boss is dead a button takes you out (Sim.leaveRoom).
   const inner = arena - 1;
-  const s = inner * Math.SQRT1_2 + 2;
+  // The kraken's room: on its floor in the middle, a few steps in from the shore.
+  const s = lair.boss === 'kraken' ? (ROOM_ISLAND - 0.5) * Math.SQRT1_2 : inner * Math.SQRT1_2 + 2;
   const [name, nameTh] = BOSS_ROOM_NAME[lair.boss];
   return {
     id: `${field.id}_room`,
@@ -973,7 +987,7 @@ function bossRoom(field: ZoneDef): ZoneDef {
     floor: field.floor,
     arenaRadius: field.arenaRadius,
     bossSolid: lair.boss === 'volcano_heart' ? 1.5 : undefined,
-    ...(lair.boss === 'kraken' ? { whirlpools: [{ x: 0, z: 0, r: ROOM_WHIRLPOOL }] } : {}),
+    ...(lair.boss === 'kraken' ? { whirlpools: [{ x: 0, z: 0, r: ROOM_WHIRLPOOL, island: ROOM_ISLAND, keepIn: true }] } : {}),
     monsterBoost: field.monsterBoost,
   };
 }

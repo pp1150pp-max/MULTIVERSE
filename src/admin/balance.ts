@@ -23,7 +23,8 @@ import {
   AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_SUMMARY_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
-import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
+import { FARM_IDS, GENERATED_ZONES, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
+import { codeSceneGrade, sceneGradeOf, SCENE_GRADE_NAME, SCENE_GRADE_RANGE, type SceneGrade, type SceneGradeKey } from '../shared/sceneGrade';
 import { customDefs } from '../shared/customZones';
 import { CLASSES, CLASS_IDS } from '../shared/data/classes';
 import { ITEM_BASES, itemRowKinds, statStep, rowRanges, TIER_BAND_NAME, TIER_BANDS, tierBandOf, tierChances, tierRanges } from '../shared/data/items';
@@ -1268,7 +1269,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const luCard = h('div', { class: 'card' });
   // dash effect (owner 2026-11-26, src/client/dashFx.ts): only the on/off switch here, the looks are per piece
   const dashCard = h('div', { class: 'card' });
-  // water, wind and light (docs/systems/shaders.md); so far the water group
+  // water, wind and light (docs/systems/shaders.md); so far the water and light groups
   const shaderCard = h('div', { class: 'card' });
   const drawFx = (): void => {
     const a = draft.fxLayer;
@@ -1391,6 +1392,28 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         ...SHADER_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const shaderOn = h('input', { type: 'checkbox', checked: a.shader, onchange: (e: Event) => { a.shader = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const waterOn = h('input', { type: 'checkbox', checked: a.shWater, onchange: (e: Event) => { a.shWater = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const fallsOn = h('input', { type: 'checkbox', checked: a.harborFalls, onchange: (e: Event) => { a.harborFalls = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const postOn = h('input', { type: 'checkbox', checked: a.shPost, onchange: (e: Event) => { a.shPost = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const shaftsOn = h('input', { type: 'checkbox', checked: a.shShafts, onchange: (e: Event) => { a.shShafts = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    // Each map's tone, mist and shafts (sceneGrade.ts): the draft keeps only what differs from the code.
+    const setGrade = <K extends keyof SceneGrade>(id: string, k: K, v: SceneGrade[K]): void => {
+      const g: Partial<SceneGrade> = { ...draft.sceneGrade[id], [k]: v };
+      if (v === codeSceneGrade(id)[k]) delete g[k];
+      if (Object.keys(g).length) draft.sceneGrade[id] = g;
+      else delete draft.sceneGrade[id];
+    };
+    const gradeRow = (id: string, name: string): HTMLElement => {
+      const grade = () => sceneGradeOf(id, draft.sceneGrade);
+      const codeGrade = codeSceneGrade(id);
+      const title = h('td', { class: draft.sceneGrade[id] ? 'bal-changed' : '' }, name);
+      const changed = (): void => { title.classList.toggle('bal-changed', !!draft.sceneGrade[id]); refresh(); };
+      const tint = h('input', { type: 'color', value: grade().tint, title: `ค่าในโค้ด: ${codeGrade.tint}`, onchange: (e: Event) => { setGrade(id, 'tint', (e.target as HTMLInputElement).value.toLowerCase()); changed(); } });
+      const cell = (k: SceneGradeKey, step: number) =>
+        h('td', {}, numBox(() => grade()[k], (n) => setGrade(id, k, n), codeGrade[k], ...SCENE_GRADE_RANGE[k], step, changed));
+      return h('tr', {}, title, h('td', {}, tint), cell('tintK', 0.01), cell('saturation', 0.01), cell('brightness', 0.01), cell('mist', 0.1), cell('shaft', 0.1),
+        h('td', {}, h('button', { type: 'button', onclick: () => { delete draft.sceneGrade[id]; refresh(); drawFx(); } }, 'คืนค่า')));
+    };
+    const gradeMaps = [...Object.keys(GENERATED_ZONES).map((id) => ({ id, nameTh: ZONES[id].nameTh })), ...customDefs()];
     shaderCard.replaceChildren(
       h('h2', {}, 'น้ำ ลม และแสง (shader)'),
       h('div', { class: 'row bal-line' }, flag(shaderOn, a.shader !== ca.shader, ' เปิดเอฟเฟกต์ shader (ปิด = ทุกคนเห็นภาพแบบเดิม)'), flag(waterOn, a.shWater !== ca.shWater, ' น้ำและทะเลเมฆขยับ')),
@@ -1399,9 +1422,24 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'ทะเลเมฆชั้น 2 และน้ำท่าเรือ'),
       h('div', { class: 'row bal-line' }, num('cloudDrift', 0.1), num('waterSpeed', 0.1), num('waterWave', 0.1), num('waterFoam', 0.1)),
       h('div', { class: 'muted' }, 'ต่ำ: ภาพเมฆเลื่อนเอง น้ำ 2 ชั้นเลื่อนคนละทิศ · สูง: + เมฆมีก้อนลอยซ้อนอีกชั้นและขอบบิดเบา ๆ น้ำมีคลื่น เส้นฟองขาวรอบแพ และประกาย · ปิด: ฟ้าวาดด้วยโค้ดแบบเดิม'),
+      h('h3', {}, 'ขอบเมืองท่าเรือ'),
+      h('div', { class: 'row bal-line' }, flag(fallsOn, a.harborFalls !== ca.harborFalls, ' น้ำตกขอบเมืองลงทะเลเมฆ (ปิด = ขอบน้ำตัดแบบเดิม)'), num('harborFallDepth', 0.5)),
+      h('div', { class: 'muted' }, 'ขอบน้ำโค้งแบบกระดาษฉีกมีฟองขาว ด้านที่หันเข้ากล้องมีม่านน้ำไหลลงหายในเมฆ · เห็นทุกระดับรวม "ปิด" (ระดับปิดเป็นภาพนิ่ง) ไม่ขึ้นกับสวิตช์ shader ด้านบน · มีผลตอนผู้เล่นเข้าแมพครั้งถัดไป · ไม่เปลี่ยนพื้นที่เดิน'),
+      h('div', { class: 'row bal-line' }, num('harborDeckHeight', 0.1)),
+      h('div', { class: 'muted' }, 'แพไม้ยกสูงเหนือน้ำ: ใต้ขอบด้านที่หันเข้ากล้องมีไม้หนา เสาปักน้ำมีวงฟอง และเงาบนน้ำ · เห็นทุกระดับ · 0 = แบนแบบเดิม · มีผลตอนผู้เล่นเข้าแมพครั้งถัดไป · ไม่เปลี่ยนพื้นที่เดิน'),
       h('h3', {}, 'บ่อน้ำ ลาวา และน้ำวน'),
       h('div', { class: 'row bal-line' }, num('lavaWave', 0.1), num('whirlTwist', 0.1), num('whirlGlow', 0.1)),
       h('div', { class: 'muted' }, 'บ่อน้ำและลาวากระเพื่อมเฉพาะระดับสูง (บ่อน้ำแข็งนิ่งเสมอ แรงคลื่นใช้ค่า "แรงคลื่น" ด้านบน) · น้ำวน: ต่ำ = แถบสว่างหมุนเข้ากลาง สูง = + เกลียวบิดและกลางวนมืดเต้นช้า ๆ · คลื่นฟองรอบน้ำวนในห้องคราเคนโยกเบา ๆ ทั้งต่ำและสูง'),
+      h('h3', {}, 'แสงทั้งจอ'),
+      h('div', { class: 'row bal-line' }, flag(postOn, a.shPost !== ca.shPost, ' แสงทั้งจอ (ปิด = ไม่มีขอบมืด โทนสี ลำแสง และหมอกไหล)'), flag(shaftsOn, a.shShafts !== ca.shShafts, ' ลำแสงแดด')),
+      h('div', { class: 'row bal-line' }, num('vignette', 0.01), num('bossRoomPostK', 0.05), num('mistFlow', 0.1)),
+      h('div', { class: 'row bal-line' }, num('shaftK', 0.1), num('shaftSpeed', 0.1), num('shaftAngle', 1)),
+      h('div', { class: 'muted' }, 'ต่ำ: ขอบมืด + ย้อมสีแมพ + ลำแสง · สูง: + ริ้วในลำแสง ความอิ่มสี ความสว่าง และหมอกไหลเป็นริ้ว · ป้ายชื่อ เลขดาเมจ และ HUD ไม่โดน · ความอิ่มสี/ความสว่างที่ไม่ใช่ 1 ต้องคัดลอกภาพจอทุกเฟรม (กินเครื่องกว่า โดยเฉพาะมือถือ)'),
+      h('h3', {}, 'โทนสี หมอก และลำแสง ต่อแมพ'),
+      h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), ...(Object.keys(SCENE_GRADE_NAME) as (keyof SceneGrade)[]).map((k) => h('th', {}, SCENE_GRADE_NAME[k])), h('th', {}, ''))),
+        h('tbody', {}, ...gradeMaps.map((z) => gradeRow(z.id, z.nameTh))))),
+      h('div', { class: 'muted' }, `แรงย้อม 0 = ไม่ย้อม · ลำแสง 0 = แมพนั้นไม่มี (สีลำแสงอ่อนตามสีย้อม) · หมอก × มีผลเฉพาะแมพที่มีหมอกลอยอยู่แล้ว (บึง หิมะ ภูเขาไฟ สุสานเรือผี วังวน) ตอนระดับสูง ช่วง ${SCENE_GRADE_RANGE.mist[0]}–${SCENE_GRADE_RANGE.mist[1]} · ห้องบอสไม่ย้อม ไม่มีลำแสง และหมอกไม่หนาขึ้น`),
     );
     const dashOn = h('input', { type: 'checkbox', checked: a.dashNew, onchange: (e: Event) => { a.dashNew = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     dashCard.replaceChildren(

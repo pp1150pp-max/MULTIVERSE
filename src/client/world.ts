@@ -3,7 +3,7 @@ import { WhirlpoolViews } from './whirlpool';
 import { WarpPadViews } from './warpPads';
 import { TreasureViews } from './treasureViews';
 import { currentBalance } from '../shared/balance';
-import { clearingRadius as arenaClearing, floorOf, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
+import { clearingRadius as arenaClearing, floorOf, inWhirlpoolCircle, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
 
 /**
  * The bare ground round a map's boss clearing: the arena's, or on a whirlpool's island (the Kraken Maelstrom's summoner,
@@ -22,9 +22,11 @@ import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, skyArt, type GroundTile } from './assets';
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
-import { HARBOR_FRAG, harborUniforms, paintHarborMask, updateHarborWater } from './harborGround';
+import { HARBOR_FRAG, harborUniforms, paintHarborMask, paintHarborSides, updateHarborWater } from './harborGround';
+import { HarborFalls } from './harborFalls';
 import { CloudSea, skyMood } from './cloudSea';
-import { gfxWater } from './gfxPrefs';
+import { gfxPost, gfxWater } from './gfxPrefs';
+import { mistLook, sceneGradeOf } from '../shared/sceneGrade';
 import { frac, noiseTexture, turn } from './waterFx';
 import { cloneShared } from './texShare';
 
@@ -271,7 +273,18 @@ class QuadGroups {
 }
 
 interface Fadeable { mat: THREE.SpriteMaterial; x: number; z: number; w: number; h: number; o: number }
-interface Fog { spr: THREE.Sprite; vx: number; vz: number; base: number; phase: number }
+/** Added to a mist blob's sprite shader at the high level: its alpha torn into ribbons by streaming noise. */
+const MIST_UNIFORMS = /* glsl */ `
+  uniform sampler2D uMistNoise;
+  uniform float uMistShift, uMistFlow, uMistPeak, uMistSeed;
+`;
+const MIST_FRAG = /* glsl */ `
+  float ribbon = texture2D(uMistNoise, vec2(vMapUv.x * 0.8 - uMistShift + uMistSeed, vMapUv.y * 3.0 + uMistSeed * 1.7)).r;
+  diffuseColor.a *= max(0.0, mix(1.0, smoothstep(0.3, 0.7, ribbon) * uMistPeak, uMistFlow));
+`;
+
+/** A mist blob; `flowing` is its ribbon material, made the first time the high level shows it. */
+interface Fog { spr: THREE.Sprite; vx: number; vz: number; base: number; phase: number; plain: THREE.SpriteMaterial; flowing?: THREE.SpriteMaterial }
 
 const S = Math.SQRT1_2;
 
@@ -532,6 +545,7 @@ export class World {
   private readonly flames: THREE.Sprite[] = [];
   private readonly portals: THREE.Sprite[] = [];
   private readonly fog: Fog[] = [];
+  private readonly mistUniforms = { uMistNoise: { value: noiseTexture() }, uMistShift: { value: 0 }, uMistFlow: { value: 0 }, uMistPeak: { value: 1 } };
   private snow: { geo: THREE.BufferGeometry; speeds: Float32Array } | null = null;
   /** Glow over the lava pools and along the cracks, pulsing slowly. */
   private readonly lavaGlows: THREE.Material[] = [];
@@ -572,6 +586,11 @@ export class World {
   private poolFlow = 0;
   /** The land's broken shoreline. */
   private readonly outline: IslandOutline;
+  /** The shore as drawn: the outline, or the harbour's softer one over its waterfall. */
+  private readonly shore: IslandOutline;
+  private falls: HarborFalls | null = null;
+  /** The harbour platforms' sides over the water (paintHarborSides). */
+  private harborSides: THREE.Texture | null = null;
   /** The props actually drawn: the rim forest has gaps in it, and nothing stands out over space. */
   private readonly props: PropSpec[];
   private readonly spaceTex: THREE.CanvasTexture;
@@ -584,6 +603,9 @@ export class World {
     this.bound = terrain.bound;
     this.pal = PALETTES[terrain.zone.theme];
     this.outline = new IslandOutline(this.half, this.bound, terrain.zone.seed + 21);
+    // The harbour's water pours off its rim (/admin harborFalls). Props still stand by the broken outline.
+    const pours = terrain.zone.town === 'harbor' && currentBalance().fxLayer.harborFalls;
+    this.shore = pours ? this.outline.softened() : this.outline;
     this.props = this.visibleProps(mulberry32(terrain.zone.seed + 23));
     // Floor 1 floats in space; floor 2 on the cloud sea (FLOOR2_SKY.md).
     this.backdrop = floorOf(terrain.zone) >= 2 ? paintSky() : paintSpace();
@@ -630,6 +652,22 @@ export class World {
       mask.generateMipmaps = false;
       this.groundTex = mask;
       this.groundUniforms = harborUniforms(mask, this.half);
+      this.groundUniforms.uFalls.value = pours ? 1 : 0;
+      const deckHeight = currentBalance().fxLayer.harborDeckHeight;
+      if (deckHeight > 0) {
+        const sides = new THREE.CanvasTexture(paintHarborSides(this.half, deckHeight));
+        sides.colorSpace = THREE.NoColorSpace;
+        sides.flipY = false;
+        sides.minFilter = sides.magFilter = THREE.LinearFilter;
+        sides.generateMipmaps = false;
+        this.harborSides = sides;
+        this.groundUniforms.uSides.value = sides;
+        this.groundUniforms.uDeckH.value = deckHeight;
+      }
+      if (pours) {
+        this.falls = new HarborFalls(this.shore, currentBalance().fxLayer.harborFallDepth);
+        this.add(this.falls.mesh);
+      }
     } else if (tiles.every(Boolean) && quads.flat().every(Boolean)) {
       const mask = new THREE.CanvasTexture(this.paintMask());
       mask.colorSpace = THREE.NoColorSpace;
@@ -678,7 +716,7 @@ export class World {
     }
     this.maskCtx = null;
     this.groundMesh = this.add(new THREE.Mesh(
-      this.ownGeo(this.outline.groundGeometry()),
+      this.ownGeo(this.shore.groundGeometry()),
       this.own(harbor
         ? new THREE.ShaderMaterial({ uniforms: this.groundUniforms!, vertexShader: GROUND_VERT, fragmentShader: HARBOR_FRAG, side: THREE.DoubleSide })
         : this.groundUniforms
@@ -824,7 +862,7 @@ export class World {
     ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
     this.bakeMapPieces(ctx);
 
-    const shore = this.outline.points();
+    const shore = this.shore.points();
     const shorePath = (dy = 0) => {
       ctx.beginPath();
       for (const [x, z] of shore) {
@@ -1164,6 +1202,7 @@ export class World {
 
     const right = new THREE.Vector3(S, 0, -S);
     const up = new THREE.Vector3().crossVectors(right, ISO_DIR.clone().negate()).normalize();
+    let decorSeq = 0;
     const place = (set: (typeof DECOR)[ZoneTheme], cell: number, x: number, z: number) => {
       const { positions, uvs } = groups.get(set.key);
       const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.15);
@@ -1185,7 +1224,17 @@ export class World {
         const ux = up.x * size;
         const uy = up.y * size;
         const uz = up.z * size;
-        positions.push(x - rx, 0, z - rz, x + rx, 0, z + rz, x + rx + ux, uy, z + rz + uz, x - rx + ux, uy, z - rz + uz);
+        // Standing details face the camera like the prop sprites, so two that overlap on screen at the same depth (or one
+        // and a prop) swapped frame by frame (owner 2026-11-27, the maelstrom's shells, starfish and buoy). Each gets its
+        // own tiny step toward the camera like addProp's, on the half steps so it never ties with a prop.
+        const step = ((decorSeq++ % PROP_DEPTH_STEPS) + 0.5) * PROP_DEPTH_STEP;
+        const dx = ISO_DIR.x * step;
+        const dy = ISO_DIR.y * step;
+        const dz = ISO_DIR.z * step;
+        positions.push(
+          x - rx + dx, dy, z - rz + dz, x + rx + dx, dy, z + rz + dz,
+          x + rx + ux + dx, uy + dy, z + rz + uz + dz, x - rx + ux + dx, uy + dy, z - rz + uz + dz,
+        );
       }
       const [ul, ur] = flip ? [u1, u0] : [u0, u1];
       uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
@@ -1199,6 +1248,8 @@ export class World {
         const px = x + rand(r, -spread, spread);
         const pz = z + rand(r, -spread, spread);
         if (Math.abs(px) > B || Math.abs(pz) > B) continue;
+        // Nothing on a whirlpool or its island (the Kraken Maelstrom, owner 2026-11-27), nor right on its rim.
+        if (inWhirlpoolCircle(this.zone, px, pz, 1)) continue;
         if (spot === 'water' ? !inPool(px, pz, -0.3) : inPool(px, pz, 0.5)) continue;
         if (spot !== 'road' && this.distToPath(px, pz) < trail + 0.2) continue;
         if (near(px, pz, start, campRadius * 0.8) || portals.some((g) => near(px, pz, g, 2.5))) continue;
@@ -1291,8 +1342,33 @@ export class World {
       spr.scale.set(size, size * 0.55, 1);
       spr.position.set(rand(r, -B, B), rand(r, 0.8, 2.2), rand(r, -B, B));
       spr.renderOrder = 5;
-      this.fog.push({ spr, vx: rand(r, 0.25, 0.6), vz: rand(r, -0.3, 0.3), base, phase: r() * Math.PI * 2 });
+      this.fog.push({ spr, vx: rand(r, 0.25, 0.6), vz: rand(r, -0.3, 0.3), base, phase: r() * Math.PI * 2, plain: spr.material as THREE.SpriteMaterial });
     }
+  }
+
+  /** The high level's mist: a copy of the blob's material that tears it into ribbons streaming sideways. */
+  private flowingMist(plain: THREE.SpriteMaterial, seed: number): THREE.SpriteMaterial {
+    const m = this.own(plain.clone());
+    m.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.mistUniforms, { uMistSeed: { value: seed } });
+      shader.fragmentShader = MIST_UNIFORMS + shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>${MIST_FRAG}`);
+    };
+    m.customProgramCacheKey = () => 'mist-flow';
+    return m;
+  }
+
+  /** Swaps the mist between its own material and the ribbons, and returns × its thickness (docs/systems/shaders.md). */
+  private updateMist(): number {
+    if (!this.fog.length) return 1;
+    const balance = currentBalance();
+    const look = mistLook(gfxPost(), balance.fxLayer.mistFlow, sceneGradeOf(this.zone.id, balance.sceneGrade), !!this.zone.roomOf);
+    this.mistUniforms.uMistShift.value = frac(this.t * 0.025);
+    this.mistUniforms.uMistFlow.value = look.flow;
+    this.mistUniforms.uMistPeak.value = look.peak;
+    this.fog.forEach((f, i) => {
+      f.spr.material = look.flow > 0 ? (f.flowing ??= this.flowingMist(f.plain, frac(i * 0.618))) : f.plain;
+    });
+    return look.thick;
   }
 
   /** Flakes falling in a box that follows the player, so there is no need for many of them. */
@@ -1380,6 +1456,8 @@ export class World {
     this.spaceTex.dispose();
     this.whirlpools?.dispose();
     this.cloudSea?.dispose();
+    this.falls?.dispose();
+    this.harborSides?.dispose();
     this.warpPads?.dispose();
     this.treasure?.dispose();
   }
@@ -1398,6 +1476,7 @@ export class World {
     if (u.uShLevel) {
       this.harborFlow += dt * cfg.waterSpeed;
       updateHarborWater(u, level, this.harborFlow, cfg);
+      this.falls?.update(level > 0 ? this.harborFlow : 0);
       return;
     }
     // Pools move only at the high level. Lava churns slower and glows; ice stays still.
@@ -1462,6 +1541,7 @@ export class World {
       (p.material as THREE.SpriteMaterial).opacity = 0.4 + Math.sin(this.t * 3.1) * 0.12;
     }
     const B = this.bound;
+    const thick = this.updateMist();
     for (const f of this.fog) {
       const s = f.spr.position;
       s.x += f.vx * dt;
@@ -1469,7 +1549,7 @@ export class World {
       if (s.x > B) s.x = -B;
       if (s.z > B) s.z = -B;
       if (s.z < -B) s.z = B;
-      (f.spr.material as THREE.SpriteMaterial).opacity = f.base * (0.75 + 0.25 * Math.sin(this.t * 0.4 + f.phase));
+      (f.spr.material as THREE.SpriteMaterial).opacity = f.base * (0.75 + 0.25 * Math.sin(this.t * 0.4 + f.phase)) * thick;
     }
   }
 

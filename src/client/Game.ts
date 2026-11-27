@@ -35,6 +35,7 @@ import { SpriteActor } from './SpriteActor';
 import { sheets, uploadAllTextures } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
+import { NpcWalk } from './walkTo';
 import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
@@ -65,6 +66,7 @@ import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
 import { gfxOwnNumsOnly, gfxShakeOn, setSoftwareRender, setTouchProbe } from './gfxPrefs';
 import { updateHudLayout } from './hudLayout';
+import { PostFx } from './postFx';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -157,6 +159,7 @@ export class Game {
   talkReady = false;
   /** Where a left click sent the player: walk there, then pick up / talk / rest on arrival. */
   private goal: ClickGoal | null = null;
+  private readonly npcWalk = new NpcWalk();
   mouseWorld: Vec2 = { x: 0, z: 0 };
   /** Touch: the monster tapped to lock on to (its id), or null = aim at the nearest one. */
   private lockId: number | null = null;
@@ -187,6 +190,8 @@ export class Game {
   private last = 0;
   /** Frames drawn so far, up to 3: the first entry's loading screen lifts after the third. */
   private frames = 0;
+  /** The corner shade, map tone and sun shafts over the finished picture (docs/systems/shaders.md). */
+  private readonly postFx = new PostFx();
 
   constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
@@ -297,7 +302,10 @@ export class Game {
     this.last = now;
     this.update(dt);
     // The rest screen covers everything in black: the world keeps up with the server, but nothing is drawn (battery).
-    if (!this.restScreen || this.frames < 3) this.renderer.render(this.scene, this.camera);
+    if (!this.restScreen || this.frames < 3) {
+      this.renderer.render(this.scene, this.camera);
+      this.postFx.draw(this.renderer, this.zone, dt, (this.camTarget.x - this.camTarget.z) * S);
+    }
     if (this.frames < 3) {
       this.frames++;
       // Behind the first entry's loading screen: send every texture to the GPU and build the shaders
@@ -305,6 +313,7 @@ export class Game {
       if (this.frames === 1) {
         uploadAllTextures(this.renderer);
         this.renderer.compile(this.scene, this.camera);
+        this.postFx.warm(this.renderer);
       }
       if (this.frames === 3) endEntryLoading();
     }
@@ -628,7 +637,10 @@ export class Game {
     let moveTo: Vec2 | null = null;
     // Walking by hand or right-clicking forgets a clicked goal; otherwise keep walking to it.
     if (move || i.rmb) this.goal = null;
-    if (this.goal) moveTo = { x: this.goal.x, z: this.goal.z };
+    if (this.goal) {
+      const to = this.goal.kind === 'npc' ? this.npcWalk.aim(this.backend.terrain, this.player, this.goal) : this.goal;
+      moveTo = { x: to.x, z: to.z };
+    }
     if (i.rmb) {
       moveTo = { ...this.mouseWorld };
       if (i.rmbPressed) this.fx.marker(moveTo.x, moveTo.z);

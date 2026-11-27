@@ -1859,7 +1859,8 @@ export class Sim {
       this.lootQueue.push(kind);
       return;
     }
-    const [x, z] = this.lootSpot(m.x, m.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
+    const at = m.lootFrom ?? m;
+    const [x, z] = this.lootSpot(at.x, at.z, 0.5 + Math.random() * (m.isBoss ? 2 : 1));
     this.pushLoot(m, kind, x, z, owner, ownerParty);
   }
 
@@ -1882,19 +1883,20 @@ export class Sim {
       [kinds[i], kinds[j]] = [kinds[j], kinds[i]];
     }
     const a0 = Math.random() * Math.PI * 2;
+    const at = m.lootFrom ?? m;
     for (let i = 0; i < n; i++) {
       const a = a0 + i * 2.399963229728653;
       let r = Math.max(0.5, R * Math.sqrt((i + 0.5) / n));
       let spot: [number, number] | null = null;
       for (; r >= 0.5; r -= 0.4) {
-        const lx = m.x + Math.cos(a) * r;
-        const lz = m.z + Math.sin(a) * r;
+        const lx = at.x + Math.cos(a) * r;
+        const lz = at.z + Math.sin(a) * r;
         if (!this.terrain.isBlocked(lx, lz, LOOT_STAND_R)) {
           spot = [lx, lz];
           break;
         }
       }
-      spot ??= this.lootSpot(m.x, m.z, 0.5);
+      spot ??= this.lootSpot(at.x, at.z, 0.5);
       this.pushLoot(m, kinds[i], spot[0], spot[1], owner, party);
     }
   }

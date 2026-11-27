@@ -186,7 +186,9 @@ for (const zone of Object.values(BOSS_ROOMS)) {
   ok(inBossArena(zone, p.x, p.z) && autoBlocked(zone, sim.monsters, p), `${zone.id}: no Auto in the boss arena`);
   p.x = zone.start.x;
   p.z = zone.start.z;
-  ok(!autoBlocked(zone, sim.monsters, p), `${zone.id}: Auto is fine at camp`);
+  // The kraken's room is a small floor in the middle of the water (owner 2026-11-27): all of it is the arena (rooms have no Auto anyway).
+  if (zone.boss?.monster === 'kraken') ok(inBossArena(zone, p.x, p.z) && !zone.allowAutoPlay, `${zone.id}: its whole floor is the arena, no Auto`);
+  else ok(!autoBlocked(zone, sim.monsters, p), `${zone.id}: Auto is fine at camp`);
   const boss = sim.monsters.find((m) => m.isBoss)!;
   boss.target = p;
   boss.state = 'chase';

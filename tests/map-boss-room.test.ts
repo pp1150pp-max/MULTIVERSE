@@ -74,7 +74,8 @@ for (const id of BOSS_ROOM_IDS) {
   // The boss stays reachable: a ring of blockers (a polygon is filled) around the boss and its reach.
   x = clone(id);
   const ring = (r: number) => Array.from({ length: 24 }, (_, i) => [room.boss.x + Math.cos((i / 24) * Math.PI * 2) * r, room.boss.z + Math.sin((i / 24) * Math.PI * 2) * r] as [number, number]);
-  x.blockers = [{ id: 'wall', pts: ring(9) }];
+  // Inside where players appear (the kraken's room has them on a small floor near the middle, owner 2026-11-27).
+  x.blockers = [{ id: 'wall', pts: ring(Math.min(9, Math.hypot(s.x - room.boss.x, s.z - room.boss.z) - 0.6)) }];
   ok(has(x, 'unreachable'), `${id}: walling the boss in (nobody can get within reach) is refused`);
 
   // The props are the owner's to change.
