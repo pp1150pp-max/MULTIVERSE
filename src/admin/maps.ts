@@ -4,6 +4,8 @@
 import { mountMapEditor } from './mapEditor/mount';
 import { CODE_MAP_FROM_DB, mergeBalance, type BalanceTuning } from '../shared/balance';
 import { codeWaves, WAVE_NUMS, type WaveConfig, type WaveTuning } from '../shared/waveGame';
+import { chestOdds, codeTreasure, TREASURE_NUMS, type ChestRowTuning, type TreasureConfig, type TreasureTuning } from '../shared/treasure';
+import { fmtPct } from '../shared/mysteryBox';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -21,18 +23,134 @@ export async function renderMaps(view: HTMLElement, h: H, api: Api, onSaved: (tu
   const editorBox = h('div', { class: 'card me-card' });
   const switchBox = h('div', { class: 'card' });
   const wavesBox = h('div', { class: 'card' });
+  const treasureBox = h('div', { class: 'card' });
   view.replaceChildren(
     h('h2', {}, 'แมพ'),
     ...(perms.mapEdit ? [editorBox] : []),
-    ...(perms.balance ? [switchBox, wavesBox] : []),
+    ...(perms.balance ? [switchBox, treasureBox, wavesBox] : []),
     ...(!perms.mapEdit && !perms.balance ? [h('div', { class: 'msg bad' }, 'ไม่มีสิทธิ์ในหน้านี้')] : []),
   );
   if (perms.mapEdit) stopEditor = mountMapEditor(editorBox, h, api, { rollback: !!perms.mapRollback, export: !!perms.mapExport, create: !!perms.mapCreate, del: !!perms.mapDelete });
   if (perms.balance) {
     await renderSwitch(switchBox, h, api, onSaved);
+    await renderTreasure(treasureBox, h, api, onSaved);
     await renderWaves(wavesBox, h, api, onSaved);
   }
 }
+
+/**
+ * The card "หีบสมบัติ + ศาลเจ้า" (owner 2026-11-27, docs/systems/chests-shrines.md): the two switches, every number and the chest
+ * table, server-wide. Where chests and shrines stand is edited in the map editor above (📍 tool). Stored with the balance settings
+ * (BalanceTuning.treasure, only what differs from the code), so it uses the balance permission and its audit.
+ */
+async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tuning: BalanceTuning) => void): Promise<void> {
+  view.replaceChildren(h('div', { class: 'muted' }, 'กำลังโหลด…'));
+  let saved: BalanceTuning;
+  try {
+    saved = (await api<{ tuning: BalanceTuning }>('GET', '/admin/balance')).tuning;
+  } catch (e) {
+    view.replaceChildren(h('div', { class: 'msg bad' }, e instanceof Error ? e.message : String(e)));
+    return;
+  }
+  const code = codeTreasure();
+  const cur = mergeBalance(saved).treasure;
+  const msg = h('div', { class: 'msg' });
+  const chestsOn = h('input', { type: 'checkbox', checked: cur.chests });
+  const shrinesOn = h('input', { type: 'checkbox', checked: cur.shrines });
+  const auraOn = h('input', { type: 'checkbox', checked: cur.aura });
+  const keys = Object.keys(TREASURE_NUMS) as (keyof typeof TREASURE_NUMS)[];
+  const inputs = Object.fromEntries(keys.map((k) => {
+    const d = TREASURE_NUMS[k];
+    return [k, h('input', { type: 'number', step: String(d.step), min: String(d.range[0]), max: String(d.range[1]), value: String(cur[k]) })];
+  })) as Record<string, HTMLInputElement>;
+  // The chest table: on/off, % (empty = shares what is left) and how many, per row; the real odds update as you type.
+  const rowInputs = cur.rows.map((r) => ({
+    id: r.id,
+    on: h('input', { type: 'checkbox', checked: r.on }),
+    pct: h('input', { type: 'number', step: '0.01', min: '0', max: '100', value: r.pct === null ? '' : String(r.pct), placeholder: 'แบ่งที่เหลือ', style: 'width:7em' }),
+    count: h('input', { type: 'number', step: '1', min: '1', max: r.prize.kind === 'gear' ? '1' : '10', value: String(r.count), style: 'width:4em', disabled: r.prize.kind === 'gear' }),
+    real: h('span', { class: 'muted' }),
+  }));
+  /** The table as typed (bad numbers fall back to the code's). */
+  const typedRows = (): TreasureConfig['rows'] => code.rows.map((d, i) => {
+    const x = rowInputs[i];
+    const p = x.pct.value.trim() === '' ? null : Number(x.pct.value);
+    const n = Number(x.count.value);
+    return { ...d, on: x.on.checked, pct: p === null || Number.isFinite(p) ? p : d.pct, count: Number.isInteger(n) && n >= 1 ? n : d.count };
+  });
+  const sumNote = h('div', { class: 'muted' });
+  const showOdds = (): void => {
+    const rows = typedRows();
+    const odds = chestOdds({ ...code, rows }, true);
+    rowInputs.forEach((x) => {
+      const o = odds.find((y) => y.row.id === x.id);
+      x.real.textContent = o ? `จริง ${fmtPct(o.pct)}` : 'ไม่ออก';
+    });
+    const fixed = rows.filter((r) => r.on && r.pct !== null).reduce((a, r) => a + (r.pct ?? 0), 0);
+    sumNote.textContent = `โอกาสที่ตั้งไว้รวม ${+fixed.toFixed(4)}%${fixed > 100 ? ' — เกิน 100% บันทึกไม่ได้' : ''} · แถวที่เว้นว่างแบ่งส่วนที่เหลือเท่า ๆ กัน · "จริง" = โอกาสบนแมพที่มีกุญแจบอส (แมพไม่มีบอส แถวกุญแจไม่ออก ส่วนของมันไปแถวที่แบ่งส่วนที่เหลือ)`;
+  };
+  for (const x of rowInputs) for (const el of [x.on, x.pct, x.count]) el.addEventListener('input', showOdds);
+  showOdds();
+  const send = async (t: TreasureTuning | undefined, text: string): Promise<void> => {
+    if (!confirm(text)) return;
+    const tuning: BalanceTuning = { ...saved };
+    if (t && Object.keys(t).length) tuning.treasure = t;
+    else delete tuning.treasure;
+    msg.className = 'msg';
+    msg.textContent = 'กำลังบันทึก…';
+    try {
+      saved = (await api<{ tuning: BalanceTuning }>('POST', '/admin/balance', { tuning, part: 'rest' })).tuning;
+      onSaved(saved);
+      await renderTreasure(view, h, api, onSaved);
+    } catch (e) {
+      msg.className = 'msg bad';
+      msg.textContent = e instanceof Error ? e.message : String(e);
+    }
+  };
+  const save = h('button', { class: 'primary', onclick: () => {
+    const t: TreasureTuning = {};
+    if (chestsOn.checked !== code.chests) t.chests = chestsOn.checked;
+    if (shrinesOn.checked !== code.shrines) t.shrines = shrinesOn.checked;
+    if (auraOn.checked !== code.aura) t.aura = auraOn.checked;
+    for (const k of keys) {
+      const n = Number(inputs[k].value);
+      if (Number.isFinite(n) && n !== code[k]) t[k] = n;
+    }
+    const rows: Record<string, ChestRowTuning> = {};
+    typedRows().forEach((r, i) => {
+      const d = code.rows[i];
+      const o: ChestRowTuning = {};
+      if (r.on !== d.on) o.on = r.on;
+      if (r.pct !== d.pct) o.pct = r.pct;
+      if (r.count !== d.count) o.count = r.count;
+      if (Object.keys(o).length) rows[d.id] = o;
+    });
+    if (Object.keys(rows).length) t.rows = rows;
+    void send(t, 'บันทึกค่า "หีบสมบัติ + ศาลเจ้า" ทั้งเซิร์ฟเลยไหม?\n\nมีผลทันที (หีบที่ถูกเปิดไปแล้วนับเวลาเกิดใหม่ตามค่าเดิมจนกลับมา บัฟที่ได้ไปแล้วใช้ค่าเดิมจนหมด)');
+  } }, '💾 บันทึก');
+  const reset = h('button', { onclick: () => void send(undefined, 'คืนค่า "หีบสมบัติ + ศาลเจ้า" เป็นค่าในโค้ดทั้งหมด?') }, '↺ คืนค่าในโค้ด');
+  const codeRow = (i: number) => {
+    const d = code.rows[i];
+    return `${d.pct === null ? 'แบ่งที่เหลือ' : `${d.pct}%`}${d.prize.kind === 'gear' ? '' : ` ×${d.count}`}`;
+  };
+  view.replaceChildren(
+    h('h3', {}, 'หีบสมบัติ + ศาลเจ้า'),
+    h('div', { class: 'muted me-hint' }, 'วางจุดหีบ/ศาลในตัวแก้แมพด้านบน (เครื่องมือ 📍 NPC / ประตู → "＋ เพิ่มหีบสมบัติ" / "＋ เพิ่มศาลเจ้า" เฉพาะแมพฟาร์มชั้น 1) · หีบ: คนแรกที่เปิดได้ทอง + ของตามจำนวน "ของต่อหีบ" ตกรอบหีบ (ม่วงแน่นอนตามที่ตั้ง ที่เหลือสุ่มจากตาราง ออกซ้ำได้) แล้วหีบหายไปจนเกิดใหม่ · ศาล: แตะแล้วได้บัฟ 1 อย่าง (ตามที่ตั้งในศาล หรือสุ่ม) ใช้ศาลเดิมซ้ำได้ตามคูลดาวน์ต่อคน · Auto Play ไม่เปิดหีบ/ไม่ใช้ศาล · Guest ใช้ได้ · ค่าในวงเล็บ = ค่าในโค้ด'),
+    h('div', { class: 'row bal-line' },
+      h('label', { title: `ค่าในโค้ด: ${code.chests ? 'เปิด' : 'ปิด'}` }, chestsOn, ' เปิดหีบสมบัติ (ปิด = หีบไม่แสดง เปิดไม่ได้)'),
+      h('label', { title: `ค่าในโค้ด: ${code.shrines ? 'เปิด' : 'ปิด'}` }, shrinesOn, ' เปิดศาลเจ้า (ปิด = ใช้ไม่ได้ บัฟที่ได้ไปแล้วอยู่จนหมดเวลา)'),
+      h('label', { title: `ค่าในโค้ด: ${code.aura ? 'เปิด' : 'ปิด'}` }, auraOn, ' ออร่ารอบหีบ/ศาล (แสงบนพื้น วงหมุน ประกายลอยขึ้น สีตามบัฟ หีบสีทอง)')),
+    h('div', { class: 'me-grid2' }, ...keys.map((k) => h('label', { title: `${TREASURE_NUMS[k].range[0]}–${TREASURE_NUMS[k].range[1]}` }, `${TREASURE_NUMS[k].name} (${code[k]}) `, inputs[k]))),
+    h('h4', {}, 'ของในหีบ (ได้ทองทุกหีบ + ของแต่ละชิ้นที่ไม่ใช่ม่วงแน่นอนสุ่ม 1 แถว ออกซ้ำได้)'),
+    h('table', { class: 'tbl' },
+      h('tr', {}, h('th', {}, 'เปิด'), h('th', {}, 'ของ'), h('th', {}, 'โอกาส %'), h('th', {}, 'จำนวน'), h('th', {}, ''), h('th', {}, 'ค่าในโค้ด')),
+      ...rowInputs.map((x, i) => h('tr', {}, h('td', {}, x.on), h('td', {}, code.rows[i].name), h('td', {}, x.pct), h('td', {}, x.count), h('td', {}, x.real), h('td', { class: 'muted' }, codeRow(i))))),
+    sumNote,
+    h('div', { class: 'muted' }, 'อุปกรณ์สุ่มตามเลเวลของคนเปิด (ไม่เกินช่วงเลเวลของแมพ) และอาชีพของคนเปิด · กุญแจ = กุญแจบอสของแมพนั้น · ของทุกชิ้นตกพื้นรอบหีบ เก็บได้เฉพาะคนเปิด (30 วิ แล้วหายแบบของดรอปทั่วไป) · ทองเข้ากระเป๋าเลย'),
+    h('div', { class: 'row' }, save, reset, msg),
+  );
+}
+
 
 /**
  * The card "มินิเกม: รอดมอนเป็นระลอก" (owner 2026-11-21): the switch and every number of the minigame, server-wide. Stored with the

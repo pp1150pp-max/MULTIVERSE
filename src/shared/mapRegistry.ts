@@ -4,7 +4,7 @@
 // tools/bake_maps.ts). Server and browser import the same files, so both build the same Terrain. No DB, no network:
 // PR 5 adds `set()` callers (published layouts from the DB, a draft preview) and the /admin switch below decides
 // whether those are used at all.
-import type { MapData } from './mapSchema';
+import { TREASURE_MAP_IDS, type MapData } from './mapSchema';
 import nexus_city from './data/maps/nexus_city.json';
 import emerald_forest from './data/maps/emerald_forest.json';
 import misty_marsh from './data/maps/misty_marsh.json';
@@ -27,6 +27,20 @@ import kraken_maelstrom_room from './data/maps/kraken_maelstrom_room.json';
 const BUNDLED: Record<string, MapData> = Object.fromEntries(
   ([nexus_city, emerald_forest, emerald_forest_room, misty_marsh, misty_marsh_room, frost_reach, frost_reach_room, ashen_isle, ashen_isle_room, harbor_town, shipwreck_beach, shipwreck_beach_room, smugglers_cove, smugglers_cove_room, ghost_ship_graveyard, ghost_ship_graveyard_room, kraken_maelstrom, kraken_maelstrom_room] as unknown as MapData[]).map((m) => [m.id, m]),
 );
+
+/**
+ * A layout saved before chests and shrines existed (2026-11-27) has no `chests` / `shrines` field at all: it gets the bundled
+ * file's, so a farm map the owner published earlier still has them. An empty list (the owner took them all away) stays empty.
+ */
+export function withBundledTreasure(map: MapData): MapData {
+  const b = BUNDLED[map.id];
+  if (!b || !TREASURE_MAP_IDS.includes(map.id) || (map.chests !== undefined && map.shrines !== undefined)) return map;
+  return {
+    ...map,
+    ...(map.chests === undefined && b.chests ? { chests: b.chests.map((c) => ({ ...c })) } : {}),
+    ...(map.shrines === undefined && b.shrines ? { shrines: b.shrines.map((c) => ({ ...c })) } : {}),
+  };
+}
 
 /** Layouts that replace the bundled ones (empty in PR 3: nothing sets them yet). */
 const override = new Map<string, MapData>();
@@ -64,7 +78,7 @@ export const MapRegistry = {
   },
   /** Replace a zone's layout (PR 5 and later). Takes effect for Terrains built afterwards. */
   set(map: MapData): void {
-    override.set(map.id, map);
+    override.set(map.id, withBundledTreasure(map));
   },
   clear(zoneId?: string): void {
     if (zoneId) override.delete(zoneId);

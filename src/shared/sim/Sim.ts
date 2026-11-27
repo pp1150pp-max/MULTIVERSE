@@ -39,7 +39,9 @@ import { Monster } from './Monster';
 import { withExtras } from './extraEffects';
 import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
-import { Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
+import { DROP_LIFE, Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
+import { chestGold, chestOdds, rollChestRow, SHRINE_BUFF_ICON, SHRINE_BUFF_NAME, shrinePct, type ChestRow } from '../treasure';
+import { SHRINE_BUFFS, type MapChest, type MapShrine, type ShrineBuff } from '../mapSchema';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
 import { questRows } from '../quests';
@@ -160,6 +162,14 @@ export const LOOT_CLICK_RANGE = 1.5;
 
 /** Owner's balance (2026-11-09): gold drops x2, potion drop chance x2, boss potions x2. */
 const DROP_POTION_MULT = 2;
+
+/** "10 นาที", "3 นาที 20 วิ", "45 วิ" (a chest or shrine wait, rounded up to seconds). */
+function fmtWait(sec: number): string {
+  const t = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return m > 0 ? (s ? `${m} นาที ${s} วิ` : `${m} นาที`) : `${s} วิ`;
+}
 
 export class Sim {
   readonly terrain: Terrain;
@@ -651,6 +661,7 @@ export class Sim {
     p.lastHurt = this.time;
     p.interruptPotions();
     this.cancelReturnCast(p, 'โดนโจมตี');
+    this.cancelChest(p, 'โดนโจมตี');
     if (m.isBoss) m.resetRamp();
     this.events.push({ t: 'flash', id: p.id });
     this.anim(p.id, 'hit');
@@ -707,6 +718,7 @@ export class Sim {
     p.lastHurt = this.time;
     p.interruptPotions();
     this.cancelReturnCast(p, 'โดนโจมตี');
+    this.cancelChest(p, 'โดนโจมตี');
     this.events.push({ t: 'flash', id: p.id });
     if (dmg > 0) this.dmgText(p, `-${dmg}`, 'hurt', p.id);
     if (p.hp <= 0) this.killPlayer(p);
@@ -737,6 +749,7 @@ export class Sim {
     p.hp -= dmg;
     p.lastHurt = this.time;
     this.cancelReturnCast(p, 'โดนลาวา');
+    this.cancelChest(p, 'โดนลาวา');
     this.events.push({ t: 'flash', id: p.id });
     this.dmgText(p, `-${dmg}`, 'hurt', p.id);
     this.fx('burst', p.x, 0.2, p.z, '#ff8a3a', 4, 2);
@@ -962,6 +975,8 @@ export class Sim {
     p.hp = 0;
     p.moving = false;
     p.castT = 0;
+    p.chestT = 0;
+    p.chestId = '';
     p.mounted = false;
     p.guardT = 0;
     // Skill buffs end with death.
@@ -989,6 +1004,184 @@ export class Sim {
     this.fx('burst', p.x, 1, p.z, '#9fffb0', 16, 3);
     this.text(p.x, p.topY, p.z, 'HP / MP เต็ม', 'heal', 1.2, p.id);
     this.log(`${spot.kind === 'fountain' ? 'ดื่มน้ำจากน้ำพุ' : 'นั่งพักข้างกองไฟ'} — HP และ MP เต็ม (พักได้อีกใน ${REST_CD} วิ)`, '#9fffb0', p.id);
+    return true;
+  }
+
+  // ------------------------------------------------------------ treasure chests and shrines
+
+  /**
+   * Chests opened on this map and when each is back (docs/systems/chests-shrines.md): chest id → time on chestClock. The server gives
+   * each channel a map that outlives its Sim (server/channels.ts), so an empty channel that closes and opens again keeps them shut.
+   */
+  chestGone: Map<string, number> = new Map();
+  /** The clock chestGone counts in (seconds). The server sets a wall clock; alone (tests) it is this Sim's time. */
+  chestClock: () => number = () => this.time;
+
+  /** This map's chests and shrines (none where the switch is off). */
+  get chests(): readonly MapChest[] {
+    return currentBalance().treasure.chests ? this.zone.chests ?? [] : [];
+  }
+  get shrines(): readonly MapShrine[] {
+    return currentBalance().treasure.shrines ? this.zone.shrines ?? [] : [];
+  }
+  /** Is this chest at its spot now (not opened, or back)? */
+  chestHere(id: string): boolean {
+    const at = this.chestGone.get(id);
+    return at === undefined || this.chestClock() >= at;
+  }
+  /** Seconds before an opened chest is back (0 = it is here). */
+  chestBackIn(id: string): number {
+    const at = this.chestGone.get(id);
+    return at === undefined ? 0 : Math.max(0, at - this.chestClock());
+  }
+  /** The chests opened now, for the snapshot. */
+  chestsGone(): string[] {
+    const now = this.chestClock();
+    return [...this.chestGone].filter(([, at]) => now < at).map(([id]) => id);
+  }
+
+  /** Why this player can't open a chest or use a shrine right now (null = they can). Auto Play never does (owner 2026-11-27). */
+  private treasureBlocked(p: Player): string | null {
+    if (!p.alive) return 'ตายอยู่';
+    if (p.autoOn) return 'ปิด Auto Play ก่อน — หีบสมบัติและศาลเจ้าใช้ได้เฉพาะตอนเล่นเอง';
+    return null;
+  }
+
+  /**
+   * Starts opening chest `id` (TreasureConfig.openSec seconds standing still; 0 = opens at once). The server checks everything:
+   * the switch, alive, no Auto, within range, the chest is there, not opening one already.
+   */
+  startChest(p: Player, id: string): boolean {
+    const cfg = currentBalance().treasure;
+    const c = this.chests.find((x) => x.id === id);
+    if (!c || p.chestT > 0) return false;
+    const why = this.treasureBlocked(p);
+    if (why) {
+      this.text(p.x, p.topY, p.z, why, 'info', 1.4, p.id);
+      return false;
+    }
+    if (Math.hypot(p.x - c.x, p.z - c.z) > cfg.range + 0.3) return false;
+    if (!this.chestHere(id)) {
+      this.text(p.x, p.topY, p.z, `หีบนี้ถูกเปิดไปแล้ว — กลับมาใน ${fmtWait(this.chestBackIn(id))}`, 'info', 1.4, p.id);
+      return false;
+    }
+    if (cfg.openSec <= 0) return this.openChest(p, c);
+    p.chestT = p.chestTotal = cfg.openSec;
+    p.chestId = id;
+    p.chestX = p.x;
+    p.chestZ = p.z;
+    p.moveTarget = null;
+    return true;
+  }
+
+  /** Stops opening a chest (moving, attacking, a hit, a stun, death, Auto Play). */
+  cancelChest(p: Player, why: string): void {
+    if (p.chestT <= 0) return;
+    p.chestT = 0;
+    p.chestId = '';
+    this.text(p.x, p.topY + 0.4, p.z, `หยุดเปิดหีบ (${why})`, 'info', 1, p.id);
+  }
+
+  private tickChest(p: Player, dt: number, it: Intent): void {
+    if (p.chestT <= 0) return;
+    if (!p.alive) return this.cancelChest(p, 'ตาย');
+    if (p.autoOn) return this.cancelChest(p, 'เปิด Auto Play');
+    if (p.stunT > 0) return this.cancelChest(p, 'โดนสตัน');
+    if (it.basic || it.skills.length || it.dash) return this.cancelChest(p, 'โจมตี');
+    if (Math.hypot(p.x - p.chestX, p.z - p.chestZ) > 0.15) return this.cancelChest(p, 'เดิน');
+    p.chestT -= dt;
+    if (p.chestT > 0) return;
+    p.chestT = 0;
+    const c = this.chests.find((x) => x.id === p.chestId);
+    p.chestId = '';
+    if (!c) return;
+    // Someone else finished first: the chest went while this player was still opening it.
+    if (!this.chestHere(c.id)) return void this.text(p.x, p.topY, p.z, 'มีคนเปิดหีบนี้ไปก่อนแล้ว', 'info', 1.4, p.id);
+    this.openChest(p, c);
+  }
+
+  /** Opens chest `c` for `p`: gold, one row of the table (into the bag, or on the ground for them alone when it doesn't fit), gone for chestRespawn s. */
+  openChest(p: Player, c: MapChest, r: Rng = Math.random): boolean {
+    const cfg = currentBalance().treasure;
+    this.chestGone.set(c.id, this.chestClock() + cfg.chestRespawn);
+    const gold = chestGold(cfg, this.zone.levels, r);
+    p.gold += gold;
+    const key = this.zone.lair ? BOSS_KEY[this.zone.lair.boss] : undefined;
+    // Pieces on the ground around the chest (owner 2026-11-27: 10, 1 surely purple, the rest rolled, repeats allowed). Only the
+    // opener may pick them up, for as long as they lie there.
+    const odds = chestOdds(cfg, !!key);
+    const epic = cfg.rows.find((x) => x.prize.kind === 'gear' && x.prize.rarity === 'epic');
+    const got: { kind: LootKind; text: string; color: string }[] = [];
+    for (let i = 0; i < cfg.pieces; i++) {
+      const row = i < cfg.epicSure && epic ? epic : rollChestRow(odds, r);
+      const g = row ? this.chestPrize(p, row, key, r) : null;
+      if (!g) continue;
+      got.push(g);
+      const [x, z] = this.lootSpot(c.x, c.z, 0.7 + r() * 1.6);
+      this.loots.push(new Loot(this.newId(), x, z, c.x, c.z, g.kind, { owner: p.id, ownerParty: null, ownerUntil: this.time + DROP_LIFE + 5 }));
+    }
+    const count = (rar: string) => got.filter((g) => g.kind.type === 'item' && g.kind.item.rarity === rar).length;
+    const [purple, orange] = [count('epic'), count('legendary')];
+    const best = orange ? got.find((g) => g.kind.type === 'item' && g.kind.item.rarity === 'legendary') : got.find((g) => g.kind.type === 'item' && g.kind.item.rarity === 'epic');
+    const rare = [orange ? `ส้ม ${orange}` : '', purple ? `ม่วง ${purple}` : ''].filter(Boolean).join(' ');
+    const summary = `${gold.toLocaleString()} G + ของ ${got.length} ชิ้น${rare ? ` (${rare})` : ''}`;
+    this.fx('burst', c.x, 0.8, c.z, '#ffd24a', 26, 4);
+    this.text(p.x, p.topY, p.z, `📦 ${summary}`, 'lvl', 1.6, p.id);
+    this.log(`เปิดหีบสมบัติได้ ${summary} — ตกรอบหีบ เก็บได้เฉพาะคุณ (หีบนี้กลับมาใน ${fmtWait(cfg.chestRespawn)})`, best?.color ?? '#f2c230', p.id);
+    if (got.length) this.log(`ของในหีบ: ${got.map((g) => g.text).join(', ')}`, best?.color ?? '#f2c230', p.id);
+    this.afterChange(p);
+    this.events.push({ t: 'save', to: p.id });
+    return true;
+  }
+
+  /** What one chest row gives, as a drop kind (null: nothing, e.g. a key row on a map without a boss). */
+  private chestPrize(p: Player, row: ChestRow, key: StoneKind | undefined, r: Rng): { kind: LootKind; text: string; color: string } | null {
+    const pr = row.prize;
+    const stone = (k: StoneKind) => ({ kind: { type: 'stone', stone: k, count: row.count } as LootKind, text: `${STONE_NAME[k]}${row.count > 1 ? ` ×${row.count}` : ''}`, color: STONE_COLOR[k] });
+    switch (pr.kind) {
+      case 'gear': {
+        const [lo, hi] = this.zone.levels;
+        const item = rollItem(r, Math.max(lo, Math.min(hi, p.level)), p.cls.id, 0, this.zone.levels, pr.rarity);
+        return { kind: { type: 'item', item }, text: item.name, color: RARITY_COLOR[item.rarity] };
+      }
+      case 'potion':
+        return { kind: { type: 'potion', pot: pr.potion, size: pr.size, count: row.count }, text: `${potionName(pr.potion, pr.size)} ×${row.count}`, color: '#ff8a8a' };
+      case 'stone':
+        return stone(pr.stone);
+      case 'key':
+        return key ? stone(key) : null;
+    }
+  }
+
+  /**
+   * Touches shrine `id`: one buff (the shrine's, or one of the three at random) for buffSec seconds; the same shrine works for this
+   * player again after shrineCd seconds. A buff of the same kind starts over; other kinds run side by side (owner 2026-11-27).
+   */
+  useShrine(p: Player, id: string, r: Rng = Math.random): boolean {
+    const cfg = currentBalance().treasure;
+    const s = this.shrines.find((x) => x.id === id);
+    if (!s) return false;
+    const why = this.treasureBlocked(p);
+    if (why) {
+      this.text(p.x, p.topY, p.z, why, 'info', 1.4, p.id);
+      return false;
+    }
+    if (Math.hypot(p.x - s.x, p.z - s.z) > cfg.range + 0.3) return false;
+    const key = `${this.zone.id}:${s.id}`;
+    const cd = p.shrineCd[key] ?? 0;
+    if (cd > 0) {
+      this.text(p.x, p.topY, p.z, `ศาลนี้ใช้ได้อีกใน ${fmtWait(cd)}`, 'info', 1.4, p.id);
+      return false;
+    }
+    const buff: ShrineBuff = s.buff === 'random' ? pick(r, SHRINE_BUFFS) : s.buff;
+    const pct = shrinePct(cfg, buff);
+    p.shrineBuffs[buff] = { left: cfg.buffSec, total: cfg.buffSec, pct };
+    if (cfg.shrineCd > 0) p.shrineCd[key] = cfg.shrineCd;
+    p.recompute();
+    this.fx('burst', s.x, 1.4, s.z, '#f070c0', 24, 4);
+    this.fx('burst', p.x, 1, p.z, '#ffe08a', 16, 3);
+    this.text(p.x, p.topY, p.z, `${SHRINE_BUFF_ICON[buff]} ${SHRINE_BUFF_NAME[buff]} +${pct}%`, 'heal', 1.6, p.id);
+    this.log(`ได้รับพรจากศาลเจ้า: ${SHRINE_BUFF_NAME[buff]} +${pct}% นาน ${fmtWait(cfg.buffSec)}${cfg.shrineCd > 0 ? ` (ศาลนี้ใช้ได้อีกใน ${fmtWait(cfg.shrineCd)})` : ''}`, '#f7a8e0', p.id);
     return true;
   }
 
@@ -1283,7 +1476,10 @@ export class Sim {
     // The cards' "EXP %" first (card plan 5.1), on kills and party shares alike.
     if (p.cardFx.expPct > 0) n = Math.floor(n * (1 + p.cardFx.expPct / 100));
     const auto = p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
-    return vipExp(p.buffs.exp_scroll ? auto * BUFF_MULT : auto, p.vip);
+    const scroll = p.buffs.exp_scroll ? auto * BUFF_MULT : auto;
+    // A shrine's EXP buff (docs/systems/chests-shrines.md) on top of the scroll, before the VIP bonus.
+    const shrine = p.shrinePct('exp');
+    return vipExp(shrine > 0 ? Math.floor(scroll * (1 + shrine / 100)) : scroll, p.vip);
   }
 
   private addExp(p: Player, n: number): void {
@@ -2459,11 +2655,18 @@ export class Sim {
       if (it.recall) this.startReturnCast(p);
       p.update(dt, it);
       this.tickReturnCast(p, dt, it);
+      this.tickChest(p, dt, it);
       this.tickMount(p);
     }
     for (const p of this.players) {
       this.tickBuyback(p, dt);
       this.tickBuffs(p, dt);
+      // Shrine buffs and cooldowns count down for everyone (the dead too: their buffs are already gone).
+      p.tickShrines(dt);
+    }
+    if (this.chestGone.size) {
+      const now = this.chestClock();
+      for (const [id, at] of this.chestGone) if (now >= at) this.chestGone.delete(id);
     }
     for (const p of this.players) if (p.alive) this.checkPortals(p);
     if (this.zone.lavaPools) for (const p of this.players) if (p.alive) this.tickLava(p, dt);

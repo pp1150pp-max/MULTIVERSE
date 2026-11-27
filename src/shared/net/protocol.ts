@@ -3,6 +3,7 @@
 import type { AutoTally } from '../sim/autoTally';
 import type { SkillSlot, WearSlot } from '../data/classes';
 import type { WaveSnap } from '../waveGame';
+import type { ShrineSnap } from '../treasure';
 import type { SkillBook } from '../skillBook';
 import type { BagEntry, BuffScroll, ClassId, EquipSlot, Item, PotionKind, PotionSize, Rarity, Stats, Vec2 } from '../types';
 import type { BagPay, BagSlots, BagTab } from '../bagTabs';
@@ -89,6 +90,9 @@ export type ActionMsg =
   | { t: 'act'; a: 'rest' }
   // Step through the warp circle you stand at (Sim.useWarp checks alive + range).
   | { t: 'act'; a: 'warp' }
+  // Treasure chests and shrines (docs/systems/chests-shrines.md): open chest `id` / touch shrine `id` of this map (Sim checks all).
+  | { t: 'act'; a: 'chest'; id: string }
+  | { t: 'act'; a: 'shrine'; id: string }
   | { t: 'act'; a: 'pickup'; id: number }
   | { t: 'act'; a: 'equip'; i: number; slot?: EquipSlot }
   | { t: 'act'; a: 'unequip'; slot: EquipSlot }
@@ -374,6 +378,10 @@ export interface PrivateSnap {
   skills?: SkillBook;
   /** Seconds left on a return-scroll cast (left out when not casting). */
   castT?: number;
+  /** Opening a treasure chest: [seconds left, seconds it takes] (left out when not opening). */
+  chestT?: [number, number];
+  /** Our shrine buffs and this map's shrines still cooling down for us (left out when none). */
+  shr?: ShrineSnap;
   /** Buff scrolls running: seconds of play left on each (left out when none). */
   buffs?: Buffs;
   /** Skill buffs running on us: [skill id, seconds left, seconds given] (left out when none). */
@@ -414,6 +422,8 @@ export interface SnapshotMsg {
   room?: RoomSnap;
   /** In a "รอดมอนเป็นระลอก" run (src/shared/waveGame.ts). */
   waves?: WaveSnap;
+  /** Treasure chests of this map opened now (gone until they come back); left out when none. */
+  chestsGone?: string[];
   /** Your party, every member wherever they are (left out when you are in none). */
   party?: PartySnap;
   events: SimEvent[];

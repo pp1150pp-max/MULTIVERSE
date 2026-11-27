@@ -25,7 +25,7 @@ import { cleanCustomDef, copyMap, CUSTOM_ID_RE, emptyMap, EMPTY_HALF } from '../
 import { ZONES } from '../src/shared/data/zones';
 import type { MapTheme } from '../src/shared/mapSchema';
 import { diffMaps, type MapDiff } from '../src/shared/mapDiff';
-import { MapRegistry } from '../src/shared/mapRegistry';
+import { MapRegistry, withBundledTreasure } from '../src/shared/mapRegistry';
 import { bakedText } from '../src/shared/mapText';
 import { currentBalance } from '../src/shared/balance';
 import type { MapData, MapIssue } from '../src/shared/mapSchema';
@@ -218,7 +218,9 @@ export async function mapsAdminApi(req: IncomingMessage, res: ServerResponse, pa
     zoneParam(id);
     const draft = db.mapDraft(id);
     const pub = db.mapPublished(id);
-    const map = (draft && parseMap(draft.json)) ?? (pub && parseMap(pub.json)) ?? MapRegistry.bundled(id);
+    const raw = (draft && parseMap(draft.json)) ?? (pub && parseMap(pub.json)) ?? MapRegistry.bundled(id);
+    // A layout from before chests and shrines (2026-11-27) shows the bundled ones, as the game uses them (withBundledTreasure).
+    const map = raw && withBundledTreasure(raw);
     // An editor-made map's settings come along: the game's "ทดลองเดิน" builds its zone from them (src/client/mapPreview.ts).
     const custom = isCustomZone(id) ? parseDef(db.customZone(id)?.def ?? '') : undefined;
     send(res, 200, { map, source: draft ? 'draft' : pub ? 'published' : 'bundled', baseRev: draft?.rev ?? pub?.rev ?? 0, publishedRev: pub?.rev ?? null, issues: map ? checkMap(map) : [], ...(custom ? { custom } : {}) });

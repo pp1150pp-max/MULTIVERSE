@@ -268,6 +268,7 @@ export class OnlineBackend implements Backend {
   private roomSnap: RoomSnap | null = null;
   private roomAt = 0;
   private waveSnap: WaveSnap | null = null;
+  chestsGone: ReadonlySet<string> = new Set();
 
   get waves(): WaveSnap | null {
     const w = this.waveSnap;
@@ -929,6 +930,7 @@ export class OnlineBackend implements Backend {
     this.hazards = s.hazards ?? [];
     this.roomSnap = s.room ?? null;
     this.waveSnap = s.waves ?? null;
+    this.chestsGone = new Set(s.chestsGone ?? []);
     this.roomAt = performance.now();
     this.party = s.party ?? null;
     this.me.partyId = this.party?.id ?? null;
@@ -1136,6 +1138,13 @@ export class OnlineBackend implements Backend {
     me.potCd = pv.potCd;
     me.restCd = pv.restCd ?? 0;
     me.castT = pv.castT ?? 0;
+    me.chestT = pv.chestT?.[0] ?? 0;
+    me.chestTotal = pv.chestT?.[1] ?? 0;
+    // Shrine buffs (their stats come in `stats` from the server; kept here too so a local recompute keeps them) and cooldowns.
+    const shrineWas = JSON.stringify(Object.keys(me.shrineBuffs).sort());
+    me.shrineBuffs = Object.fromEntries((pv.shr?.b ?? []).map(([k, left, total, pct]) => [k, { left, total, pct }]));
+    if (JSON.stringify(Object.keys(me.shrineBuffs).sort()) !== shrineWas && !pv.stats) me.recompute();
+    me.shrineCd = Object.fromEntries(Object.entries(pv.shr?.cd ?? {}).map(([id, left]) => [`${this.zone.id}:${id}`, left]));
     me.buffs = pv.buffs ?? {};
     if (typeof pv.buybackLeft === 'number') me.buybackLeft = pv.buybackLeft;
     if (pv.inv) {
@@ -1247,6 +1256,9 @@ export class OnlineBackend implements Backend {
     me.potCd -= dt;
     me.restCd -= dt;
     if (me.castT > 0) me.castT = Math.max(0, me.castT - dt);
+    if (me.chestT > 0) me.chestT = Math.max(0, me.chestT - dt);
+    for (const b of Object.values(me.shrineBuffs)) if (b) b.left = Math.max(0, b.left - dt);
+    for (const k of Object.keys(me.shrineCd)) me.shrineCd[k] = Math.max(0, me.shrineCd[k] - dt);
 
     if (this.settling && !this.serverMoves) this.settle(dt);
     this.atkT -= dt;
@@ -1370,6 +1382,8 @@ export class OnlineBackend implements Backend {
   respawn(): void { this.send({ t: 'act', a: 'respawn' }); }
   rest(): void { this.send({ t: 'act', a: 'rest' }); }
   useWarp(): void { this.send({ t: 'act', a: 'warp' }); }
+  openChest(id: string): void { this.send({ t: 'act', a: 'chest', id }); }
+  useShrine(id: string): void { this.send({ t: 'act', a: 'shrine', id }); }
   pickup(lootId: number): void { this.send({ t: 'act', a: 'pickup', id: lootId }); }
   equip(i: number, slot?: EquipSlot): void { this.send({ t: 'act', a: 'equip', i, slot }); }
   unequip(slot: EquipSlot): void { this.send({ t: 'act', a: 'unequip', slot }); }

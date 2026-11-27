@@ -1834,5 +1834,15 @@
   {"monster":"will_o_wisp","x":54,"z":-24,"radius":3,"count":2,"respawn":[10,15]},
   {"monster":"will_o_wisp","x":-3,"z":-83,"radius":2.5,"count":1,"respawn":[10,15]}
  ],
+ "chests": [
+  {"id":"c1","x":-25,"z":5},
+  {"id":"c2","x":81,"z":-83},
+  {"id":"c3","x":83,"z":83},
+  {"id":"c4","x":-81,"z":-83}
+ ],
+ "shrines": [
+  {"id":"s1","x":63,"z":1,"buff":"speed"},
+  {"id":"s2","x":-1,"z":-73,"buff":"random"}
+ ],
  "lair": {"boss":"bog_witch","x":63,"z":-63}
 }

@@ -115,6 +115,8 @@ export function bakeZone(zone: ZoneDef): MapData {
     spawns: zone.spawns.map((s) => ({ monster: s.monster, x: s.x, z: s.z, radius: s.radius, count: s.count, respawn: [s.respawn[0], s.respawn[1]] as [number, number] })),
   };
   if (zone.warps?.length) map.warps = zone.warps.map((w) => ({ x: w.x, z: w.z, toX: w.toX, toZ: w.toZ }));
+  if (zone.chests?.length) map.chests = zone.chests.map((c) => ({ id: c.id, x: c.x, z: c.z }));
+  if (zone.shrines?.length) map.shrines = zone.shrines.map((c) => ({ id: c.id, x: c.x, z: c.z, buff: c.buff }));
   if (zone.lair) map.lair = { boss: zone.lair.boss, x: zone.lair.x, z: zone.lair.z };
   if (zone.roomOf && zone.boss) {
     map.room = { of: zone.roomOf, arena: arenaRadius(zone), boss: { monster: zone.boss.monster, x: zone.boss.x, z: zone.boss.z, radius: zone.boss.radius } };

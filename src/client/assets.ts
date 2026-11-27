@@ -614,6 +614,12 @@ async function loadFxSheet(name: FxSheet): Promise<void> {
  * laid under the character and one footprint, and the white enhancement-orb atlas the orbs are tinted from.
  */
 export const paperTex: { auras: Record<string, { ring: THREE.Texture; foot: THREE.Texture }>; orbs?: THREE.Texture } = { auras: {} };
+/**
+ * Treasure chests and shrines (docs/systems/chests-shrines.md, cut by tools/cut_chests_shrines.cjs): by file name
+ * (chest_closed, chest_open, shrine_atk, shrine_speed, shrine_exp, shrine_random). A missing one keeps the code-drawn look.
+ */
+export const treasureTex: Partial<Record<string, THREE.Texture>> = {};
+export const TREASURE_ART = ['chest_closed', 'chest_open', 'shrine_atk', 'shrine_speed', 'shrine_exp', 'shrine_random'] as const;
 
 async function loadPaperCosmetics(): Promise<void> {
   const smooth = (t: THREE.Texture, srgb = true): THREE.Texture => {
@@ -635,6 +641,7 @@ async function loadPaperCosmetics(): Promise<void> {
     // Raw greys: the orb shader reads them as they are in the file (like its code-made atlas). The game and
     // the /admin benches; a page without paper art keeps the code-made atlas.
     ...(paperMaps ? [loadTexture(`${BASE}paper/fx/orbs.png`).then((t) => { paperTex.orbs = smooth(t, false); }, () => undefined)] : []),
+    ...TREASURE_ART.map((n) => loadTexture(`${BASE}paper/treasure/${n}.png`).then((t) => { treasureTex[n] = smooth(t); }, () => undefined)),
   ]);
 }
 

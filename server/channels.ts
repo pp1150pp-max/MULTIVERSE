@@ -68,6 +68,11 @@ export class Channels {
   private readonly byZone = new Map<string, Channel[]>();
   private readonly bySim = new Map<Sim, Channel>();
   private readonly drops = new Map<number, DropNote>();
+  /**
+   * Treasure chests opened, by `<zone>:<ch>` (Sim.chestGone): kept here, not in the Sim, so a channel that closes when empty and opens
+   * again does not refill every chest (docs/systems/chests-shrines.md).
+   */
+  private readonly chestStore = new Map<string, Map<string, number>>();
 
   constructor(
     private readonly zones: ZoneDef[],
@@ -288,6 +293,12 @@ export class Channels {
     let n = ch ?? 1;
     if (ch === undefined) while (list.some((c) => c.ch === n)) n++;
     const c: Channel = { zone, ch: n, sim: this.makeSim(zone) };
+    // Chests count in wall-clock seconds, the same for every channel and across a channel closing and opening again.
+    const key = `${zone.id}:${n}`;
+    let gone = this.chestStore.get(key);
+    if (!gone) this.chestStore.set(key, (gone = new Map()));
+    c.sim.chestGone = gone;
+    c.sim.chestClock = () => this.now() / 1000;
     list.push(c);
     list.sort((a, b) => a.ch - b.ch);
     this.bySim.set(c.sim, c);

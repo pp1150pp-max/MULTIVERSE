@@ -1,4 +1,6 @@
 import { SPACE_COLOUR } from './island';
+import { SHRINE_BUFF_ICON, SHRINE_BUFF_NAME } from '../shared/treasure';
+import { SHRINE_BUFFS } from '../shared/mapSchema';
 import { elementBadge } from './elementBadge';
 import { CLASS_PASSIVES } from '../shared/classPassives';
 import { placeLabel } from '../shared/channels';
@@ -19,7 +21,7 @@ import { CARD_GROUP_NAME, CARD_RARITY_NAME, cardFxLines } from '../shared/data/c
 import { cardDef } from '../shared/cardTuning';
 import { cardFxHtml, gameSocketHost, openCardView, openSocketView, socketTipHtml } from './ui/cardPopup';
 import { socketCount } from '../shared/cardSockets';
-import { cappedItemMove, itemMoveSpeed, lootPots, type Buffs, type LootFilter, type SortKey } from '../shared/sim/Player';
+import { cappedItemMove, itemMoveSpeed, lootPots, type Buffs, type LootFilter, type Player, type SortKey } from '../shared/sim/Player';
 import { MONSTERS } from '../shared/data/monsters';
 import { currentBalance } from '../shared/balance';
 import { SET_MAX_PIECES, setInfo } from '../shared/data/sets';
@@ -864,10 +866,18 @@ export class Hud {
   update(dt: number): void {
     const p = this.g.player;
     // Return-scroll cast bar, filling up over RETURN_CAST seconds.
+    // The same bar while opening a treasure chest (docs/systems/chests-shrines.md).
     const cast = $('cast-bar');
-    cast.classList.toggle('hidden', !(p.castT > 0));
-    if (p.castT > 0) (cast.firstElementChild as HTMLElement).style.width = `${(1 - p.castT / RETURN_CAST) * 100}%`;
-    this.drawBuffs(p.buffs);
+    const chest = p.chestT > 0 && p.chestTotal > 0;
+    cast.classList.toggle('hidden', !(p.castT > 0) && !chest);
+    if (p.castT > 0 || chest) (cast.firstElementChild as HTMLElement).style.width = `${(chest ? 1 - p.chestT / p.chestTotal : 1 - p.castT / RETURN_CAST) * 100}%`;
+    const castText = cast.querySelector('span');
+    const castLine = chest ? 'กำลังเปิดหีบสมบัติ…' : 'กำลังวาร์ปกลับเมือง…';
+    if (castText && castText.dataset.line !== castLine) {
+      castText.dataset.line = castLine;
+      castText.textContent = t(castLine);
+    }
+    this.drawBuffs(p.buffs, p.shrineBuffs);
     if (p.level !== this.drawnLevel) {
       this.drawnLevel = p.level;
       this.markInventory();
@@ -1579,7 +1589,7 @@ export class Hud {
    * the total EXP and drop bonus (scroll ×2 times VIP, as Sim counts them), the sources and their time left on hover.
    * Off: one chip per running scroll with its time left (h:mm:ss), VIP not shown.
    */
-  private drawBuffs(buffs: Buffs): void {
+  private drawBuffs(buffs: Buffs, shrineBuffs: Player['shrineBuffs']): void {
     const hms = (sec: number) => {
       const s = Math.ceil(sec);
       return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -1594,15 +1604,18 @@ export class Hud {
         const left = buffs[k] ?? 0;
         const scroll = left > 0;
         const vip = !!vipLeft && vipPct > 0;
-        if (!scroll && !vip) continue;
-        const mult = (scroll ? BUFF_MULT : 1) * (vip ? 1 + vipPct / 100 : 1);
+        // A shrine's EXP buff is part of the EXP total too (docs/systems/chests-shrines.md).
+        const shrine = k === 'exp_scroll' ? shrineBuffs.exp : undefined;
+        if (!scroll && !vip && !shrine) continue;
+        const mult = (scroll ? BUFF_MULT : 1) * (shrine ? 1 + shrine.pct / 100 : 1) * (vip ? 1 + vipPct / 100 : 1);
         const total = Math.round((mult - 1) * 100);
         const color = scroll ? STONE_COLOR[k] : '#ffd98a';
         parts.push(`<div class="buff" style="--bc:${color}">${stoneIcon(k)}<span>${label} +${total}%</span></div>`);
         const lines = [`${label} รวม +${total}% (×${Number(mult.toFixed(2))})`];
         if (scroll) lines.push(`• ${STONE_NAME[k]} ×${BUFF_MULT} (+${(BUFF_MULT - 1) * 100}%) · เหลือ ${hms(left)} (นับเฉพาะตอนออนไลน์)`);
+        if (shrine) lines.push(`• ศาลเจ้า +${shrine.pct}% · เหลือ ${hms(shrine.left)}`);
         if (vip) lines.push(`• VIP +${vipPct}% · เหลือ ${vipLeft}`);
-        if (scroll && vip) lines.push('ใบคูณกับ VIP คูณกัน');
+        if ((scroll ? 1 : 0) + (vip ? 1 : 0) + (shrine ? 1 : 0) > 1) lines.push('ใบคูณ ศาลเจ้า และ VIP คูณกัน');
         // Each line on its own through the dictionary (a whole multi-line title matches no key).
         titles.push(lines.map((l) => t(l)).join('\n'));
       }
@@ -1613,6 +1626,13 @@ export class Hud {
         parts.push(`<div class="buff" style="--bc:${STONE_COLOR[k]}">${stoneIcon(k)}<span>${BUFF_LABEL[k]} ${hms(left)}</span></div>`);
         titles.push(`${STONE_NAME[k]} — เวลาที่เหลือ (นับเฉพาะตอนออนไลน์)`);
       }
+    }
+    // Shrine buffs (EXP is in the total above when that badge is on): a chip each with the time left.
+    for (const k of SHRINE_BUFFS) {
+      const sb = shrineBuffs[k];
+      if (!sb || sb.left <= 0 || (k === 'exp' && b.buffTotal)) continue;
+      parts.push(`<div class="buff" style="--bc:#f070c0"><img class="gi" src="${imgUrl(`assets/sprites/icons/shrine_buff_${k}.png`)}" alt="" draggable="false" onerror="this.outerHTML='${SHRINE_BUFF_ICON[k]}'"><span>${SHRINE_BUFF_NAME[k]} +${sb.pct}%</span></div>`);
+      titles.push([`พรจากศาลเจ้า: ${SHRINE_BUFF_NAME[k]} +${sb.pct}%`, `เหลือ ${hms(sb.left)} · หายเมื่อตาย`].map((l) => t(l)).join('\n'));
     }
     const box = $('hud-buffs');
     const html = parts.join('');

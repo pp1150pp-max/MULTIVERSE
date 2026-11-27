@@ -1883,5 +1883,15 @@
   {"monster":"forest_wolf","x":-67,"z":-2,"radius":2.5,"count":1,"respawn":[10,15]},
   {"monster":"forest_wolf","x":15,"z":-78,"radius":2.5,"count":1,"respawn":[10,15]}
  ],
+ "chests": [
+  {"id":"c1","x":-25,"z":-5},
+  {"id":"c2","x":83,"z":-83},
+  {"id":"c3","x":-79,"z":83},
+  {"id":"c4","x":-83,"z":-83}
+ ],
+ "shrines": [
+  {"id":"s1","x":1,"z":-83,"buff":"atk"},
+  {"id":"s2","x":45,"z":-21,"buff":"random"}
+ ],
  "lair": {"boss":"forest_bear","x":-63,"z":-63}
 }
