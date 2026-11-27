@@ -68,14 +68,48 @@ try {
     sim.hitMonster(p, m, 1, { src: 'mg_chainlightning' });
     ok(texts(sim).includes('ไฟฟ้าลาม!'), 'water + lightning: "ไฟฟ้าลาม!"');
     ok(markOf(m, sim.time) === null, 'both marks are gone');
-    ok(other.hp < before && other.stunT > 0, 'it spreads to the monster next to it and stuns');
+    ok(other.hp < before && other.stunT <= 0, 'it spreads to the monster next to it, no stun (owner 2026-11-27)');
+    ok(codeElements().reactCd === 1, 'code: 1 s');
     sim.hitMonster(p, m, 1, { src: 'frostnova' });
+    ok(markOf(m, sim.time) === null, 'right after a reaction: no new mark for 1 s');
+    sim.time += 1.05;
+    sim.hitMonster(p, m, 1, { src: 'frostnova' });
+    ok(markOf(m, sim.time) === 'water', 'after 1 s marks stick again');
     sim.drainEvents();
     sim.hitMonster(p, m, 1, { src: 'mg_chainlightning' });
-    ok(!texts(sim).includes('ไฟฟ้าลาม!') && markOf(m, sim.time) === 'lightning', 'inside the cooldown: no reaction, the new mark goes on');
-    sim.time += codeElements().reactCd + 0.1;
-    sim.hitMonster(p, m, 1, { src: 'fireball' });
-    ok(texts(sim).includes('ระเบิดพลาสมา!'), 'after the cooldown: lightning + fire reacts again');
+    ok(texts(sim).includes('ไฟฟ้าลาม!'), 'after 1 s the same reaction can happen again');
+    // Each reaction keeps its own timer: Plasma right after Electrocute is still allowed once marks stick.
+    const r2 = fresh();
+    r2.m.reactReady.set('water+lightning', r2.sim.time + 100);
+    r2.sim.hitMonster(r2.p, r2.m, 1, { src: 'frostnova' });
+    r2.sim.drainEvents();
+    r2.sim.hitMonster(r2.p, r2.m, 1, { src: 'mg_chainlightning' });
+    ok(!texts(r2.sim).includes('ไฟฟ้าลาม!') && markOf(r2.m, r2.sim.time) === 'lightning', 'that reaction on cooldown: no reaction, the new mark goes on');
+    r2.sim.hitMonster(r2.p, r2.m, 1, { src: 'fireball' });
+    ok(texts(r2.sim).includes('ระเบิดพลาสมา!'), 'another reaction has its own timer: lightning + fire reacts');
+  }
+
+  // ---- Freeze slows instead of stunning; Numbing Shock stuns 0.5 s and never a boss
+  {
+    const { sim, p, m } = fresh();
+    sim.hitMonster(p, m, 1, { src: 'frostnova' });
+    m.slowT = 0;
+    m.slowAmt = 0;
+    sim.hitMonster(p, m, 1, { src: 'mg_forcewave' });
+    ok(m.stunT <= 0.0001 || m.stunT < 0.5, 'Freeze: no 1.5 s stun');
+    ok(Math.abs(m.slowAmt - 0.5) < 1e-9 && m.slowT >= 0.99, 'Freeze: 50% slower for 1 s');
+    const n = fresh();
+    n.sim.hitMonster(n.p, n.m, 1, { src: 'mg_poisonmist' });
+    n.m.stunT = 0;
+    n.sim.hitMonster(n.p, n.m, 1, { src: 'mg_chainlightning' });
+    ok(Math.abs(n.m.stunT - 0.5) < 0.05, `Numbing Shock: 0.5 s stun (${n.m.stunT.toFixed(2)})`);
+    const b = fresh();
+    Object.defineProperty(b.m, 'isBoss', { value: true });
+    b.sim.hitMonster(b.p, b.m, 1, { src: 'mg_poisonmist' });
+    b.m.stunT = 0;
+    b.sim.drainEvents();
+    b.sim.hitMonster(b.p, b.m, 1, { src: 'mg_chainlightning' });
+    ok(!texts(b.sim).includes('ประสาทชา!') && b.m.stunT <= 0, 'Numbing Shock never on a boss');
   }
 
   // ---- a reaction that kills its own target does not kill it twice

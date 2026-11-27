@@ -57,10 +57,11 @@ export class Monster extends Unit {
   weakUntil = 0;
   /** Burning / poisoned by a damage-over-time skill until this sim time (for passives that check statuses). */
   dotUntil = 0;
-  /** Its element mark (sim/elements.ts): which, until when, and when it can react again. */
+  /** Its element mark (sim/elements.ts): which and until when; when each reaction can happen again; no new mark before `markFreeAt`. */
   elem: Element | null = null;
   elemUntil = 0;
-  reactReadyAt = 0;
+  reactReady = new Map<string, number>();
+  markFreeAt = 0;
   /** Client only: the mark as the server last sent it (MonsterSnap.el, 0 = none). */
   elemShown = 0;
   /** Extra effects (sim/extraEffects.ts): when an extra stun from each skill last began, and running extra burns. */

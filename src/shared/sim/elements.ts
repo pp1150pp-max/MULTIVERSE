@@ -65,12 +65,16 @@ export function hitElement(sim: Sim, p: Player, m: Monster, src: string, opts: H
   const el = hitElementOf(p, src, sim.time, cfg);
   if (el === 'none') return { opts, reaction: null };
   const now = sim.time;
+  // Right after a reaction the monster takes no new mark for a moment (owner 2026-11-27: 1 s).
+  if (now < m.markFreeAt) return { opts, reaction: null };
   const had = markOf(m, now);
   const rid = had ? reactionOf(had, el) : null;
-  if (rid && cfg.reactions[rid].on && now >= m.reactReadyAt) {
+  if (rid && cfg.reactions[rid].on && now >= (m.reactReady.get(rid) ?? 0) && (cfg.reactions[rid].boss || !m.isBoss)) {
     m.elem = null;
     m.elemUntil = 0;
-    m.reactReadyAt = now + cfg.reactCd;
+    // Each reaction has its own timer on each monster.
+    m.reactReady.set(rid, now + cfg.reactCd);
+    m.markFreeAt = now + cfg.reactCd;
     return { opts, reaction: rid };
   }
   m.elem = el;
@@ -101,11 +105,17 @@ export function runReaction(sim: Sim, p: Player, m: Monster, rid: ReactionId): v
   sim.fx('ring', m.x, m.z, Math.max(1.2, rc.r), ELEMENT_COLOR[a], 0.4);
   sim.fx('burst', m.x, m.def.height * 0.6, m.z, ELEMENT_COLOR[b], 14, 4);
   for (const t of near) {
-    if (!t.alive) continue;
+    if (!t.alive || (t.isBoss && !rc.boss)) continue;
     if (rc.dmg > 0) {
       const kb = rc.kb > 0 ? { kb: rc.kb * KB_PER_METRE, fromX: m.x, fromZ: m.z } : {};
-      sim.hitMonster(p, t, rc.dmg / 100, { noExtra: true, noElem: true, ...kb, ...(rc.stun > 0 ? { stun: rc.stun } : {}) });
+      const slow = rc.slow > 0 && rc.slowSec > 0 ? { slow: rc.slow / 100, slowT: rc.slowSec } : {};
+      sim.hitMonster(p, t, rc.dmg / 100, { noExtra: true, noElem: true, ...kb, ...slow, ...(rc.stun > 0 ? { stun: rc.stun } : {}) });
     } else {
+      // No damage: a slow goes on as hitMonster would put it (the stronger one stays for its time).
+      if (rc.slow > 0 && rc.slowSec > 0) {
+        t.slowAmt = Math.max(t.slowT > 0 ? t.slowAmt : 0, rc.slow / 100);
+        t.slowT = Math.max(t.slowT, rc.slowSec);
+      }
       // No damage: the stun and knockback go on as hitMonster would put them (bosses take 30% of a stun, pattern bosses none, knockback never moves a boss).
       if (rc.stun > 0 && !t.def.pattern) t.stunT = Math.max(t.stunT, t.isBoss ? rc.stun * 0.3 : rc.stun);
       if (rc.kb > 0 && !t.isBoss && !t.def.anchored) t.knockback(m.x, m.z, rc.kb * KB_PER_METRE);

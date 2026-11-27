@@ -196,7 +196,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: สกิลที่มีธาตุตีโดนมอน = ติดป้ายธาตุพร้อมผลเล็ก ๆ · โดนธาตุอื่นตอนยังมีป้าย = เกิดปฏิกิริยาของคู่นั้น ป้ายทั้งคู่หาย (มอนตัวเดิมเกิดซ้ำได้ตามคูลดาวน์) · ดาเมจต่อวิของไฟ/พิษและการตีของปฏิกิริยาเองไม่ทำให้ติดป้าย · ของที่เรียกมา (ป้อมปืน โดรน กับระเบิด) ใช้ธาตุของสกิลที่เรียก · บัฟมือปืนที่เปลี่ยนยิงปกติ (กระสุนร้อน/ช็อต/แยก/พายุลูกกระสุน) ให้ยิงปกติได้ธาตุนั้นระหว่างบัฟ · บอสโดนสตันจากปฏิกิริยา 30% ไม่โดนผลักตามกติกาเดิม'),
       setRow('เปิดระบบธาตุ', 'ปิด = ไม่มีป้าย ไม่มีปฏิกิริยา ไม่โชว์ธาตุบนสกิล', h('input', { type: 'checkbox', checked: el.on, onchange: (e: Event) => { el.on = (e.target as HTMLInputElement).checked; updateSummary(); } })),
       setRow('ป้ายธาตุอยู่นาน', null, elNum('markSec', 'ป้ายธาตุอยู่นาน', () => el.markSec, (n) => { el.markSec = n; }, ce.markSec, ELEMENT_RANGE.markSec, 0.5), 'วิ'),
-      setRow('ปฏิกิริยาซ้ำกับมอนตัวเดิมได้ทุก', null, elNum('reactCd', 'ปฏิกิริยาซ้ำได้ทุก', () => el.reactCd, (n) => { el.reactCd = n; }, ce.reactCd, ELEMENT_RANGE.reactCd, 0.5), 'วิ'),
+      setRow('คูลดาวน์ปฏิกิริยา', 'ปฏิกิริยาเดิมกับมอนตัวเดิมเกิดซ้ำได้ทุกเท่านี้ (แต่ละปฏิกิริยานับแยก) และหลังเกิดปฏิกิริยา มอนตัวนั้นไม่ติดป้ายธาตุนานเท่านี้', elNum('reactCd', 'ปฏิกิริยาซ้ำได้ทุก', () => el.reactCd, (n) => { el.reactCd = n; }, ce.reactCd, ELEMENT_RANGE.reactCd, 0.5), 'วิ'),
       h('div', { class: 'skm-sub' }, 'ผลเล็ก ๆ ของป้ายแต่ละธาตุ (ตลอดเวลาที่ป้ายอยู่)'),
       ...ELEMENTS.map((e) => setRow(`${ELEMENT_ICON[e]} ${MARK_EFFECT_NAME[e]}`, `ป้าย "${MARK_NAME[e]}"`,
         elNum(`mark.${e}`, MARK_EFFECT_NAME[e], () => el.mark[e], (n) => { el.mark[e] = n; }, ce.mark[e], e === 'wind' ? [0, 10] : e === 'water' ? [0, 90] : [0, 200], e === 'wind' ? 0.5 : 1))),
@@ -208,6 +208,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
         return setRow(`${ELEMENT_ICON[a]}+${ELEMENT_ICON[b]} ${REACTION_NAME[k]}`, null,
           h('div', { class: 'set-multi' },
             h('label', { class: rc.on !== cr.on ? 'bal-changed' : '' }, h('input', { type: 'checkbox', checked: rc.on, onchange: (e: Event) => { rc.on = (e.target as HTMLInputElement).checked; updateSummary(); } }), ' เปิด'),
+            h('label', { class: rc.boss !== cr.boss ? 'bal-changed' : '' }, h('input', { type: 'checkbox', checked: rc.boss, onchange: (e: Event) => { rc.boss = (e.target as HTMLInputElement).checked; updateSummary(); } }), ' ใช้กับบอส'),
             ...REACTION_KEYS.map((f) => h('label', {}, ` ${REACTION_NUM_NAME[f]} `,
               elNum(`r.${k}.${f}`, `${REACTION_NAME[k]} ${REACTION_NUM_NAME[f]}`, () => rc[f], (n) => { rc[f] = n; }, cr[f], REACTION_RANGE[f], f === 'dmg' || f === 'dot' ? 5 : 0.5)))));
       }),

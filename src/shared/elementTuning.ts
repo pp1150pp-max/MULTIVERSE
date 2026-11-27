@@ -44,16 +44,17 @@ export function reactionOf(a: Element, b: Element): ReactionId | null {
 
 /**
  * One reaction, all in one shape: `dmg` % ATK at once, to every monster within `r` metres of the target (0 = the target
- * only); `stun` seconds; `dot` % ATK a second for `dotSec` seconds; `kb` metres of knockback away from the target.
+ * only); `stun` seconds; `slow` % slower for `slowSec` seconds; `dot` % ATK a second for `dotSec` seconds; `kb` metres
+ * of knockback away from the target. `boss` off = bosses are left out of it.
  */
-export interface ReactionCfg { on: boolean; dmg: number; r: number; stun: number; dot: number; dotSec: number; kb: number }
-export const REACTION_KEYS = ['dmg', 'r', 'stun', 'dot', 'dotSec', 'kb'] as const;
+export interface ReactionCfg { on: boolean; boss: boolean; dmg: number; r: number; stun: number; slow: number; slowSec: number; dot: number; dotSec: number; kb: number }
+export const REACTION_KEYS = ['dmg', 'r', 'stun', 'slow', 'slowSec', 'dot', 'dotSec', 'kb'] as const;
 export type ReactionNum = (typeof REACTION_KEYS)[number];
 export const REACTION_RANGE: Record<ReactionNum, readonly [number, number]> = {
-  dmg: [0, 1000], r: [0, 10], stun: [0, 5], dot: [0, 200], dotSec: [0, 20], kb: [0, 10],
+  dmg: [0, 1000], r: [0, 10], stun: [0, 5], slow: [0, 90], slowSec: [0, 10], dot: [0, 200], dotSec: [0, 20], kb: [0, 10],
 };
 export const REACTION_NUM_NAME: Record<ReactionNum, string> = {
-  dmg: 'ดาเมจ (% ATK)', r: 'รัศมี (ม., 0 = ตัวเดียว)', stun: 'สตัน (วิ)', dot: 'ดาเมจต่อวิ (% ATK)', dotSec: 'นาน (วิ)', kb: 'ผลัก (ม.)',
+  dmg: 'ดาเมจ (% ATK)', r: 'รัศมี (ม., 0 = ตัวเดียว)', stun: 'สตัน (วิ)', slow: 'ช้าลง (%)', slowSec: 'ช้านาน (วิ)', dot: 'ดาเมจต่อวิ (% ATK)', dotSec: 'นาน (วิ)', kb: 'ผลัก (ม.)',
 };
 
 /** The small effect of each element's mark: water slow %, fire / poison % ATK a second, lightning damage taken +%, wind knockback metres. */
@@ -67,7 +68,10 @@ export interface ElementConfig {
   on: boolean;
   /** Seconds a mark stays. */
   markSec: number;
-  /** Seconds before the same monster can react again. */
+  /**
+   * Seconds before the same monster can have the same reaction again (each reaction its own timer), and the seconds after
+   * any reaction in which that monster takes no new mark (owner 2026-11-27: 1 s).
+   */
   reactCd: number;
   mark: MarkCfg;
   reactions: Record<ReactionId, ReactionCfg>;
@@ -113,24 +117,26 @@ export const CODE_SKILL_ELEMENT: Record<string, Element> = {
   gs_deadeye: W,
 };
 
-const r = (dmg: number, rad: number, stun: number, dot: number, dotSec: number, kb: number): ReactionCfg => ({ on: true, dmg, r: rad, stun, dot, dotSec, kb });
+const r = (dmg: number, rad: number, stun: number, dot: number, dotSec: number, kb: number, more: Partial<ReactionCfg> = {}): ReactionCfg =>
+  ({ on: true, boss: true, dmg, r: rad, stun, slow: 0, slowSec: 0, dot, dotSec, kb, ...more });
 
 export function codeElements(): ElementConfig {
   return {
     on: true,
     markSec: 4,
-    reactCd: 3,
+    reactCd: 1,
     mark: { water: 15, fire: 10, poison: 8, lightning: 10, wind: 1 },
     reactions: {
-      'water+lightning': r(120, 4, 0.5, 0, 0, 0),
+      // Owner 2026-11-27 (second pass): no stun on Electrocute, Freeze slows instead of stunning, Numbing Shock 0.5 s and never on bosses.
+      'water+lightning': r(120, 4, 0, 0, 0, 0),
       'water+fire': r(150, 3, 0, 0, 0, 0),
-      'water+wind': r(0, 0, 1.5, 0, 0, 0),
+      'water+wind': r(0, 0, 0, 0, 0, 0, { slow: 50, slowSec: 1 }),
       'water+poison': r(0, 0, 0, 16, 5, 0),
       'fire+wind': r(0, 4, 0, 10, 4, 0),
       'fire+poison': r(200, 0, 0, 0, 0, 0),
       'fire+lightning': r(130, 3, 0, 0, 0, 0),
       'poison+wind': r(0, 4, 0, 8, 4, 0),
-      'poison+lightning': r(0, 0, 1, 0, 0, 0),
+      'poison+lightning': r(0, 0, 0.5, 0, 0, 0, { boss: false }),
       'lightning+wind': r(100, 3, 0, 0, 0, 3),
     },
     skill: { ...CODE_SKILL_ELEMENT },
@@ -224,12 +230,12 @@ export function checkElements(x: unknown, strict: boolean, skillIds: ReadonlySet
         const id = k as ReactionId;
         const one: Partial<ReactionCfg> = {};
         for (const [f, fv] of Object.entries(v)) {
-          if (f === 'on') {
+          if (f === 'on' || f === 'boss') {
             if (typeof fv !== 'boolean') {
               if (strict) return { error: `${REACTION_NAME[id]}: สวิตช์ต้องเป็นเปิด/ปิด` };
               continue;
             }
-            if (fv !== CODE.reactions[id].on) one.on = fv;
+            if (fv !== CODE.reactions[id][f]) one[f] = fv;
             continue;
           }
           if (!(REACTION_KEYS as readonly string[]).includes(f)) {
@@ -279,6 +285,7 @@ export function elementChanges(a: ElementConfig, b: ElementConfig, name: (id: st
     const x = a.reactions[k];
     const y = b.reactions[k];
     if (x.on !== y.on) out.push(`ปฏิกิริยา ${REACTION_NAME[k]} ${onOff(x.on)} → ${onOff(y.on)}`);
+    if (x.boss !== y.boss) out.push(`ปฏิกิริยา ${REACTION_NAME[k]} ใช้กับบอส ${onOff(x.boss)} → ${onOff(y.boss)}`);
     for (const f of REACTION_KEYS) if (x[f] !== y[f]) out.push(`ปฏิกิริยา ${REACTION_NAME[k]} ${REACTION_NUM_NAME[f]} ${x[f]} → ${y[f]}`);
   }
   for (const id of new Set([...Object.keys(a.skill), ...Object.keys(b.skill)])) {
