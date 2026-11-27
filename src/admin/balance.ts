@@ -33,7 +33,7 @@ import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LA
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
 import { GEAR_KILLS_MAX, GEAR_KILLS_MIN, gearFloors, gearMaps } from '../shared/gearTuning';
 import { NPC_INFO, type NpcId } from '../shared/data/npcs';
-import { TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type TalkNumKey } from '../shared/npcTalk';
+import { PANE_LINES, TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type PanePart, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
 import { POTION_SIZES, potionName } from '../shared/data/potions';
@@ -1726,7 +1726,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const drawTalk = (): void => {
     const t = draft.npcTalk;
     const ct = code.npcTalk;
-    const flag = (k: 'on' | 'bubbles', label: string): HTMLElement =>
+    const flag = (k: 'on' | 'shopPane' | 'forgePane' | 'stashPane' | 'marketPane' | 'cashPane' | 'seekerPane' | 'bubbles', label: string): HTMLElement =>
       h('label', { title: `ค่าในโค้ด: ${ct[k] ? 'เปิด' : 'ปิด'}`, class: t[k] !== ct[k] ? 'bal-changed' : '' },
         h('input', { type: 'checkbox', checked: t[k], onchange: (e: Event) => { t[k] = (e.target as HTMLInputElement).checked; updateSummary(); drawTalk(); } }),
         ` ${label}`);
@@ -1747,16 +1747,48 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       });
       return ta;
     };
+    /** One event's lines in a grown window (the merchant's shop, the blacksmith). */
+    const paneLines = (part: PanePart, k: string): HTMLElement => {
+      const set = t[part] as Record<string, string[]>;
+      const code = ct[part] as Record<string, string[]>;
+      const ta = h('textarea', { rows: '2', style: 'width:100%;font:inherit' }) as HTMLTextAreaElement;
+      ta.value = set[k].join('\n');
+      const changed = (): boolean => JSON.stringify(set[k]) !== JSON.stringify(code[k]);
+      ta.classList.toggle('bal-changed', changed());
+      ta.addEventListener('input', () => {
+        set[k] = ta.value.split('\n').map((x) => x.trim()).filter(Boolean);
+        ta.classList.toggle('bal-bad', set[k].length > TALK_LINES_MAX || set[k].some((x) => x.length > TALK_LINE_LEN));
+        ta.classList.toggle('bal-changed', changed());
+        updateSummary();
+      });
+      return ta;
+    };
+    const paneBlock = (part: PanePart, title: string, who: string): HTMLElement => {
+      const def = PANE_LINES[part].lines as Record<string, { name: string; args: string }>;
+      return h('details', { style: 'margin:4px 0' },
+        h('summary', {}, title),
+        h('div', { class: 'muted' }, `สุ่มทีละบรรทัดตอนเกิดเหตุการณ์ · {0} {1} = ค่าที่ใส่ให้ตามที่บอกข้างหัวข้อ · ว่างทั้งช่อง = ${who}ไม่พูดตอนนั้น`),
+        ...Object.keys(def).flatMap((k) => [
+          h('div', {}, `${def[k].name}${def[k].args ? ` (${def[k].args})` : ''}`),
+          paneLines(part, k),
+        ]));
+    };
     talkCard.replaceChildren(
       h('h2', {}, 'หน้าต่างคุย NPC'),
       h('div', { class: 'muted' }, 'คลิก NPC = หน้าต่างคุย (ฉากสถานที่ของ NPC รูปครึ่งตัวซ้าย บทพูดล่าง ปุ่มคำตอบมีไอคอน) กดคำตอบแล้วเปิดหน้าต่างของ NPC (ร้าน เมนูช่างตีเหล็ก คลัง แท็บตลาด/กล่องรับของ แคชช็อป เควสกุญแจ) · ปิด = คลิกแล้วเปิดหน้าต่างของ NPC ทันทีแบบเดิม · คำพูดเหนือหัว: เดินเข้าใกล้ NPC แล้วมีคำพูดสั้น ๆ ลอยเหนือหัว · ฝั่งเบราว์เซอร์เท่านั้น มีผลทันที'),
-      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
+      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('shopPane', 'ร้านพ่อค้าในหน้าต่างคุย (ปิด = หน้าต่างร้านเล็กแบบเดิม)'), flag('forgePane', 'ช่างตีเหล็กในหน้าต่างคุย (ปิด = หน้าต่างช่างตีเหล็กแบบเดิม)'), flag('stashPane', 'คลังในหน้าต่างคุย (ปิด = หน้าต่างคลังแบบเดิม)'), flag('marketPane', 'ตลาดในหน้าต่างคุย (ปิด = หน้าต่างตลาดแบบเดิม)'), flag('cashPane', 'แคชช็อปในหน้าต่างคุย รวมไอคอนมุมขวาบน (ปิด = หน้าต่างแคชช็อปแบบเดิม)'), flag('seekerPane', 'เควส The Seeker ในหน้าต่างคุย (ปิด = หน้าต่างเควสแบบเดิม)'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
       h('div', { class: 'row bal-line' }, ...TALK_NUM_KEYS.map(num)),
       h('div', { class: 'muted' }, `บทพูด: บรรทัดละ 1 ประโยค (ไม่เกิน ${TALK_LINES_MAX} บรรทัด บรรทัดละ ${TALK_LINE_LEN} ตัวอักษร) สุ่มทีละบรรทัด · ทักทาย = ในหน้าต่างคุย (ปุ่ม "พูดคุย" สุ่มบรรทัดใหม่) · เหนือหัว = ลอยเหนือหัวเมื่อเดินเข้าใกล้ · NPC ท่าเรือใช้บทของงานเดียวกัน`),
       ...TALK_NPCS.map((id) => h('details', { style: 'margin:4px 0' },
         h('summary', {}, NPC_INFO[id].name),
         h('div', {}, 'ทักทาย (หน้าต่างคุย)'), lines('greet', id),
         h('div', {}, 'เหนือหัว'), lines('chat', id))),
+      paneBlock('shop', 'บทพูดในร้านพ่อค้า (ร้านในหน้าต่างคุย)', 'พ่อค้า'),
+      paneBlock('forge', 'บทพูดช่างตีเหล็ก (ช่างตีเหล็กในหน้าต่างคุย)', 'ช่างตีเหล็ก'),
+      paneBlock('stash', 'บทพูดผู้ดูแลคลัง (คลังในหน้าต่างคุย)', 'ผู้ดูแลคลัง'),
+      paneBlock('market', 'บทพูดนายหน้าตลาด (ตลาดในหน้าต่างคุย)', 'นายหน้า'),
+      paneBlock('cash', 'บทพูดพ่อค้าคริสตัล (แคชช็อปในหน้าต่างคุย)', 'พ่อค้าคริสตัล'),
+      paneBlock('seeker', 'บทพูด The Seeker (เควสในหน้าต่างคุย)', 'The Seeker'),
     );
   };
 

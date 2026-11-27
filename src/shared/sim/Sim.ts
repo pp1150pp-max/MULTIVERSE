@@ -85,6 +85,21 @@ export function isBulkSellable(e: BagEntry | null, rarity: Rarity): e is Item {
   return isItem(e) && e.rarity === rarity && !plusOf(e) && !isDrilled(e);
 }
 
+/** One slot in the merchant's sell basket: the bag index plus what the browser saw there (Sim.sellMany). */
+export interface SellPick {
+  i: number;
+  /** Gear: its uid. */
+  uid?: string;
+  /** A stack: sellPickKey of it. */
+  k?: string;
+}
+/** Names a stack's kind ("p:hp:m", "s:protect") so a sell pick can tell its slot still holds the same thing. */
+export function sellPickKey(e: BagEntry): string {
+  return isPotion(e) ? `p:${e.potion}:${e.size}` : isStone(e) ? `s:${e.stone}` : '';
+}
+/** The sell basket's pick for bag slot `i`. */
+export const sellPickOf = (e: BagEntry, i: number): SellPick => (isItem(e) ? { i, uid: e.uid } : { i, k: sellPickKey(e) });
+
 function validSlot(i: number, len: number): boolean {
   return Number.isInteger(i) && i >= 0 && i < len;
 }
@@ -2297,6 +2312,40 @@ export class Sim {
     this.sfx('trade', p.x, p.z, p.id);
     this.afterChange(p);
     return v;
+  }
+
+  /**
+   * The merchant's sell basket (owner 2026-11-27): sells the whole of every picked bag slot in one go. Each pick names
+   * what the browser saw there (gear by uid, a stack by sellPickKey) and is skipped when the slot now holds something
+   * else; bound entries and orb items are skipped as sellItem refuses them. One log line, one save.
+   */
+  sellMany(p: Player, picks: readonly SellPick[]): number {
+    if (!this.near(p, 'merchant')) return 0;
+    const seen = new Set<number>();
+    let n = 0;
+    let total = 0;
+    let skipped = 0;
+    for (const pk of picks) {
+      const i = pk.i;
+      if (!Number.isInteger(i) || i < 0 || i >= p.bag.length || seen.has(i)) continue;
+      seen.add(i);
+      const e = p.bag[i];
+      if (!e) continue;
+      const same = isItem(e) ? pk.uid === e.uid : pk.k === sellPickKey(e);
+      if (!same || isBound(e) || (isStone(e) && isOrbStone(e.stone))) {
+        skipped++;
+        continue;
+      }
+      total += p.sell(i);
+      n++;
+    }
+    if (skipped) this.log(`ข้าม ${skipped} ชิ้นที่ขายไม่ได้หรือย้ายไปแล้ว`, '#b9b09a', p.id);
+    if (!n) return 0;
+    this.log(`ขาย ${n} ชิ้น ได้ ${total.toLocaleString()} G`, '#f2c230', p.id);
+    this.tutTask(p, 'sell');
+    this.sfx('trade', p.x, p.z, p.id);
+    this.afterChange(p);
+    return total;
   }
 
   /** Sells every bag item of this rarity. Enhanced (+N) items are kept. */

@@ -1215,6 +1215,8 @@ export class Hud {
   closePanels(): void {
     if (this.amountDone) return this.closeAmount();
     if (this.confirmYes) return this.closeConfirm();
+    // A prompt inside the merchant's shop in the talk window: Esc closes just that.
+    if (this.g.npcDialog.dismissPrompt()) return;
     if (this.detail.isOpen) return this.detail.closeDetail();
     if (this.linkPop.isOpen) return this.linkPop.close();
     this.closeChat();
@@ -1308,11 +1310,22 @@ export class Hud {
   // ------------------------------------------------------------ NPC windows (ui/shop.ts, ui/stash.ts, ui/forge.ts)
 
   /** Market broker: the window lives in market.ts. Guests may look but not trade (the server refuses it too). */
-  private openMarket(): void {
+  private openMarket(inTalk = false): void {
     this.shop.closeShop();
     this.forge.closeForge();
     this.stash.closeStash();
-    this.market.open();
+    this.market.open(inTalk);
+  }
+
+  /** The market inside the NPC talk window (npcMarketPane.ts): no bag window beside it. */
+  openMarketInTalk(): void {
+    this.toggleBag(false);
+    this.openMarket(true);
+  }
+
+  /** The market window (the talk window's broker pane drives it). */
+  get marketWin(): MarketWindow {
+    return this.market;
   }
 
   /** Something of yours sold or expired at the market: a banner, a chat line and the trade sound. */
@@ -1322,25 +1335,62 @@ export class Hud {
     playSound('trade');
   }
 
-  private openShop(): void {
+  private openShop(inTalk = false): void {
     this.market.close();
     this.forge.closeForge();
     this.stash.closeStash();
-    this.shop.openShop();
+    this.shop.openShop(inTalk);
   }
 
-  private openStash(): void {
+  /** The merchant's shop inside the NPC talk window (npcShopPane.ts): marks the shop open without its old window. */
+  openShopInTalk(): void {
+    this.toggleBag(false);
+    this.openShop(true);
+  }
+
+  /** Whether the merchant's shop counts as open (the HUD closes it when the player walks away or dies). */
+  get shopOpen(): boolean {
+    return this.shop.isOpen;
+  }
+
+  closeShop(): void {
+    this.shop.closeShop();
+  }
+
+  private openStash(inTalk = false): void {
     this.shop.closeShop();
     this.forge.closeForge();
     this.market.close();
-    this.stash.openStash();
+    this.stash.openStash(inTalk);
   }
 
-  private openForge(): void {
+  /** The stash inside the NPC talk window (npcStashPane.ts): no bag window beside it. */
+  openStashInTalk(): void {
+    this.toggleBag(false);
+    this.openStash(true);
+  }
+
+  /** The stash window (the talk window's keeper pane drives it). */
+  get stashWin(): StashWindow {
+    return this.stash;
+  }
+
+  private openForge(inTalk = false): void {
     this.shop.closeShop();
     this.stash.closeStash();
     this.market.close();
-    this.forge.openForge();
+    this.forge.openForge(inTalk);
+  }
+
+  /** The blacksmith's window inside the NPC talk window (npcForgePane.ts): no bag window beside it. */
+  openForgeInTalk(): void {
+    this.toggleBag(false);
+    this.openForge(true);
+  }
+
+  /** The blacksmith window (the talk window's blacksmith pane drives it). */
+  get forgeWin(): ForgeWindow {
+    return this.forge;
   }
 
   /** True while the blacksmith window is open (Game skips your own overhead enhance text then: the window shows it). */

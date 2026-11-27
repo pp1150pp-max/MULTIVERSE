@@ -5,6 +5,7 @@ import type { CardId } from '../shared/data/cards';
 import type { CosSlot } from '../shared/data/cosmetics';
 import type { WearSlot } from '../shared/data/classes';
 import type { Player, AutoSettings, LootFilter, SortKey } from '../shared/sim/Player';
+import type { SellPick } from '../shared/sim/Sim';
 import type { Monster } from '../shared/sim/Monster';
 import type { Loot } from '../shared/sim/Loot';
 import type { Intent, SimEvent } from '../shared/sim/types';
@@ -138,6 +139,8 @@ export interface Backend {
   /** Buy back entry `i` of the merchant's buyback list (`uid` guards against a list that just changed). */
   buyBack(i: number, uid: string): void;
   sellAllOfRarity(rarity: Rarity): void;
+  /** The merchant's sell basket: the whole of every picked slot (Sim.sellMany checks each pick). */
+  sellMany(picks: SellPick[]): void;
   /** `protect` = use a protection stone if a fail would drop the level. */
   enhance(uid: string, protect: boolean): Promise<EnhanceOutcome>;
   /** Blacksmith reroll of worn or bag gear; resolves with the changed item, or null if refused. */
