@@ -22,7 +22,7 @@ import { mulberry32, pick, rand, type Rng } from '../shared/rng';
 import { assetSources, fxTex, groundTiles, sheets, skyArt, type GroundTile } from './assets';
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
-import { HARBOR_FRAG, harborUniforms, paintHarborMask, updateHarborWater } from './harborGround';
+import { HARBOR_FRAG, harborUniforms, paintHarborMask, paintHarborSides, updateHarborWater } from './harborGround';
 import { HarborFalls } from './harborFalls';
 import { CloudSea, skyMood } from './cloudSea';
 import { gfxWater } from './gfxPrefs';
@@ -576,6 +576,8 @@ export class World {
   /** The shore as drawn: the outline, or the harbour's softer one over its waterfall. */
   private readonly shore: IslandOutline;
   private falls: HarborFalls | null = null;
+  /** The harbour platforms' sides over the water (paintHarborSides). */
+  private harborSides: THREE.Texture | null = null;
   /** The props actually drawn: the rim forest has gaps in it, and nothing stands out over space. */
   private readonly props: PropSpec[];
   private readonly spaceTex: THREE.CanvasTexture;
@@ -638,6 +640,17 @@ export class World {
       this.groundTex = mask;
       this.groundUniforms = harborUniforms(mask, this.half);
       this.groundUniforms.uFalls.value = pours ? 1 : 0;
+      const deckHeight = currentBalance().fxLayer.harborDeckHeight;
+      if (deckHeight > 0) {
+        const sides = new THREE.CanvasTexture(paintHarborSides(this.half, deckHeight));
+        sides.colorSpace = THREE.NoColorSpace;
+        sides.flipY = false;
+        sides.minFilter = sides.magFilter = THREE.LinearFilter;
+        sides.generateMipmaps = false;
+        this.harborSides = sides;
+        this.groundUniforms.uSides.value = sides;
+        this.groundUniforms.uDeckH.value = deckHeight;
+      }
       if (pours) {
         this.falls = new HarborFalls(this.shore, currentBalance().fxLayer.harborFallDepth);
         this.add(this.falls.mesh);
@@ -1406,6 +1419,7 @@ export class World {
     this.whirlpools?.dispose();
     this.cloudSea?.dispose();
     this.falls?.dispose();
+    this.harborSides?.dispose();
     this.warpPads?.dispose();
     this.treasure?.dispose();
   }

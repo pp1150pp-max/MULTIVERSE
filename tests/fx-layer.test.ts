@@ -254,6 +254,9 @@ applyBalance({});
   const f = checkFxLayerTuning({ harborFalls: false, harborFallDepth: 8 }, true);
   ok('tuning' in f && JSON.stringify(f.tuning) === '{"harborFalls":false,"harborFallDepth":8}', 'waterfall settings stored');
   ok('error' in checkFxLayerTuning({ harborFallDepth: 1 }, true), 'too short a fall refused');
+  const d = checkFxLayerTuning({ harborDeckHeight: 0 }, true);
+  ok(code.harborDeckHeight === 1.3 && 'tuning' in d && d.tuning?.harborDeckHeight === 0, 'raised platforms on in code, 0 = flat');
+  ok('error' in checkFxLayerTuning({ harborDeckHeight: 3 }, true), 'too high a platform refused');
 }
 
 finish('fx-layer');

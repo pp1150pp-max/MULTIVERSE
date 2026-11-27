@@ -185,6 +185,11 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    */
   harborFalls: boolean;
   harborFallDepth: number;
+  /**
+   * How high the harbour's platforms are drawn over the water (owner 2026-11-27): a wooden side, posts and a shadow
+   * under their near edges, at every graphics level; 0 = flat as before. Used when the map is built.
+   */
+  harborDeckHeight: number;
 }
 
 /** One skill's magic circle and code effects, as set on /admin. Missing = on / ×1. */
@@ -302,6 +307,7 @@ export const FX_LAYER_RANGE = {
   whirlTwist: [0, 3],
   whirlGlow: [0, 3],
   harborFallDepth: [2, 12],
+  harborDeckHeight: [0, 2],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -364,6 +370,7 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   whirlTwist: '× เกลียวบิดของน้ำวน',
   whirlGlow: '× แถบสว่างของน้ำวน',
   harborFallDepth: 'ท่าเรือ: ความยาวม่านน้ำตกขอบเมือง',
+  harborDeckHeight: 'ท่าเรือ: ความสูงแพไม้เหนือน้ำ (0 = แบนแบบเดิม)',
 };
 
 const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew', 'shader', 'shWater', 'harborFalls'] as const;
@@ -414,7 +421,7 @@ export function codeFxLayer(): FxLayerConfig {
     dashNew: true,
     shader: true, shWater: true, shaderDefault: 2, shaderTouchDefault: 1, shaderMax: 2,
     cloudDrift: 1, waterSpeed: 1, waterWave: 1, waterFoam: 1, lavaWave: 1, whirlTwist: 1, whirlGlow: 1,
-    harborFalls: true, harborFallDepth: 5,
+    harborFalls: true, harborFallDepth: 5, harborDeckHeight: 1.3,
   };
 }
 const CODE = codeFxLayer();
