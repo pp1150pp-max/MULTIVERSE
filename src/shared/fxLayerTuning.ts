@@ -161,10 +161,13 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   dashNew: boolean;
   /**
    * Shader effects (docs/systems/shaders.md, owner 2026-11-26): `shader` off = everyone sees the game as it was before
-   * them; `shWater` = the water group (floor 2's cloud sea, the harbour's water, the pools, the whirlpools).
+   * them; `shWater` = the water group (floor 2's cloud sea, the harbour's water, the pools, the whirlpools); `shPost` =
+   * the light group (corner shade, each map's tone and sun shafts, the mist's ribbons); `shShafts` = the sun shafts.
    */
   shader: boolean;
   shWater: boolean;
+  shPost: boolean;
+  shShafts: boolean;
   /** The level (2 high, 1 low, 0 off) a player starts on, on a computer and on a touch screen, and the most anyone can pick. */
   shaderDefault: number;
   shaderTouchDefault: number;
@@ -190,6 +193,15 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
    * under their near edges, at every graphics level; 0 = flat as before. Used when the map is built.
    */
   harborDeckHeight: number;
+  /** How much darker the screen's corners get, and × the whole light layer's strength inside a boss room. */
+  vignette: number;
+  bossRoomPostK: number;
+  /** × the sun shafts' strength and the speed they breathe and slide, and their slant (degrees from upright). */
+  shaftK: number;
+  shaftSpeed: number;
+  shaftAngle: number;
+  /** × how strongly the mist streams in ribbons (high level). Each map's tone, mist and shafts: sceneGrade.ts. */
+  mistFlow: number;
 }
 
 /** One skill's magic circle and code effects, as set on /admin. Missing = on / ×1. */
@@ -308,6 +320,12 @@ export const FX_LAYER_RANGE = {
   whirlGlow: [0, 3],
   harborFallDepth: [2, 12],
   harborDeckHeight: [0, 2],
+  vignette: [0, 0.6],
+  bossRoomPostK: [0, 1],
+  shaftK: [0, 3],
+  shaftSpeed: [0, 4],
+  shaftAngle: [-60, 60],
+  mistFlow: [0, 2],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -371,9 +389,15 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   whirlGlow: '× แถบสว่างของน้ำวน',
   harborFallDepth: 'ท่าเรือ: ความยาวม่านน้ำตกขอบเมือง',
   harborDeckHeight: 'ท่าเรือ: ความสูงแพไม้เหนือน้ำ (0 = แบนแบบเดิม)',
+  vignette: 'ขอบมืดที่มุมจอ (0 = ไม่มี)',
+  bossRoomPostK: '× ขอบมืดและแสงในห้องบอส',
+  shaftK: '× ความแรงลำแสงแดด',
+  shaftSpeed: '× ความเร็วลำแสงแดด',
+  shaftAngle: 'ความเอียงลำแสงแดด (องศาจากแนวตั้ง)',
+  mistFlow: '× หมอกไหลเป็นริ้ว',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew', 'shader', 'shWater', 'harborFalls'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew', 'shader', 'shWater', 'harborFalls', 'shPost', 'shShafts'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -404,6 +428,8 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   shader: 'เอฟเฟกต์น้ำ ลม และแสง (shader) (ปิด = ทุกคนเห็นภาพแบบเดิม)',
   shWater: 'น้ำและทะเลเมฆขยับ (shader)',
   harborFalls: 'ท่าเรือ: น้ำตกขอบเมืองลงทะเลเมฆ (ปิด = ขอบน้ำตัดแบบเดิม)',
+  shPost: 'แสงทั้งจอ: ขอบมืด โทนสีแมพ ลำแสง หมอกไหล (shader)',
+  shShafts: 'ลำแสงแดด (shader)',
 };
 
 
@@ -422,6 +448,7 @@ export function codeFxLayer(): FxLayerConfig {
     shader: true, shWater: true, shaderDefault: 2, shaderTouchDefault: 1, shaderMax: 2,
     cloudDrift: 1, waterSpeed: 1, waterWave: 1, waterFoam: 1, lavaWave: 1, whirlTwist: 1, whirlGlow: 1,
     harborFalls: true, harborFallDepth: 5, harborDeckHeight: 1.3,
+    shPost: true, shShafts: true, vignette: 0.22, bossRoomPostK: 0.5, shaftK: 1.7, shaftSpeed: 1, shaftAngle: 28, mistFlow: 0.5,
   };
 }
 const CODE = codeFxLayer();
