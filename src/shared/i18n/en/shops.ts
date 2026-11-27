@@ -333,5 +333,9 @@ export const EN_SHOPS: Record<string, string> = {
   'ยินดีต้อนรับสู่ VIP! เพิ่มอีก {0} วัน': "Welcome to VIP! {0} more days",
   'อยากเติมคริสตัลหรือ? เลือกแพ็กที่ถูกใจเลย': "Topping up crystals? Pick the pack you like",
   '{0} เข้ากับเจ้าดีนะ ลองดูตัวเองสิ': "{0} suits you — have a look at yourself",
+  'ภารกิจ': "Quests",
+  'ประตูทุกบานมีผู้เฝ้า… เลือกภารกิจที่เจ้าพร้อมจะรับไป': "Every door has its guardian… pick the quest you are ready for",
+  'ข้าฝากด้วย ล่าให้ครบแล้วกลับมารับ{0}': "I count on you. Finish the hunt and come back for {0}",
+  'เจ้าทำได้ดี นี่คือ{0} รับไปเถิด': "Well done. Here is {0} — take it",
   'ขาย {0} ชิ้น ได้ {1} G': 'Sold {0} items for {1} G',
 };
