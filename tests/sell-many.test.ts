@@ -7,7 +7,7 @@ import { sellValue } from '../src/shared/data/enhance';
 import { makeItem } from '../src/shared/data/items';
 import { anyStackValue } from '../src/shared/data/potions';
 import type { BagEntry, Item } from '../src/shared/types';
-import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS, STASH_LINE_KEYS } from '../src/shared/npcTalk';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS, STASH_LINE_KEYS, MARKET_LINE_KEYS } from '../src/shared/npcTalk';
 import { finish, ok } from './check';
 
 const sim = new Sim(Object.values(ZONES)[0]);
@@ -117,5 +117,16 @@ const sm = mergeNpcTalk({ stashPane: false, stash: { take: ['คืน'] } });
 ok(!sm.stashPane && sm.stash.take[0] === 'คืน' && sm.stash.put[0] === codeNpcTalk().stash.put[0], 'stash merge');
 const sc = npcTalkChanges(codeNpcTalk(), sm);
 ok(sc.some((l) => l.includes('คลังในหน้าต่างคุย')) && sc.some((l) => l.includes('บทพูดผู้ดูแลคลัง')), 'stash audit lines');
+
+// The market inside the talk window (npcTalk.marketPane + npcTalk.market lines).
+ok(codeNpcTalk().marketPane === true, 'market pane: on in the code');
+ok(MARKET_LINE_KEYS.every((k) => codeNpcTalk().market[k].length > 0), 'every market line has a code default');
+const m1 = checkNpcTalkTuning({ marketPane: false, market: { listed: ['ลงแล้ว'] } }, true);
+ok('tuning' in m1 && m1.tuning?.marketPane === false && m1.tuning?.market?.listed?.[0] === 'ลงแล้ว', 'market switch and lines saved');
+ok('error' in checkNpcTalkTuning({ market: { nope: ['x'] } }, true), 'unknown market line refused');
+const mm = mergeNpcTalk({ marketPane: false, market: { bought: ['ได้แล้ว'] } });
+ok(!mm.marketPane && mm.market.bought[0] === 'ได้แล้ว' && mm.market.open[0] === codeNpcTalk().market.open[0], 'market merge');
+const mc = npcTalkChanges(codeNpcTalk(), mm);
+ok(mc.some((l) => l.includes('ตลาดในหน้าต่างคุย')) && mc.some((l) => l.includes('บทพูดนายหน้าตลาด')), 'market audit lines');
 
 finish('sell-many');

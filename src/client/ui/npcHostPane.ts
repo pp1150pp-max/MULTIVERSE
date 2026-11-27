@@ -34,7 +34,8 @@ export interface HostPaneSpec {
   hint: (touch: boolean) => string;
   /** The width (px) the NPC window's layout was made for; a narrower panel zooms it down. */
   designW: number;
-  cell(e: BagEntry, view: BagView): CellInfo;
+  /** `index` = its bag slot, or its place in EQUIP_SLOTS on the worn tab. */
+  cell(e: BagEntry, view: BagView, index: number): CellInfo;
   /** A click (tap) on a cell: `index` = its bag slot, or its place in EQUIP_SLOTS on the worn tab. */
   click(e: BagEntry, view: BagView, index: number): void;
   /** What else changes the right side (redrawn when it does). */
@@ -176,7 +177,7 @@ export class NpcHostPane {
       w.innerHTML = this.g.hud.itemCell(e, '');
       const c = w.firstElementChild as HTMLElement;
       if (e) {
-        const info = this.spec.cell(e, this.view);
+        const info = this.spec.cell(e, this.view, index);
         if (!info.usable) c.classList.add('ns-nosell');
         if (info.on) c.classList.add('nh-on');
         c.onmousemove = (ev) => { if (!isTouchMode()) this.g.hud.showEntryTip(e, ev, info.tip); };

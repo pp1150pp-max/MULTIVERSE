@@ -11,13 +11,19 @@ import { imgUrl } from './img';
 import { NpcShopPane } from './ui/npcShopPane';
 import { npcForgePane } from './ui/npcForgePane';
 import { npcStashPane } from './ui/npcStashPane';
+import { npcMarketPane } from './ui/npcMarketPane';
+import type { MarketTab } from './market';
 import type { NpcHostPane } from './ui/npcHostPane';
 
 /** The NPC windows that open inside the talk window, how to tell they are still open, and how to close them. */
-type HostKind = 'forge' | 'stash';
-const HOST_KINDS: readonly HostKind[] = ['forge', 'stash'];
-const HOST_OPEN: Record<HostKind, (g: Game) => boolean> = { forge: (g) => g.hud.forgeWin.isOpen, stash: (g) => g.hud.stashWin.isOpen };
-const HOST_CLOSE: Record<HostKind, (g: Game) => void> = { forge: (g) => g.hud.forgeWin.closeForge(), stash: (g) => g.hud.stashWin.closeStash() };
+type HostKind = 'forge' | 'stash' | 'market';
+const HOST_KINDS: readonly HostKind[] = ['forge', 'stash', 'market'];
+const HOST_OPEN: Record<HostKind, (g: Game) => boolean> = {
+  forge: (g) => g.hud.forgeWin.isOpen, stash: (g) => g.hud.stashWin.isOpen, market: (g) => g.hud.marketWin.isOpen,
+};
+const HOST_CLOSE: Record<HostKind, (g: Game) => void> = {
+  forge: (g) => g.hud.forgeWin.closeForge(), stash: (g) => g.hud.stashWin.closeStash(), market: (g) => g.hud.marketWin.close(),
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -90,10 +96,12 @@ export class NpcDialog {
     const back = el('button', 'nt-back', '◀ กลับไปคุย');
     back.onclick = () => this.leavePane(true);
     this.shopPane = new NpcShopPane(g, (text) => this.say(text));
-    this.hosts = { forge: npcForgePane(g, (text) => this.say(text)), stash: npcStashPane(g, (text) => this.say(text)) };
+    const say = (text: string) => this.say(text);
+    this.hosts = { forge: npcForgePane(g, say), stash: npcStashPane(g, say), market: npcMarketPane(g, say) };
     g.hud.forgeWin.onTalk = (key, ...args) => { if (this.pane === 'forge') this.hosts.forge.line(key, ...args); };
     g.hud.stashWin.onTalk = (key, ...args) => { if (this.pane === 'stash') this.hosts.stash.line(key, ...args); };
-    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.hosts.forge.root, this.hosts.stash.root, back, close);
+    g.hud.marketWin.onTalk = (key, ...args) => { if (this.pane === 'market') this.hosts.market.line(key, ...args); };
+    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.hosts.forge.root, this.hosts.stash.root, this.hosts.market.root, back, close);
     document.getElementById('hud')!.append(this.win);
   }
 
@@ -138,7 +146,7 @@ export class NpcDialog {
     if (!this.open || !id) return;
     const p = this.g.player;
     const n = this.g.backend.terrain.npcPos[id];
-    // Shop / blacksmith / stash: the server deals only within NPC_USE_RANGE, so the window closes there (and when the HUD closed theirs).
+    // Shop / blacksmith / stash / market: the server deals only within NPC_USE_RANGE, so the window closes there (and when the HUD closed theirs).
     const reach = this.pane ? NPC_USE_RANGE : NPC_USE_RANGE + 1;
     if (!n || !p.alive || this.g.backend.zoneSeq !== this.zoneSeq || Math.hypot(p.x - n.x, p.z - n.z) > reach) return this.close();
     if (this.pane === 'shop') {
@@ -202,6 +210,18 @@ export class NpcDialog {
     return t.on && t.stashPane;
   }
 
+  /** Whether the market opens inside this window (/admin: talk window on and "ตลาดในหน้าต่างคุย" on). */
+  get marketInTalk(): boolean {
+    const t = currentBalance().npcTalk;
+    return t.on && t.marketPane;
+  }
+
+  /** Opens this window on the market straight away (the quest card's button). */
+  openMarket(id: NpcId): void {
+    this.show(id);
+    this.enterMarket(id, 'buy');
+  }
+
   /** Opens this window on the stash straight away (the quest card's button). */
   openStash(id: NpcId): void {
     this.show(id);
@@ -247,6 +267,14 @@ export class NpcDialog {
     this.g.hud.openStashInTalk();
     this.enterHost('stash', id, '');
     this.hosts.stash.line('open');
+  }
+
+  /** "ตลาดฝากขาย" / "กล่องรับของ": the window grows into the market on that tab (owner 2026-11-27). Guests may look. */
+  private enterMarket(id: NpcId, tab: MarketTab): void {
+    this.g.hud.marketWin.openTab(tab);
+    this.g.hud.openMarketInTalk();
+    this.enterHost('market', id, tab);
+    this.hosts.market.line(tab === 'box' ? 'box' : 'open');
   }
 
   private enterHost(kind: HostKind, id: NpcId, arg: string): void {
@@ -364,8 +392,10 @@ export class NpcDialog {
         break;
       case 'broker': {
         const box = g.backend.marketBox;
-        out.push({ icon: 'market', label: 'ตลาดฝากขาย', run: () => this.openThen(id, '[data-mtab="buy"]') });
-        out.push({ icon: 'parcel', label: 'กล่องรับของ', note: box > 0 ? `${box}` : undefined, run: () => this.openThen(id, '[data-mtab="box"]') });
+        // /admin "ตลาดในหน้าต่างคุย" off = the old market window.
+        const inTalk = currentBalance().npcTalk.marketPane;
+        out.push({ icon: 'market', label: 'ตลาดฝากขาย', run: () => (inTalk ? this.enterMarket(id, 'buy') : this.openThen(id, '[data-mtab="buy"]')) });
+        out.push({ icon: 'parcel', label: 'กล่องรับของ', note: box > 0 ? `${box}` : undefined, run: () => (inTalk ? this.enterMarket(id, 'box') : this.openThen(id, '[data-mtab="box"]')) });
         break;
       }
       case 'crystal':
