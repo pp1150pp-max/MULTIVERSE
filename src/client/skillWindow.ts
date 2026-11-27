@@ -6,6 +6,7 @@
 // Clicking a star shows it in the details box with its buttons. Every click is a request: the server checks points,
 // levels, gold and combat (Sim.learnSkill / refundSkill / resetSkills / wearSkill) and its snapshot redraws this.
 // The sky is `ui/skill_sky.png` (the owner makes it, see art_templates/skills/PROMPTS.md) over a CSS star field.
+import { elementBadge } from './elementBadge';
 import type { Game } from './Game';
 import { KIND_NAME, SLOT_KIND, WEAR_SLOTS, type SkillDef, type WearSlot } from '../shared/data/classes';
 import {
@@ -393,7 +394,7 @@ export class SkillWindow {
     this.detail.innerHTML =
       `<div class="sk-dhead"><span class="sk-ico${sk.kind === 'ult' ? ' ult' : ''}">${skillIcon(sk.id)}</span><span><b>${sk.nameTh}</b> (${sk.name})<br>` +
       `<span class="sk-dsub">${KIND_NAME[sk.kind as 'normal']}${line} · ปลด Lv.${unlockLevel(sk)}${reach ? ` · ${reachText(reach)}` : ''}</span></span></div>` +
-      `<div class="sk-desc">${sk.desc}</div>` +
+      `<div class="sk-desc">${elementBadge(sk.id)}${sk.desc}</div>` +
       `<div class="sk-dval">แรงก์ <b>${rank}</b> / ${maxRank()}</div>` +
       `<div class="sk-dbtns sk-dmain">${main}</div>` +
       (block && !full ? `<div class="sk-dwhy">${block}</div>` : '') +

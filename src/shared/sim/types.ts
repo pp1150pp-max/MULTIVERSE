@@ -56,12 +56,16 @@ export interface HitOpts {
   src?: string;
   /** This hit gives no extra effects (the ticks of an extra burn, so they don't feed themselves). */
   noExtra?: boolean;
+  /** No element mark or reaction from this hit (a reaction's own hits, sim/elements.ts). */
+  noElem?: boolean;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */
 export interface FxApi {
   slash(x: number, z: number, angle: number, arc: number, radius: number, color: string): void;
   ring(x: number, z: number, radius: number, color: string, life?: number): void;
+  /** An element reaction going off (sim/elements.ts): its id, where, its radius and the monsters it reached as flat x, z pairs (client/reactionFx.ts). */
+  reaction(id: string, x: number, z: number, r: number, hits: number[]): void;
   disc(x: number, z: number, radius: number, color: string, life?: number): void;
   /** `by`, `skill`: tagged by Sim.asCaster when a colour is given (the client's three.quarks particles). */
   telegraph(x: number, z: number, radius: number, duration: number, color?: string, by?: number, skill?: string): void;
