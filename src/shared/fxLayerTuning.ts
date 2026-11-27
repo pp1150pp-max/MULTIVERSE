@@ -448,7 +448,7 @@ export function codeFxLayer(): FxLayerConfig {
     shader: true, shWater: true, shaderDefault: 2, shaderTouchDefault: 1, shaderMax: 2,
     cloudDrift: 1, waterSpeed: 1, waterWave: 1, waterFoam: 1, lavaWave: 1, whirlTwist: 1, whirlGlow: 1,
     harborFalls: true, harborFallDepth: 5, harborDeckHeight: 1.3,
-    shPost: true, shShafts: true, vignette: 0.22, bossRoomPostK: 0.5, shaftK: 1, shaftSpeed: 1, shaftAngle: 28, mistFlow: 1,
+    shPost: true, shShafts: true, vignette: 0.22, bossRoomPostK: 0.5, shaftK: 1.7, shaftSpeed: 1, shaftAngle: 28, mistFlow: 0.5,
   };
 }
 const CODE = codeFxLayer();

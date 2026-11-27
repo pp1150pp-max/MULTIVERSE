@@ -7,7 +7,7 @@ import { codeSceneGrade, mistLook, postLook, sceneGradeOf, SHAFT_PEAK } from '..
 import { finish, ok } from './check';
 
 const cfg = codeFxLayer();
-ok(cfg.shPost && cfg.shShafts && cfg.vignette === 0.22 && cfg.bossRoomPostK === 0.5, 'on in code, the numbers the owner picked');
+ok(cfg.shPost && cfg.shShafts && cfg.vignette === 0.22 && cfg.bossRoomPostK === 0.5 && cfg.shaftK === 1.7 && cfg.mistFlow === 0.5, 'on in code, the numbers the owner picked');
 
 const toned = Object.keys(GENERATED_ZONES).filter((id) => codeSceneGrade(id).tintK > 0).sort();
 ok(toned.join() === 'emerald_forest,harbor_town,nexus_city,shipwreck_beach,smugglers_cove', `only the warm maps are toned (${toned})`);
@@ -18,7 +18,7 @@ ok(codeSceneGrade('emerald_forest_room').tintK === 0 && codeSceneGrade('emerald_
 const forest = codeSceneGrade('emerald_forest');
 const low = postLook(1, cfg, forest, false)!;
 const high = postLook(2, cfg, forest, false)!;
-ok(low.vignette === 0.22 && low.tintK === 0.07 && low.shaft === SHAFT_PEAK && !low.streaks && !low.read, 'low: corners, tone, shafts, no screen copy');
+ok(low.vignette === 0.22 && low.tintK === 0.07 && low.shaft === SHAFT_PEAK * cfg.shaftK && !low.streaks && !low.read, 'low: corners, tone, shafts, no screen copy');
 ok(high.streaks && !high.read && high.tintK === low.tintK, 'high: streaks, the same tone, and no copy while colours are unchanged');
 const vivid = { ...forest, saturation: 1.2, brightness: 0.9 };
 ok(postLook(1, cfg, vivid, false)!.saturation === 1 && !postLook(1, cfg, vivid, false)!.read, 'low ignores colour strength and brightness');

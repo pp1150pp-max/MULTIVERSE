@@ -109,7 +109,7 @@ export function sceneGradeChanges(a: SceneGradeTuning, b: SceneGradeTuning, name
   return out;
 }
 
-/** The opacity of a sun shaft at its brightest, at /admin's ×1 on a map with shaft 1 (owner 2026-11-27). */
+/** The opacity of a sun shaft at its brightest, at ×1 on a map with shaft 1 (/admin's shaftK starts at ×1.7, owner 2026-11-28). */
 export const SHAFT_PEAK = 0.14;
 
 /** What the full-screen light layer draws on a map. */
