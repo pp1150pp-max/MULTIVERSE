@@ -308,6 +308,7 @@ export class Game {
       if (this.frames === 1) {
         uploadAllTextures(this.renderer);
         this.renderer.compile(this.scene, this.camera);
+        this.postFx.warm(this.renderer);
       }
       if (this.frames === 3) endEntryLoading();
     }

@@ -116,6 +116,11 @@ export class PostFx {
     this.scene.add(sheet);
   }
 
+  /** Builds the shader behind the loading screen, so turning the light on later doesn't hitch. Draws nothing. */
+  warm(renderer: THREE.WebGLRenderer): void {
+    renderer.compile(this.scene, this.camera);
+  }
+
   /**
    * Draws the layer over the frame just rendered. Everything is read each frame, so the player's setting and /admin
    * apply at once. `walk`: how far the camera has gone to the screen's right (world units).
