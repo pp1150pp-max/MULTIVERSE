@@ -603,7 +603,9 @@ export class KrakenBrain {
   // ---- shark knights leaping out of the water onto the floor
 
   private callSharks(sim: Sim, m: Monster): void {
-    const n = Math.max(0, Math.round(mv('kraken.sharks')));
+    // Never more than kraken.sharks on the floor at once: a call only tops them up.
+    this.sharks = this.sharks.filter((s) => s.alive);
+    const n = Math.max(0, Math.round(mv('kraken.sharks')) - this.sharks.length);
     for (const a of this.shoreAngles(n)) {
       const d = ROOM_ISLAND - 1.5;
       const x = Math.cos(a) * d;
@@ -623,6 +625,11 @@ export class KrakenBrain {
     for (const c of due) {
       const s = sim.spawnSummon('shark_knight', c.x, c.z, m.level);
       if (!s) continue;
+      // Its HP and hit from the kraken's card (/admin), on top of a Lv80 shark knight in this room (keys included).
+      s.hpOverride = Math.max(1, Math.round(s.maxHp * mv('kraken.sharkHp')));
+      s.retune();
+      s.hp = s.maxHp;
+      s.atk *= mv('kraken.sharkAtk');
       s.face(-c.x, -c.z);
       sim.fx('sprite', 'fx_slam_splash', c.x, c.z, 1.4, 0.5);
       this.sharks.push(s);
