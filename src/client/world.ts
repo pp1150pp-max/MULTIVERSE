@@ -3,7 +3,7 @@ import { WhirlpoolViews } from './whirlpool';
 import { WarpPadViews } from './warpPads';
 import { TreasureViews } from './treasureViews';
 import { currentBalance } from '../shared/balance';
-import { clearingRadius as arenaClearing, floorOf, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
+import { clearingRadius as arenaClearing, floorOf, inWhirlpoolCircle, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
 
 /**
  * The bare ground round a map's boss clearing: the arena's, or on a whirlpool's island (the Kraken Maelstrom's summoner,
@@ -1199,6 +1199,8 @@ export class World {
         const px = x + rand(r, -spread, spread);
         const pz = z + rand(r, -spread, spread);
         if (Math.abs(px) > B || Math.abs(pz) > B) continue;
+        // Nothing on a whirlpool or its island (the Kraken Maelstrom, owner 2026-11-27), nor right on its rim.
+        if (inWhirlpoolCircle(this.zone, px, pz, 1)) continue;
         if (spot === 'water' ? !inPool(px, pz, -0.3) : inPool(px, pz, 0.5)) continue;
         if (spot !== 'road' && this.distToPath(px, pz) < trail + 0.2) continue;
         if (near(px, pz, start, campRadius * 0.8) || portals.some((g) => near(px, pz, g, 2.5))) continue;
