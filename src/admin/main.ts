@@ -209,7 +209,7 @@ function tabAllowed(t: Tab): boolean {
     // The papercraft sword trial bench: whoever may use the cosmetics bench (it changes nothing on the server).
     case 'rig': return f.includes('cosPreview');
     case 'anim': return f.includes('animPreview');
-    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('directWs') || f.includes('googleLogin');
+    case 'server': return me.role === 'owner' || f.includes('backup') || f.includes('shutdownText') || f.includes('netDelta') || f.includes('directWs') || f.includes('googleLogin') || f.includes('accountAuth');
   }
 }
 
@@ -281,6 +281,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'server', title: 'ข้อความเตือนก่อนรีสตาร์ท' },
   { tab: 'server', title: 'ลดขนาด snapshot', words: 'delta เน็ต' },
   { tab: 'server', title: 'เข้าสู่ระบบด้วย Google' },
+  { tab: 'server', title: 'บัญชีผู้เล่น', words: 'รหัสผ่าน เปลี่ยนชื่อผู้ใช้ ลืมรหัส กู้รหัส guest บันทึกตัวละคร' },
   { tab: 'server', title: 'สำรองฐานข้อมูล', words: 'backup db' },
 ];
 

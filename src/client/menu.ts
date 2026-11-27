@@ -8,7 +8,8 @@ import type { ClassId } from '../shared/types';
 import * as api from './net/api';
 import { connectOnline, type OnlineBackend } from './net/online';
 import { preloadHudImages } from './icons';
-import { AFTER_EXIT_KEY, GOOGLE_AFTER_EXIT_KEY } from './sysmenu';
+import { AFTER_EXIT_KEY, GOOGLE_AFTER_EXIT_KEY, RESUME_CHAR_KEY } from './sysmenu';
+import { openAccountWindow } from './accountUi';
 import { beginEntryLoading, cancelEntryLoading, preloadLoadingArt } from './loadingScreen';
 import { imgUrl } from './img';
 
@@ -210,7 +211,7 @@ class OnlineMenu {
   private readonly chosenClass: () => ClassId;
   private armedDelete: { id: number; t: number } | null = null;
   /** A Google round trip that needs a username for the new account. */
-  private googleTicket: { ticket: string; guest: boolean } | null = null;
+  private googleTicket: { ticket: string; guest: boolean; mode: 'login' | 'upgrade'; useGuest: boolean | null } | null = null;
 
   constructor(private readonly launch: Launcher, private readonly googleOn: Promise<boolean>) {
     this.chosenClass = buildClassCards($('online-class-cards'));
@@ -222,6 +223,20 @@ class OnlineMenu {
       e.preventDefault();
       void this.googleName();
     });
+    const pick = (use: boolean) => {
+      const t = this.googleTicket;
+      if (!t) return;
+      t.useGuest = use;
+      $('btn-google-use-guest').classList.toggle('on', use);
+      $('btn-google-blank').classList.toggle('on', !use);
+      const hint = $('google-guest-hint');
+      hint.textContent = use
+        ? 'ตัวละคร Guest ในเครื่องนี้จะย้ายเข้าบัญชีใหม่นี้ (ไม่เป็น Guest อีก)'
+        : 'ได้บัญชีใหม่ที่ยังไม่มีตัวละคร — ตัวละคร Guest ยังอยู่ในเครื่องนี้ตามเดิม';
+      hint.classList.remove('hidden');
+    };
+    $('btn-google-use-guest').onclick = () => pick(true);
+    $('btn-google-blank').onclick = () => pick(false);
     $('btn-google-name-back').onclick = () => {
       this.googleTicket = null;
       this.showLogin();
@@ -231,6 +246,10 @@ class OnlineMenu {
       void this.login();
     });
     $('btn-register').onclick = () => this.showRegister();
+    // No email system: a password is recovered with Google only (server/account-api.ts, owner 2026-11-27).
+    $('btn-forgot').onclick = () => {
+      $('login-error').textContent = 'บัญชีที่ผูก Google ไว้: กด "เข้าสู่ระบบด้วย Google" แล้วกด "⚙ จัดการบัญชี" ตั้งรหัสใหม่ได้เลยโดยไม่ต้องใส่รหัสเดิม · บัญชีที่ไม่ได้ผูก Google: แจ้งผู้ดูแลเกม';
+    };
     $('btn-register-back').onclick = () => this.showLogin();
     $('register-box').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -425,45 +444,50 @@ class OnlineMenu {
     this.render();
   }
 
-  /** Under the account name: the linked Google account (unlink when there is a password), or a button to link one. */
+  /** Under the account name: how it logs in (Google email, password or not) and the "จัดการบัญชี" button. */
   private async showGoogleRow(): Promise<void> {
     const row = $('google-link-row');
     row.classList.add('hidden');
-    const [me, on] = await Promise.all([api.me().catch(() => null), this.googleOn]);
+    const me = await api.me().catch(() => null);
     if (!me || me.guest) return;
-    row.replaceChildren();
-    if (me.google) {
-      const label = document.createElement('span');
-      label.innerHTML = `ผูก Google แล้ว: <b>${escapeHtml(me.google)}</b>`;
-      row.append(label);
-      if (me.hasPassword) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = 'ยกเลิกการผูก';
-        b.onclick = async () => {
-          if (!confirm(`ยกเลิกการผูก Google (${me.google})? หลังจากนี้เข้าได้ด้วยชื่อผู้ใช้และรหัสผ่านเท่านั้น`)) return;
-          try {
-            await api.unlinkGoogle();
-            $('char-error').textContent = 'ยกเลิกการผูก Google แล้ว';
-          } catch (e) {
-            $('char-error').textContent = (e as Error).message;
-          }
-          void this.showGoogleRow();
-        };
-        row.append(b);
-      }
-    } else if (on) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'logon-google';
-      b.textContent = 'ผูกบัญชี Google';
-      b.title = 'เข้าเกมด้วย Google ได้อีกทาง (ชื่อผู้ใช้และรหัสผ่านเดิมยังใช้ได้)';
-      b.onclick = () => void this.linkGoogle();
-      row.append(b);
-    } else {
-      return;
-    }
+    const label = document.createElement('span');
+    label.innerHTML = [
+      me.hasPassword ? '🔑 รหัสผ่าน' : '',
+      me.google ? `Google: <b translate="no">${escapeHtml(me.google)}</b>` : '',
+    ].filter(Boolean).join(' · ');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = '⚙ จัดการบัญชี';
+    b.title = 'ตั้ง/เปลี่ยนรหัสผ่าน ผูก Google เปลี่ยนชื่อผู้ใช้';
+    b.onclick = () => openAccountWindow({
+      linkGoogle: () => void this.linkGoogle(),
+      renamed: (name) => ($('account-name').textContent = name),
+      // What the row says may have changed (a password set, Google unlinked).
+      closed: () => void this.showGoogleRow(),
+    });
+    row.replaceChildren(label, b);
     row.classList.remove('hidden');
+  }
+
+  /**
+   * Straight back into the game with this character (a guest saved itself in the game and the page reloaded:
+   * sysmenu.ts openGuestSave). The server still has its map, channel and spot. Any problem = the character list.
+   */
+  async resumeCharacter(charId: number): Promise<void> {
+    show('online');
+    this.showWaiting();
+    let me;
+    try {
+      me = await api.me();
+      await this.showCharacters(me.username, 'บันทึกตัวละครแล้ว — ครั้งหน้าเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านที่ตั้งไว้');
+    } catch {
+      return this.open();
+    }
+    if (!this.chars.some((c) => c.id === charId)) return;
+    this.selected = charId;
+    this.creating = false;
+    this.render();
+    await this.enterWorld();
   }
 
   /** Leaves for Google to link it to the logged-in account. */
@@ -494,11 +518,23 @@ class OnlineMenu {
       if (me) return void this.showCharacters(me.username, `ผูก Google (${r.email}) แล้ว — ครั้งหน้ากด "เข้าสู่ระบบด้วย Google" ได้เลย`);
       return this.showLogin(`ผูก Google (${r.email}) แล้ว`);
     }
-    this.googleTicket = { ticket, guest: r.guest };
+    // Asked before anything moves (owner 2026-11-27): upgrade shows the character and the email; a login from a
+    // browser with a guest picks "ใช้ Guest ที่อยู่" or "สร้างบัญชีเปล่า" (the guest then stays as it is).
+    const mode = r.mode ?? 'login';
+    const gc = r.guest ? r.guestChar ?? null : null;
+    this.googleTicket = { ticket, guest: r.guest, mode, useGuest: mode === 'upgrade' ? true : gc ? null : false };
     $('login-box').classList.add('hidden');
     $('google-name-box').classList.remove('hidden');
     $('google-name-email').textContent = r.email;
-    $('google-guest-hint').classList.toggle('hidden', !r.guest);
+    const who = gc ? `“${gc.name}” Lv.${gc.level}` : 'Guest';
+    const choice = $('google-guest-choice');
+    choice.classList.toggle('hidden', mode === 'upgrade' || !gc);
+    $('btn-google-use-guest').textContent = `ใช้ Guest ที่อยู่: ${who}`;
+    for (const b of choice.querySelectorAll('button')) b.classList.remove('on');
+    const hint = $('google-guest-hint');
+    hint.textContent = mode === 'upgrade' ? `ยืนยัน: ตัวละคร Guest ${who} จะย้ายเข้าบัญชี Google ${r.email} (บัญชีใหม่)` : '';
+    hint.classList.toggle('hidden', mode !== 'upgrade');
+    $<HTMLButtonElement>('btn-google-name-submit').textContent = mode === 'upgrade' ? 'ยืนยัน ย้ายตัวละคร' : 'สร้างบัญชี';
     $('google-name-error').textContent = '';
     $<HTMLInputElement>('google-user').focus();
   }
@@ -510,10 +546,11 @@ class OnlineMenu {
     const bad = checkUsername(username);
     const err = $('google-name-error');
     if (bad) return void (err.textContent = bad);
+    if (t.useGuest === null) return void (err.textContent = 'เลือกก่อน: ใช้ตัวละคร Guest ที่อยู่ หรือสร้างบัญชีเปล่า');
     this.busy = true;
     err.textContent = 'กำลังสร้างบัญชี…';
     try {
-      const r = await api.googleFinish(t.ticket, username, t.guest);
+      const r = await api.googleFinish(t.ticket, username, t.useGuest);
       if (r.kind !== 'session') throw new Error(r.kind === 'error' ? r.message : 'ลองใหม่อีกครั้ง');
       this.googleTicket = null;
       err.textContent = '';
@@ -677,6 +714,18 @@ export function buildMenu(launch: Launcher): void {
     show('guest');
     $('guest-error').textContent = 'กำลังไปที่ Google…';
     api.googleStart('upgrade').catch((e: Error) => ($('guest-error').textContent = e.message));
+    return;
+  }
+  // A guest saved itself in the game: back into the world with the same character, now as the account.
+  let resumeChar: string | null = null;
+  try {
+    resumeChar = sessionStorage.getItem(RESUME_CHAR_KEY);
+    sessionStorage.removeItem(RESUME_CHAR_KEY);
+  } catch {
+    // Storage blocked: nothing to resume.
+  }
+  if (resumeChar && /^\d+$/.test(resumeChar) && api.savedToken()) {
+    void online.resumeCharacter(Number(resumeChar));
     return;
   }
   // Back from the in-game menu: open the character list (or the guest screen) instead of the Login form.

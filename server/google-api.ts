@@ -23,7 +23,8 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 export interface GoogleApiDeps {
   db: Db;
   world: GameWorld;
-  startSession(accountId: number, username: string): AuthResponse;
+  /** `google` = the token comes from a Google login (a fresh one may reset the password: server/account-api.ts). */
+  startSession(accountId: number, username: string, google?: boolean): AuthResponse;
 }
 
 const flows = new GoogleFlows();
@@ -108,8 +109,15 @@ export async function googleApi(req: IncomingMessage, res: ServerResponse, path:
     const bad = checkUsername(username);
     if (bad) throw new HttpError(400, bad);
     const id = t.id!;
+    // Upgrade always takes the guest; a login only when the player chose "ใช้ Guest ที่อยู่" (owner 2026-11-27:
+    // asked first, "สร้างบัญชีเปล่า" leaves the guest on this browser as it is). The guest id is the flow's, never the page's.
+    const takeGuest = t.result.mode === 'upgrade' || body.useGuest === true;
     // The guest may be gone by now (deleted, or became an account elsewhere): then a fresh account.
-    const guestId = t.guestId !== null && db.isGuestAccount(t.guestId) ? t.guestId : null;
+    const guestId = takeGuest && t.guestId !== null && db.isGuestAccount(t.guestId) ? t.guestId : null;
+    if (t.result.mode === 'upgrade' && guestId === null) {
+      tickets.drop(ticket);
+      throw new HttpError(410, 'ไม่พบตัวละคร Guest แล้ว — ลองใหม่อีกครั้ง');
+    }
     const linked = db.accountByGoogle(id.sub);
     if (linked) {
       tickets.drop(ticket);
@@ -123,7 +131,9 @@ export async function googleApi(req: IncomingMessage, res: ServerResponse, path:
     }
     tickets.drop(ticket);
     console.log(`[account] registered ${username} with Google${guestId !== null ? ` (from guest #${guestId})` : ''}`);
-    send(res, 201, { kind: 'session', ...d.startSession(accountId, username) } satisfies GoogleFinishResponse);
+    db.audit(null, 'ผู้เล่น', guestId !== null ? 'guest-upgrade' : 'google-register', `${username} (#${accountId})`,
+      guestId !== null ? `สมัครด้วย Google ${id.email} พร้อมตัวละคร Guest` : `สมัครด้วย Google ${id.email} (บัญชีเปล่า)`);
+    send(res, 201, { kind: 'session', ...d.startSession(accountId, username, true) } satisfies GoogleFinishResponse);
     return true;
   }
 
@@ -132,7 +142,9 @@ export async function googleApi(req: IncomingMessage, res: ServerResponse, path:
     if (!acc || acc.guest) throw new HttpError(401, 'กรุณาเข้าสู่ระบบใหม่');
     // Without a password the account could never be entered again.
     if (!db.hasPassword(acc.id)) throw new HttpError(400, 'บัญชีนี้เข้าได้ด้วย Google อย่างเดียว ยกเลิกการผูกไม่ได้');
-    if (!db.unlinkGoogle(acc.id)) throw new HttpError(404, 'บัญชีนี้ยังไม่ได้ผูก Google');
+    const g = db.googleOf(acc.id);
+    if (!g || !db.unlinkGoogle(acc.id)) throw new HttpError(404, 'บัญชีนี้ยังไม่ได้ผูก Google');
+    db.audit(null, 'ผู้เล่น', 'google-unlink', `${acc.username} (#${acc.id})`, `ผู้เล่นยกเลิกการผูก Google ${g.email} เอง`);
     console.log(`[account] ${acc.username} unlinked Google`);
     send(res, 200, {});
     return true;
@@ -181,12 +193,16 @@ async function callback(d: GoogleApiDeps, state: string, code: string, error: st
       if (ban) result = { kind: 'error', message: banMessage(ban.until, ban.reason) };
       else {
         db.touchGoogle(id.sub, id.email, id.name);
-        result = { kind: 'session', ...d.startSession(linked.id, linked.username) };
+        result = { kind: 'session', ...d.startSession(linked.id, linked.username, true) };
       }
     }
   } else {
     const guest = p.guestId !== null && db.isGuestAccount(p.guestId);
-    return tickets.add({ kind: 'needName', email: id.email, guest }, p.bind, id, guest ? p.guestId : null);
+    // Shown before anything moves (the page asks: take this guest along, or a blank account).
+    const c = guest ? db.listCharacters(p.guestId!)[0] : undefined;
+    const guestChar = c ? { name: c.name, level: c.level } : null;
+    if (p.mode === 'upgrade' && !guest) return fail('ไม่พบตัวละคร Guest แล้ว — ลองใหม่อีกครั้ง');
+    return tickets.add({ kind: 'needName', email: id.email, guest, mode: p.mode === 'upgrade' ? 'upgrade' : 'login', guestChar }, p.bind, id, guest ? p.guestId : null);
   }
   return tickets.add(result, p.bind, id);
 }

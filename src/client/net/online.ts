@@ -202,6 +202,9 @@ export function connectOnline(token: string, characterId: number): Promise<Onlin
 export class OnlineBackend implements Backend {
   readonly online = true;
   readonly guest: boolean;
+  get characterId(): number | null {
+    return this.login?.characterId ?? null;
+  }
   zone: ZoneDef;
   channel: number;
   zoneSeq = 0;
