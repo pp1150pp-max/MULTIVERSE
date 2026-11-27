@@ -536,6 +536,7 @@ export class Sim {
     this.hitCount++;
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
     if (this.time < p.dmgUntil) raw *= p.dmgMult;
+    if (this.time < p.perfectUntil) raw *= p.perfectMult;
     // Card "ดาเมจโจมตีปกติ %" (normalAtkPct): the class's basic attack only, never a skill (card plan 12.3 no. 7).
     const fx = p.cardFx;
     if (fx.normalAtkPct > 0) {
@@ -623,7 +624,7 @@ export class Sim {
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
     if (!p.alive || this.inSafe(p)) return;
     if (p.invulnT > 0 || p.guardT > 0) {
-      this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
+      if (!this.perfectDodge(m, p)) this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
     const weak = this.time < m.weakUntil ? 1 - m.weak : 1;
@@ -657,6 +658,28 @@ export class Sim {
       this.hitMonster(p, m, back, { maxMult: back, reflected: true });
     }
     if (p.hp <= 0) this.killPlayer(p);
+  }
+
+  /**
+   * Perfect Dodge (owner 2026-11-27, dodgeTuning.ts): this hit missed because of the dash, and the dash button was
+   * pressed at most `window` seconds ago. Gives extra invulnerability and a damage buff; true when it happened.
+   */
+  private perfectDodge(m: Monster, p: Player): boolean {
+    const cfg = currentBalance().dodge;
+    if (!cfg.on || (m.isBoss && !cfg.boss) || p.invulnT <= 0) return false;
+    if (this.time - p.dodgeDashAt > cfg.window || this.time < p.dodgeReadyAt) return false;
+    p.dodgeReadyAt = this.time + cfg.cooldown;
+    p.invulnT = Math.max(p.invulnT, cfg.invuln);
+    if (cfg.dmgPct > 0 && cfg.dmgSec > 0) {
+      p.perfectMult = 1 + cfg.dmgPct / 100;
+      p.perfectUntil = this.time + cfg.dmgSec;
+    }
+    this.text(p.x, p.topY + 0.3, p.z, 'PERFECT DODGE!', 'lvl', 1.1);
+    if (cfg.dmgPct > 0 && cfg.dmgSec > 0) this.text(p.x, p.topY - 0.1, p.z, `ดาเมจ +${cfg.dmgPct}% ${cfg.dmgSec} วิ`, 'info', 1.1, p.id);
+    this.fx('ring', p.x, p.z, 1.6, '#9fe8ff', 0.35);
+    this.fx('burst', p.x, 1, p.z, '#bff2ff', 14, 4);
+    this.sfx('pickup_item', p.x, p.z, p.id);
+    return true;
   }
 
   /**
