@@ -1,3 +1,4 @@
+import './confirmKeys';
 import { SPACE_COLOUR } from './island';
 import { SHRINE_BUFF_ICON, SHRINE_BUFF_NAME } from '../shared/treasure';
 import { SHRINE_BUFFS } from '../shared/mapSchema';
