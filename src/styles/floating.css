@@ -126,4 +126,4 @@ body.touch-ui #bar-buffs { bottom: auto; top: 100%; margin: 4px 0 0; }
 
 
 /* Element mark over a monster's HP bar (sim/elements.ts), before the debuff icons. */
-.plate .pdebuffs .pelem { font-size: 13px; line-height: 16px; filter: drop-shadow(0 0 2px #000); }
+.plate .pdebuffs img.pelem { width: 16px; height: 16px; image-rendering: auto; filter: drop-shadow(0 0 1px #000); }

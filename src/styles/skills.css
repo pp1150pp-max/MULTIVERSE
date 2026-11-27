@@ -92,4 +92,5 @@
 
 
 /* A skill's element (src/client/elementBadge.ts). */
-.el-badge { display: inline-block; margin-right: 6px; font-weight: bold; text-shadow: 0 0 2px #000; }
+.el-badge { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; font-weight: bold; text-shadow: 0 0 2px #000; vertical-align: middle; }
+.el-badge img { width: 18px; height: 18px; }
