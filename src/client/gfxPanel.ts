@@ -23,7 +23,7 @@ export function renderGfxSettings(host: HTMLElement, redraw: () => void): void {
     ...(currentBalance().fxLayer.shader ? [setRow('น้ำ ลม และแสง',
       setSelect<ShaderLevel>(([2, 1, 0] as ShaderLevel[]).map((n) => [n, SHADER[n], n === 0 || (!isSoftwareRender() && n <= currentBalance().fxLayer.shaderMax)]),
         gfxShader(), (n) => set({ shader: n })),
-      isSoftwareRender() ? 'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้' : 'ปิด = ภาพนิ่งแบบเดิม · ตอนนี้มีผลกับน้ำและทะเลเมฆ')] : []),
+      isSoftwareRender() ? 'เบราว์เซอร์กำลังวาดด้วย CPU จึงปิดไว้' : 'ปิด = ภาพแบบเดิม · ตอนนี้มีผลกับน้ำ ทะเลเมฆ และแสง')] : []),
     setRow('อนุภาคของผู้เล่นคนอื่น',
       setSelect<GfxOthers>([[2, 'เต็ม'], [1, 'ครึ่ง'], [0, 'ปิด']], gfxOthersPick(), (n) => set({ others: n }))),
     setRow('จอสั่น', setSwitch(gfxShakeOn(), (on) => set({ shake: on }))),

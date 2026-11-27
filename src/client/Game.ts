@@ -66,6 +66,7 @@ import { TouchControls, TOUCH_ATTACK } from './touch/controls';
 import { TouchGestures } from './touch/gestures';
 import { gfxOwnNumsOnly, gfxShakeOn, setSoftwareRender, setTouchProbe } from './gfxPrefs';
 import { updateHudLayout } from './hudLayout';
+import { PostFx } from './postFx';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -189,6 +190,8 @@ export class Game {
   private last = 0;
   /** Frames drawn so far, up to 3: the first entry's loading screen lifts after the third. */
   private frames = 0;
+  /** The corner shade, map tone and sun shafts over the finished picture (docs/systems/shaders.md). */
+  private readonly postFx = new PostFx();
 
   constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
@@ -294,7 +297,10 @@ export class Game {
     this.last = now;
     this.update(dt);
     // The rest screen covers everything in black: the world keeps up with the server, but nothing is drawn (battery).
-    if (!this.restScreen || this.frames < 3) this.renderer.render(this.scene, this.camera);
+    if (!this.restScreen || this.frames < 3) {
+      this.renderer.render(this.scene, this.camera);
+      this.postFx.draw(this.renderer, this.zone, dt, (this.camTarget.x - this.camTarget.z) * S);
+    }
     if (this.frames < 3) {
       this.frames++;
       // Behind the first entry's loading screen: send every texture to the GPU and build the shaders

@@ -25,7 +25,8 @@ import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './is
 import { HARBOR_FRAG, harborUniforms, paintHarborMask, paintHarborSides, updateHarborWater } from './harborGround';
 import { HarborFalls } from './harborFalls';
 import { CloudSea, skyMood } from './cloudSea';
-import { gfxWater } from './gfxPrefs';
+import { gfxPost, gfxWater } from './gfxPrefs';
+import { mistLook, sceneGradeOf } from '../shared/sceneGrade';
 import { frac, noiseTexture, turn } from './waterFx';
 import { cloneShared } from './texShare';
 
@@ -272,7 +273,18 @@ class QuadGroups {
 }
 
 interface Fadeable { mat: THREE.SpriteMaterial; x: number; z: number; w: number; h: number; o: number }
-interface Fog { spr: THREE.Sprite; vx: number; vz: number; base: number; phase: number }
+/** Added to a mist blob's sprite shader at the high level: its alpha torn into ribbons by streaming noise. */
+const MIST_UNIFORMS = /* glsl */ `
+  uniform sampler2D uMistNoise;
+  uniform float uMistShift, uMistFlow, uMistPeak, uMistSeed;
+`;
+const MIST_FRAG = /* glsl */ `
+  float ribbon = texture2D(uMistNoise, vec2(vMapUv.x * 0.8 - uMistShift + uMistSeed, vMapUv.y * 3.0 + uMistSeed * 1.7)).r;
+  diffuseColor.a *= max(0.0, mix(1.0, smoothstep(0.3, 0.7, ribbon) * uMistPeak, uMistFlow));
+`;
+
+/** A mist blob; `flowing` is its ribbon material, made the first time the high level shows it. */
+interface Fog { spr: THREE.Sprite; vx: number; vz: number; base: number; phase: number; plain: THREE.SpriteMaterial; flowing?: THREE.SpriteMaterial }
 
 const S = Math.SQRT1_2;
 
@@ -533,6 +545,7 @@ export class World {
   private readonly flames: THREE.Sprite[] = [];
   private readonly portals: THREE.Sprite[] = [];
   private readonly fog: Fog[] = [];
+  private readonly mistUniforms = { uMistNoise: { value: noiseTexture() }, uMistShift: { value: 0 }, uMistFlow: { value: 0 }, uMistPeak: { value: 1 } };
   private snow: { geo: THREE.BufferGeometry; speeds: Float32Array } | null = null;
   /** Glow over the lava pools and along the cracks, pulsing slowly. */
   private readonly lavaGlows: THREE.Material[] = [];
@@ -1329,8 +1342,33 @@ export class World {
       spr.scale.set(size, size * 0.55, 1);
       spr.position.set(rand(r, -B, B), rand(r, 0.8, 2.2), rand(r, -B, B));
       spr.renderOrder = 5;
-      this.fog.push({ spr, vx: rand(r, 0.25, 0.6), vz: rand(r, -0.3, 0.3), base, phase: r() * Math.PI * 2 });
+      this.fog.push({ spr, vx: rand(r, 0.25, 0.6), vz: rand(r, -0.3, 0.3), base, phase: r() * Math.PI * 2, plain: spr.material as THREE.SpriteMaterial });
     }
+  }
+
+  /** The high level's mist: a copy of the blob's material that tears it into ribbons streaming sideways. */
+  private flowingMist(plain: THREE.SpriteMaterial, seed: number): THREE.SpriteMaterial {
+    const m = this.own(plain.clone());
+    m.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.mistUniforms, { uMistSeed: { value: seed } });
+      shader.fragmentShader = MIST_UNIFORMS + shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>${MIST_FRAG}`);
+    };
+    m.customProgramCacheKey = () => 'mist-flow';
+    return m;
+  }
+
+  /** Swaps the mist between its own material and the ribbons, and returns × its thickness (docs/systems/shaders.md). */
+  private updateMist(): number {
+    if (!this.fog.length) return 1;
+    const balance = currentBalance();
+    const look = mistLook(gfxPost(), balance.fxLayer.mistFlow, sceneGradeOf(this.zone.id, balance.sceneGrade), !!this.zone.roomOf);
+    this.mistUniforms.uMistShift.value = frac(this.t * 0.025);
+    this.mistUniforms.uMistFlow.value = look.flow;
+    this.mistUniforms.uMistPeak.value = look.peak;
+    this.fog.forEach((f, i) => {
+      f.spr.material = look.flow > 0 ? (f.flowing ??= this.flowingMist(f.plain, frac(i * 0.618))) : f.plain;
+    });
+    return look.thick;
   }
 
   /** Flakes falling in a box that follows the player, so there is no need for many of them. */
@@ -1503,6 +1541,7 @@ export class World {
       (p.material as THREE.SpriteMaterial).opacity = 0.4 + Math.sin(this.t * 3.1) * 0.12;
     }
     const B = this.bound;
+    const thick = this.updateMist();
     for (const f of this.fog) {
       const s = f.spr.position;
       s.x += f.vx * dt;
@@ -1510,7 +1549,7 @@ export class World {
       if (s.x > B) s.x = -B;
       if (s.z > B) s.z = -B;
       if (s.z < -B) s.z = B;
-      (f.spr.material as THREE.SpriteMaterial).opacity = f.base * (0.75 + 0.25 * Math.sin(this.t * 0.4 + f.phase));
+      (f.spr.material as THREE.SpriteMaterial).opacity = f.base * (0.75 + 0.25 * Math.sin(this.t * 0.4 + f.phase)) * thick;
     }
   }
 
