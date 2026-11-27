@@ -45,7 +45,7 @@
           <div id="hud-online" class="hidden"></div>
           <div id="hud-online-all" class="hidden"></div>
           <div id="hud-buffs"></div>
-          <div id="hud-guest" class="hidden" title="สมัครสมาชิกเพื่อเก็บตัวละครนี้ไว้ถาวร (กลับไปหน้าแรก → เข้าสู่ระบบ / สมัคร)">Guest · ถูกลบถ้าไม่เข้าเกม 24 ชม.</div>
+          <div id="hud-guest" class="hidden">Guest · ถูกลบถ้าไม่เข้าเกม 24 ชม. <button id="btn-hud-guest-save" type="button" title="ตั้งชื่อผู้ใช้/รหัสผ่าน หรือใช้ Google เพื่อเก็บตัวละครนี้ไว้ถาวร">บันทึกตัวละคร</button></div>
         </div>
 
         <div id="boss-bar" class="hidden">
@@ -430,6 +430,7 @@
                 <div class="form-row"><label for="login-user">ชื่อผู้ใช้</label><input id="login-user" name="username" maxlength="16" autocomplete="username" /></div>
                 <div class="form-row"><label for="login-pass">รหัสผ่าน</label><span class="pass-wrap"><input id="login-pass" name="password" type="password" maxlength="72" autocomplete="current-password" /><button type="button" class="pass-eye" data-for="login-pass" aria-label="แสดงรหัสผ่าน" title="แสดงรหัสผ่าน">👁</button></span></div>
                 <div id="login-error" class="form-error"></div>
+                <button id="btn-forgot" type="button" class="logon-forgot">ลืมรหัสผ่าน?</button>
                 <div class="menu-buttons logon-actions">
                   <button id="btn-login" type="submit" class="primary">เข้าสู่ระบบ</button>
                   <button id="btn-register" type="button">สมัครสมาชิกใหม่</button>
@@ -467,7 +468,7 @@
                     <li data-rule="pass-match">ตรงกับรหัสผ่านด้านบน</li>
                   </ul>
                 </div>
-                <label class="logon-check"><input id="reg-agree" type="checkbox" /> ฉันเข้าใจว่าต้องจำรหัสผ่านไว้เอง เพราะตอนนี้ยังกู้คืนรหัสผ่านไม่ได้</label>
+                <label class="logon-check"><input id="reg-agree" type="checkbox" /> ฉันเข้าใจว่าต้องจำรหัสผ่านไว้เอง (กู้รหัสได้เฉพาะบัญชีที่ผูก Google ไว้)</label>
                 <p id="guest-move-hint" class="hint guest-move hidden"></p>
                 <div id="register-error" class="form-error"></div>
                 <div class="menu-buttons logon-actions">
@@ -484,9 +485,14 @@
                 <p class="logon-sub">บัญชีใหม่สำหรับ <b id="google-name-email"></b></p>
                 <div class="form-field">
                   <div class="form-row"><label for="google-user">ชื่อผู้ใช้</label><input id="google-user" maxlength="16" autocomplete="off" /></div>
-                  <ul class="rules"><li>ยาว 3–16 ตัว ใช้ได้เฉพาะ A–Z, a–z, 0–9 และ _ (ใช้แสดงในเกม เปลี่ยนทีหลังไม่ได้)</li></ul>
+                  <ul class="rules"><li>ยาว 3–16 ตัว ใช้ได้เฉพาะ A–Z, a–z, 0–9 และ _ (เปลี่ยนทีหลังได้ที่ "จัดการบัญชี")</li></ul>
                 </div>
-                <p id="google-guest-hint" class="hint guest-move hidden">ตัวละคร Guest ในเครื่องนี้จะย้ายเข้าบัญชีใหม่นี้ทันที</p>
+                <div id="google-guest-choice" class="guest-choice hidden">
+                  <p class="hint">เครื่องนี้มีตัวละคร Guest อยู่ — จะใช้กับบัญชีนี้ไหม?</p>
+                  <button id="btn-google-use-guest" type="button"></button>
+                  <button id="btn-google-blank" type="button">สร้างบัญชีเปล่า (Guest ยังอยู่ในเครื่องนี้)</button>
+                </div>
+                <p id="google-guest-hint" class="hint guest-move hidden"></p>
                 <div id="google-name-error" class="form-error"></div>
                 <div class="menu-buttons logon-actions">
                   <button id="btn-google-name-back" type="button">‹ ยกเลิก</button>

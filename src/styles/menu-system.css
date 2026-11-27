@@ -312,3 +312,26 @@
 .drag-handle { cursor: move; touch-action: none; user-select: none; }
 .drag-handle button { cursor: pointer; }
 
+
+/* ---------------------------------------------------------------- account windows (src/client/accountUi.ts) */
+.acct-layer { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; background: rgba(0, 0, 0, 0.6); overflow-y: auto; }
+.acct-box { position: relative; width: 100%; max-width: 440px; }
+.acct-x { position: absolute; top: 6px; right: 8px; padding: 2px 8px; font-size: 14px; background: none; border: none; box-shadow: none; color: var(--ink-dim); cursor: pointer; }
+.acct-x:hover { color: #fff; background: none; }
+.acct-body { font-size: 14px; }
+.acct-body h2 { margin-bottom: 6px; }
+.acct-body h3 { border-top: 1px solid var(--panel-edge); padding-top: 10px; }
+.acct-body .hint { font-size: 12px; margin: 2px 0 8px; }
+.acct-body .form-row label { width: 88px; }
+.acct-body .menu-buttons { margin-top: 4px; }
+.acct-way { margin: 2px 0; color: var(--ink); }
+.acct-way b { color: var(--gold-hi); font-weight: 600; }
+.acct-note { color: var(--ink-dim); }
+.form-error.acct-ok { color: #8fd98a; }
+.logon-forgot { display: block; margin: -4px 0 6px auto; padding: 0; font-size: 12px; background: none; border: none; box-shadow: none; color: var(--ink-dim); text-decoration: underline; cursor: pointer; }
+.logon-forgot:hover { color: #fff; background: none; }
+.guest-choice { display: grid; gap: 6px; margin: 4px 0 8px; }
+.guest-choice .hint { margin: 0; }
+.guest-choice button { text-align: left; padding: 8px 12px; font-size: 14px; }
+.guest-choice button.on { border-color: var(--gold-hi); color: var(--gold-hi); box-shadow: 0 0 0 1px var(--gold-hi) inset; }
+#hud-guest button { margin-left: 4px; padding: 1px 8px; font-size: 11px; }
