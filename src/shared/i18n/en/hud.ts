@@ -218,4 +218,8 @@ export const EN_HUD: Record<string, string> = {
   'ยาที่ใช้': 'Potions used',
   '{0} ขวด': '{0}',
   '{0} ครั้ง': '{0} times',
+  'ระหว่างที่คุณไม่อยู่': 'While you were away',
+  'พักหน้าจอ': 'Rest screen',
+  'เริ่มพักหน้าจอ': 'Start rest screen',
+  'จอมืดทั้งจอ ไม่วาดภาพเกม เหลือหน้าสรุปผล Auto นับต่อเรื่อย ๆ · ปิดด้วย ✕ หรือดับเบิลคลิก': 'Black screen, the game is not drawn, only the Auto summary keeps counting · Close with ✕ or a double-click',
 };

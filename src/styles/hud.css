@@ -248,3 +248,6 @@
 .auto-sum-row b { color: var(--gold-hi); font-weight: normal; }
 .auto-sum-rarity { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; font-size: 13px; }
 .auto-sum-hint { margin-top: 10px; text-align: center; }
+
+/* "พักหน้าจอ" from the settings: all black behind the summary (the game is not drawn either). */
+.auto-sum-back.rest { background: #000; }

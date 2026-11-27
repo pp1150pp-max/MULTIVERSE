@@ -41,6 +41,8 @@ export class AutoSummaryWindow {
   private autoSeen = false;
   /** Why Auto switched itself off since then (the server's message), if it did. */
   private stopMsg: string | null = null;
+  /** Opened from the settings as a rest screen: all black, the game is not drawn (Game.restScreen). */
+  private rest = false;
 
   constructor(private readonly g: Game) {
     const panel = el('div', 'panel auto-sum');
@@ -113,17 +115,35 @@ export class AutoSummaryWindow {
     this.render();
   }
 
+  /**
+   * "พักหน้าจอ" from the settings (owner 2026-11-27): the summary at once, over a black screen, counting from now; the
+   * game stops drawing until it is closed (Auto keeps farming on the server).
+   */
+  openRest(): void {
+    if (this.open) this.close();
+    this.restart();
+    this.rest = true;
+    this.root.classList.add('rest');
+    this.g.restScreen = true;
+    this.show();
+  }
+
   private close(): void {
     if (!this.open) return;
     this.open = false;
     this.root.classList.add('hidden');
+    if (this.rest) {
+      this.rest = false;
+      this.root.classList.remove('rest');
+      this.g.restScreen = false;
+    }
     this.restart();
   }
 
   private render(): void {
     const t = this.tally();
     const d = t && this.base ? tallySince(t, this.base) : emptyTally(0);
-    this.since.textContent = `ระหว่างที่คุณไม่อยู่ · ${clock(performance.now() - this.lastActive)}`;
+    this.since.textContent = `${this.rest ? 'พักหน้าจอ' : 'ระหว่างที่คุณไม่อยู่'} · ${clock(performance.now() - this.lastActive)}`;
     this.status.textContent = this.g.autoPlay ? 'Auto กำลังทำงาน' : `Auto หยุดแล้ว${this.stopMsg ? ` — ${this.stopMsg}` : ''}`;
     this.status.classList.toggle('off', !this.g.autoPlay);
     const rows: [string, string][] = [

@@ -152,6 +152,7 @@ export class SystemMenu {
         <button data-act="hudstyle" id="sys-hudstyle"></button>
         <button data-act="partyblock" id="sys-partyblock"></button>
         <button data-act="keybinds" id="sys-keybinds">ตั้งค่าปุ่ม</button>
+        <button data-act="rest" id="sys-rest">พักหน้าจอ</button>
         ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
         <div class="sys-sep"></div>
         <button data-act="google" id="sys-google" class="hidden">${guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google'}</button>
@@ -295,6 +296,7 @@ export class SystemMenu {
   private drawOldList(): void {
     $('sys-hudstyle').textContent = $('btn-hud-style').textContent;
     document.getElementById('sys-keybinds')?.classList.toggle('hidden', !currentBalance().fxLayer.keyRebind);
+    document.getElementById('sys-rest')?.classList.toggle('hidden', !currentBalance().auto.summary);
     $('sys-partyblock').textContent = `${this.g.party.block ? '☑' : '☐'} ไม่รับคำชวนปาร์ตี้`;
     const tb = document.getElementById('sys-tradeblock');
     if (tb) tb.textContent = `${this.g.trade.block ? '☑' : '☐'} ไม่รับคำขอเทรด`;
@@ -345,6 +347,13 @@ export class SystemMenu {
       setRow('รับคำชวนปาร์ตี้', setSwitch(!g.party.block, (on) => { g.party.setBlock(!on); redraw(); })),
     );
     if (!g.backend.guest) rows.append(setRow('รับคำขอเทรด', setSwitch(!g.trade.block, (on) => { g.trade.setBlock(!on); redraw(); })));
+    if (currentBalance().auto.summary) {
+      const rest = document.createElement('button');
+      rest.className = 'set-btn';
+      rest.dataset.act = 'rest';
+      rest.textContent = 'เริ่มพักหน้าจอ';
+      rows.append(setRow('พักหน้าจอ', rest, 'จอมืดทั้งจอ ไม่วาดภาพเกม เหลือหน้าสรุปผล Auto นับต่อเรื่อย ๆ · ปิดด้วย ✕ หรือดับเบิลคลิก'));
+    }
     if (this.googleOn) {
       const b = document.createElement('button');
       b.className = 'set-btn';
@@ -479,6 +488,9 @@ export class SystemMenu {
       case 'tradeblock':
         this.g.trade.setBlock(!this.g.trade.block);
         return this.drawOldList();
+      case 'rest':
+        this.toggle(false);
+        return this.g.hud.autoSummary.openRest();
       case 'chars':
         this.toGoogle = false;
         return this.requestExit('characters');
