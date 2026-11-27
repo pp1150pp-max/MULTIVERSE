@@ -56,6 +56,8 @@ export interface HitOpts {
   src?: string;
   /** This hit gives no extra effects (the ticks of an extra burn, so they don't feed themselves). */
   noExtra?: boolean;
+  /** No element mark or reaction from this hit (a reaction's own hits, sim/elements.ts). */
+  noElem?: boolean;
 }
 
 /** Visual effects the renderer knows how to draw. The client's Effects class implements this. */

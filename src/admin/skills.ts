@@ -17,6 +17,7 @@ import { constellation, PAD, SIZE } from '../client/skillMap';
 import { imgUrl } from '../client/img';
 import { CLASS_PASSIVES } from '../shared/classPassives';
 import { CP_RANGE } from '../shared/classPassiveTuning';
+import { ELEMENTS, ELEMENT_ICON, ELEMENT_NAME, ELEMENT_RANGE, MARK_EFFECT_NAME, MARK_NAME, REACTIONS, REACTION_KEYS, REACTION_NAME, REACTION_NUM_NAME, REACTION_RANGE, SKILL_ELEMENTS, type Element } from '../shared/elementTuning';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -100,6 +101,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
   const cardZoom = h('div', { class: 'card folded' });
   const cardFx = h('div', { class: 'card folded' });
   const cardCp = h('div', { class: 'card folded' });
+  const cardEl = h('div', { class: 'card folded' });
   /** One setting: its name and hint on the left, the box on the right. */
   const setRow = (label: string, hint: string | null, ctl: Node, unit = ''): HTMLElement =>
     h('div', { class: 'set-row' }, h('div', { class: 'set-name' }, h('div', {}, label), hint ? h('div', { class: 'muted set-hint' }, hint) : null), h('div', { class: 'set-ctl' }, ctl, unit ? h('span', { class: 'muted' }, ` ${unit}`) : null));
@@ -165,6 +167,55 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
         h('div', { class: 'set-multi' },
           color(() => cp.warp.look.color1, (v) => { cp.warp.look.color1 = v; }, ccp.warp.look.color1),
           color(() => cp.warp.look.color2, (v) => { cp.warp.look.color2 = v; }, ccp.warp.look.color2))),
+    );
+
+    // The element system (owner 2026-11-27, src/shared/elementTuning.ts).
+    const el = sc.elements;
+    const ce = cs.elements;
+    const elNum = (key: string, what: string, get: () => number, set: (n: number) => void, codeVal: number, r: readonly [number, number], step: number): HTMLInputElement =>
+      numBox(`el.${key}`, what, get, set, codeVal, r[0], r[1], step, refresh);
+    const elementPick = (id: string): HTMLSelectElement => {
+      const now = el.skill[id] ?? 'none';
+      const was = ce.skill[id] ?? 'none';
+      const s = h('select', {
+        title: `ค่าในโค้ด: ${ELEMENT_NAME[was]}`,
+        onchange: (e: Event) => {
+          const v = SKILL_ELEMENTS[(e.target as HTMLSelectElement).selectedIndex];
+          if (v === 'none') delete el.skill[id];
+          else el.skill[id] = v;
+          s.classList.toggle('bal-changed', v !== was);
+          updateSummary();
+        },
+      }, ...SKILL_ELEMENTS.map((v) => h('option', { selected: v === now }, `${ELEMENT_ICON[v]} ${ELEMENT_NAME[v]}`.trim())));
+      s.classList.toggle('bal-changed', now !== was);
+      return s;
+    };
+    const hitting = (c: ClassId) => CLASSES[c].skills.filter((sk) => sk.kind !== 'passive');
+    cardEl.replaceChildren(
+      h('h2', {}, 'ค่ารวม 6: ระบบธาตุ'),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: สกิลที่มีธาตุตีโดนมอน = ติดป้ายธาตุพร้อมผลเล็ก ๆ · โดนธาตุอื่นตอนยังมีป้าย = เกิดปฏิกิริยาของคู่นั้น ป้ายทั้งคู่หาย (มอนตัวเดิมเกิดซ้ำได้ตามคูลดาวน์) · ดาเมจต่อวิของไฟ/พิษและการตีของปฏิกิริยาเองไม่ทำให้ติดป้าย · ของที่เรียกมา (ป้อมปืน โดรน กับระเบิด) ใช้ธาตุของสกิลที่เรียก · บัฟมือปืนที่เปลี่ยนยิงปกติ (กระสุนร้อน/ช็อต/แยก/พายุลูกกระสุน) ให้ยิงปกติได้ธาตุนั้นระหว่างบัฟ · บอสโดนสตันจากปฏิกิริยา 30% ไม่โดนผลักตามกติกาเดิม'),
+      setRow('เปิดระบบธาตุ', 'ปิด = ไม่มีป้าย ไม่มีปฏิกิริยา ไม่โชว์ธาตุบนสกิล', h('input', { type: 'checkbox', checked: el.on, onchange: (e: Event) => { el.on = (e.target as HTMLInputElement).checked; updateSummary(); } })),
+      setRow('ป้ายธาตุอยู่นาน', null, elNum('markSec', 'ป้ายธาตุอยู่นาน', () => el.markSec, (n) => { el.markSec = n; }, ce.markSec, ELEMENT_RANGE.markSec, 0.5), 'วิ'),
+      setRow('ปฏิกิริยาซ้ำกับมอนตัวเดิมได้ทุก', null, elNum('reactCd', 'ปฏิกิริยาซ้ำได้ทุก', () => el.reactCd, (n) => { el.reactCd = n; }, ce.reactCd, ELEMENT_RANGE.reactCd, 0.5), 'วิ'),
+      h('div', { class: 'skm-sub' }, 'ผลเล็ก ๆ ของป้ายแต่ละธาตุ (ตลอดเวลาที่ป้ายอยู่)'),
+      ...ELEMENTS.map((e) => setRow(`${ELEMENT_ICON[e]} ${MARK_EFFECT_NAME[e]}`, `ป้าย "${MARK_NAME[e]}"`,
+        elNum(`mark.${e}`, MARK_EFFECT_NAME[e], () => el.mark[e], (n) => { el.mark[e] = n; }, ce.mark[e], e === 'wind' ? [0, 10] : e === 'water' ? [0, 90] : [0, 200], e === 'wind' ? 0.5 : 1))),
+      h('div', { class: 'skm-sub' }, 'ปฏิกิริยา (ดาเมจ/สตัน/ผลัก ใส่ทุกตัวในรัศมีรอบมอนที่เกิด · 0 = ตัวนั้นตัวเดียว · ดาเมจต่อวิ = ติดไฟ/พิษแบบปฏิกิริยา)'),
+      ...REACTIONS.map((k) => {
+        const rc = el.reactions[k];
+        const cr = ce.reactions[k];
+        const [a, b] = k.split('+') as [Element, Element];
+        return setRow(`${ELEMENT_ICON[a]}+${ELEMENT_ICON[b]} ${REACTION_NAME[k]}`, null,
+          h('div', { class: 'set-multi' },
+            h('label', { class: rc.on !== cr.on ? 'bal-changed' : '' }, h('input', { type: 'checkbox', checked: rc.on, onchange: (e: Event) => { rc.on = (e.target as HTMLInputElement).checked; updateSummary(); } }), ' เปิด'),
+            ...REACTION_KEYS.map((f) => h('label', {}, ` ${REACTION_NUM_NAME[f]} `,
+              elNum(`r.${k}.${f}`, `${REACTION_NAME[k]} ${REACTION_NUM_NAME[f]}`, () => rc[f], (n) => { rc[f] = n; }, cr[f], REACTION_RANGE[f], f === 'dmg' || f === 'dot' ? 5 : 0.5)))));
+      }),
+      h('div', { class: 'skm-sub' }, 'ธาตุของแต่ละสกิล (ช่องขอบทอง = ต่างจากค่าในโค้ด)'),
+      ...CLASS_IDS.map((c) => h('div', {},
+        h('div', { class: 'muted' }, CLASSES[c].nameTh),
+        h('div', { class: 'set-multi', style: 'flex-wrap: wrap; gap: 6px 12px' },
+          ...hitting(c).map((sk) => h('label', {}, `${sk.nameTh} `, elementPick(sk.id)))))),
     );
   };
 
@@ -625,7 +676,7 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
     msg,
   );
 
-  box.replaceChildren(fold.head, mapCard, cardPoints, cardUnlock, cardZoom, cardFx, cardCp, bar);
+  box.replaceChildren(fold.head, mapCard, cardPoints, cardUnlock, cardZoom, cardFx, cardCp, cardEl, bar);
   redraw();
   fold.refreshToc();
 }

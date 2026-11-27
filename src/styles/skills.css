@@ -90,3 +90,6 @@
   #skills-win .sk-mapwrap { max-height: 55vh; }
 }
 
+
+/* A skill's element (src/client/elementBadge.ts). */
+.el-badge { display: inline-block; margin-right: 6px; font-weight: bold; text-shadow: 0 0 2px #000; }

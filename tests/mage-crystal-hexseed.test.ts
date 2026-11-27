@@ -46,7 +46,8 @@ const dealt = (m: Monster, p: Player): number => m.damageBy.get(p.id) ?? 0;
 const realRandom = Math.random;
 Math.random = () => 0.5;
 try {
-  applyBalance({});
+  // The element system (poison mark ticks) is off here: this test measures the crystal's own poison exactly.
+  applyBalance({ skills: { elements: { on: false } } });
 
   // ---------------------------------------------------------- Crystal Spikes: stacks to 5, then shatters the rest
   {

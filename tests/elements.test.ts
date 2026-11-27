@@ -1,0 +1,144 @@
+// The element system (owner 2026-11-27): the owner's table of skill elements, marks and their small effects,
+// reactions between two elements (once per cooldown, never from damage-over-time ticks or reaction hits), the lightning
+// mark's damage, Gunslinger buffs that give the basic shot an element, and the /admin checks. On a real Sim, no server.
+import { ok, finish } from './check';
+import { Sim } from '../src/shared/sim/Sim';
+import { ZONES } from '../src/shared/data/zones';
+import { CLASSES, CLASS_IDS } from '../src/shared/data/classes';
+import { applyBalance, checkBalance, currentBalance } from '../src/shared/balance';
+import { CODE_SKILL_ELEMENT, ELEMENTS, REACTIONS, codeElements, elementChanges, mergeElements, reactionOf } from '../src/shared/elementTuning';
+import { hitElementOf, markOf } from '../src/shared/sim/elements';
+import type { Monster } from '../src/shared/sim/Monster';
+
+const texts = (sim: Sim) => sim.drainEvents().filter((e) => e.t === 'text').map((e) => (e as { text: string }).text);
+const fresh = (cls: 'sword' | 'mage' | 'gunslinger' = 'mage') => {
+  const sim = new Sim(ZONES.emerald_forest);
+  const p = sim.addPlayer({ name: 'T', classId: cls, level: 10, exp: 0, gold: 0, equipment: {}, bag: [] });
+  const live = sim.monsters.filter((m) => !m.isBoss);
+  const m = live[0];
+  // A big pool of HP so hits never kill it; a second monster right next to it for the area reactions.
+  m.hp = 1e9;
+  const other = live.find((x) => x !== m)!;
+  other.x = m.x + 1;
+  other.z = m.z;
+  other.hp = 1e9;
+  p.x = m.x + 2;
+  p.z = m.z;
+  return { sim, p, m, other };
+};
+
+try {
+  applyBalance({});
+
+  // ---- the table
+  const all = new Map(CLASS_IDS.flatMap((c) => CLASSES[c].skills.map((s) => [s.id, s] as const)));
+  ok(Object.keys(CODE_SKILL_ELEMENT).every((id) => all.has(id)), 'every skill in the table exists');
+  ok(Object.keys(CODE_SKILL_ELEMENT).every((id) => all.get(id)!.kind !== 'passive' && all.get(id)!.kind !== 'basic' && all.get(id)!.kind !== 'dash'), 'no basic attack, dash or passive has an element');
+  const per = (e: string) => Object.values(CODE_SKILL_ELEMENT).filter((x) => x === e).length;
+  ok(ELEMENTS.every((e) => per(e) > 0), `every element is used (${ELEMENTS.map((e) => `${e} ${per(e)}`).join(', ')})`);
+  const ofClass = (c: 'sword' | 'mage' | 'gunslinger') => CLASSES[c].skills.filter((sk) => CODE_SKILL_ELEMENT[sk.id]).length;
+  ok(ofClass('sword') === 23 && ofClass('mage') === 28 && ofClass('gunslinger') === 23, `the owner's table: sword 23, mage 28, gunslinger 23 (${ofClass('sword')}/${ofClass('mage')}/${ofClass('gunslinger')})`);
+  ok(REACTIONS.length === 10 && ELEMENTS.every((a) => ELEMENTS.every((b) => (a === b) === (reactionOf(a, b) === null))), 'every pair of two elements has a reaction, either order');
+
+  // ---- a mark and its small effect
+  {
+    const { sim, p, m } = fresh();
+    sim.hitMonster(p, m, 1, { src: 'fireball' });
+    ok(markOf(m, sim.time) === 'fire', 'fireball marks the monster with fire');
+    ok(m.dotUntil > sim.time && m.extraDots.has(`${p.id}:el_fire`), 'the fire mark burns');
+    sim.hitMonster(p, m, 1, { src: 'fireball' });
+    ok(markOf(m, sim.time) === 'fire', 'the same element again: still the mark, no reaction');
+    const w = fresh();
+    w.sim.hitMonster(w.p, w.m, 1, { src: 'frostnova' });
+    ok(markOf(w.m, w.sim.time) === 'water' && w.m.slowT > 0, 'water marks and slows');
+    w.sim.hitMonster(w.p, w.m, 1, { src: 'bolt' });
+    ok(markOf(w.m, w.sim.time) === 'water', 'the basic attack (no element) leaves the mark alone');
+    w.sim.hitMonster(w.p, w.m, 1, { src: 'frostnova', noExtra: true });
+    ok(markOf(w.m, w.sim.time) === 'water', 'a damage-over-time tick never reacts');
+    w.sim.time += codeElements().markSec + 0.1;
+    ok(markOf(w.m, w.sim.time) === null, 'the mark wears off');
+  }
+
+  // ---- a reaction: water then lightning
+  {
+    const { sim, p, m, other } = fresh();
+    sim.hitMonster(p, m, 1, { src: 'frostnova' });
+    sim.drainEvents();
+    const before = other.hp;
+    sim.hitMonster(p, m, 1, { src: 'mg_chainlightning' });
+    ok(texts(sim).includes('ไฟฟ้าลาม!'), 'water + lightning: "ไฟฟ้าลาม!"');
+    ok(markOf(m, sim.time) === null, 'both marks are gone');
+    ok(other.hp < before && other.stunT > 0, 'it spreads to the monster next to it and stuns');
+    sim.hitMonster(p, m, 1, { src: 'frostnova' });
+    sim.drainEvents();
+    sim.hitMonster(p, m, 1, { src: 'mg_chainlightning' });
+    ok(!texts(sim).includes('ไฟฟ้าลาม!') && markOf(m, sim.time) === 'lightning', 'inside the cooldown: no reaction, the new mark goes on');
+    sim.time += codeElements().reactCd + 0.1;
+    sim.hitMonster(p, m, 1, { src: 'fireball' });
+    ok(texts(sim).includes('ระเบิดพลาสมา!'), 'after the cooldown: lightning + fire reacts again');
+  }
+
+  // ---- a reaction that kills its own target does not kill it twice
+  {
+    const { sim, p, m } = fresh();
+    m.hp = 1e9;
+    sim.hitMonster(p, m, 1, { src: 'frostnova' });
+    m.hp = 1;
+    let kills = 0;
+    const was = sim.monsters.find((x) => x === m)!;
+    const orig = p.onKill.bind(p);
+    p.onKill = (x: Monster) => { if (x === was) kills++; orig(x); };
+    sim.hitMonster(p, m, 1, { src: 'mg_chainlightning' });
+    ok(!m.alive && kills === 1, 'the monster died once');
+  }
+
+  // ---- the lightning mark makes hits land harder
+  {
+    const { sim, p, m } = fresh();
+    const avg = (src: string) => {
+      let sum = 0;
+      for (let i = 0; i < 300; i++) {
+        m.hp = 1e9;
+        sim.hitMonster(p, m, 1, { src, noElem: true });
+        sum += 1e9 - m.hp;
+      }
+      return sum;
+    };
+    const plain = avg('bolt');
+    m.elem = 'lightning';
+    m.elemUntil = sim.time + 100;
+    const shocked = avg('bolt');
+    ok(shocked > plain * 1.05, `lightning mark: more damage (${shocked} vs ${plain})`);
+  }
+
+  // ---- Gunslinger buffs give the basic shot their element
+  {
+    const { sim, p } = fresh('gunslinger');
+    ok(hitElementOf(p, 'shot', sim.time) === 'none', 'basic shot: no element');
+    p.gun.onHit.gs_hotrounds = { until: sim.time + 5, add: 0.1 };
+    ok(hitElementOf(p, 'shot', sim.time) === 'fire', 'during Hot Rounds: fire');
+    p.gun.shock = { until: sim.time + 5, slow: 0.1, slowT: 1 };
+    ok(hitElementOf(p, 'shot', sim.time) === 'lightning', 'Shock Rounds first: lightning');
+  }
+
+  // ---- /admin: off, a skill's element changed, checks, audit
+  applyBalance(checkBalance({ skills: { elements: { on: false } } }, true).tuning!);
+  {
+    const { sim, p, m } = fresh();
+    sim.hitMonster(p, m, 1, { src: 'fireball' });
+    ok(markOf(m, sim.time) === null, 'switch off: no mark');
+  }
+  applyBalance(checkBalance({ skills: { elements: { skill: { fireball: 'water', bolt: 'wind' } } } }, true).tuning!);
+  ok(currentBalance().skills.elements.skill.fireball === 'water' && currentBalance().skills.elements.skill.bolt === 'wind', 'a skill\'s element can be changed, basic attacks too');
+  applyBalance(checkBalance({ skills: { elements: { skill: { fireball: 'none' } } } }, true).tuning!);
+  ok(currentBalance().skills.elements.skill.fireball === undefined, '"none" takes the element away');
+  ok('error' in checkBalance({ skills: { elements: { skill: { fireball: 'ice' } } } }, true), 'an unknown element is refused');
+  ok('error' in checkBalance({ skills: { elements: { skill: { mg_elementmastery: 'fire' } } } }, true), 'a passive cannot have one');
+  ok('error' in checkBalance({ skills: { elements: { reactions: { 'water+fire': { dmg: -1 } } } } }, true), 'a reaction number out of range is refused');
+  ok(checkBalance({ skills: { elements: { markSec: 4, skill: { fireball: 'fire' } } } }, true).tuning?.skills === undefined, 'values equal to the code are not saved');
+  ok(elementChanges(codeElements(), mergeElements({ reactions: { 'fire+poison': { dmg: 250 } } }), (id) => id).some((s) => s.includes('ระเบิดพิษ ดาเมจ (% ATK) 200 → 250')), 'changes go to the audit');
+  applyBalance({});
+} catch (e) {
+  ok(false, `threw: ${(e as Error).stack}`);
+}
+finish('elements');

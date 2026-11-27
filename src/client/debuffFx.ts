@@ -2,6 +2,7 @@
 // body for each: stars circling the head (stun), frost at the feet (slow), grey shards falling off (armor break), a dark
 // red glow (attack down), embers rising (burning / poison) and a red reticle over the head (your mark). The icons are
 // drawn here in pixels until the owner's art exists (art_templates/ui/DEBUFF_ICONS.md); switch both off on /admin.
+import { ELEMENTS, ELEMENT_COLOR, ELEMENT_ICON, MARK_NAME } from '../shared/elementTuning';
 import * as THREE from 'three';
 import { DEBUFFS, DEBUFF_BIT, DEBUFF_NAME, type Debuff } from '../shared/sim/debuffs';
 import type { Monster } from '../shared/sim/Monster';
@@ -104,8 +105,11 @@ export function debuffIcon(d: Debuff): string {
 }
 
 /** The icons row of a nameplate, redrawn only when the mask changes. */
-export function debuffIconsHtml(mask: number): string {
-  return DEBUFFS.filter((d) => mask & DEBUFF_BIT[d])
+export function debuffIconsHtml(mask: number, elem = 0): string {
+  // The element mark first (an emoji until the owner's papercraft icons exist, art_templates/ui/ELEMENT_ICONS.md).
+  const e = ELEMENTS[elem - 1];
+  const mark = e ? `<span class="pelem" title="${MARK_NAME[e]}" style="color:${ELEMENT_COLOR[e]}">${ELEMENT_ICON[e]}</span>` : '';
+  return mark + DEBUFFS.filter((d) => mask & DEBUFF_BIT[d])
     .map((d) => `<img src="${debuffIcon(d)}" title="${DEBUFF_NAME[d]}" alt="" draggable="false">`).join('');
 }
 

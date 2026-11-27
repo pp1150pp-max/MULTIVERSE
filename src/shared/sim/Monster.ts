@@ -1,4 +1,5 @@
 import { Unit } from './Unit';
+import type { Element } from '../elementTuning';
 import type { Sim } from './Sim';
 import type { Player } from './Player';
 import type { MonsterDef, ShotDef } from '../data/monsters';
@@ -56,6 +57,12 @@ export class Monster extends Unit {
   weakUntil = 0;
   /** Burning / poisoned by a damage-over-time skill until this sim time (for passives that check statuses). */
   dotUntil = 0;
+  /** Its element mark (sim/elements.ts): which, until when, and when it can react again. */
+  elem: Element | null = null;
+  elemUntil = 0;
+  reactReadyAt = 0;
+  /** Client only: the mark as the server last sent it (MonsterSnap.el, 0 = none). */
+  elemShown = 0;
   /** Extra effects (sim/extraEffects.ts): when an extra stun from each skill last began, and running extra burns. */
   extraStunAt = new Map<string, number>();
   extraDots = new Map<string, { until: number; mult: number }>();
