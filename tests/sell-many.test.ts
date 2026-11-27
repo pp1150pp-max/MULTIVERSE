@@ -7,7 +7,7 @@ import { sellValue } from '../src/shared/data/enhance';
 import { makeItem } from '../src/shared/data/items';
 import { anyStackValue } from '../src/shared/data/potions';
 import type { BagEntry, Item } from '../src/shared/types';
-import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS } from '../src/shared/npcTalk';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS } from '../src/shared/npcTalk';
 import { finish, ok } from './check';
 
 const sim = new Sim(Object.values(ZONES)[0]);
@@ -95,5 +95,16 @@ ok('error' in checkNpcTalkTuning({ shop: { nope: ['x'] } }, true), 'unknown line
 ok('error' in checkNpcTalkTuning({ shop: { sold: ['x'.repeat(200)] } }, true), 'too long a line refused');
 ok(mergeNpcTalk({ shop: { poor: ['ไม่มีตังค์'] } }).shop.poor[0] === 'ไม่มีตังค์' && mergeNpcTalk({}).shop.poor[0] === codeNpcTalk().shop.poor[0], 'merge shop lines');
 ok(npcTalkChanges(codeNpcTalk(), mergeNpcTalk({ shop: { poor: ['ไม่มีตังค์'] } })).some((l) => l.includes('บทพูดร้านพ่อค้า')), 'shop line audit');
+
+// The blacksmith inside the talk window (npcTalk.forgePane + npcTalk.forge lines).
+ok(codeNpcTalk().forgePane === true, 'forge pane: on in the code');
+const f1 = checkNpcTalkTuning({ forgePane: false, forge: { success: ['เย้ {0}'] } }, true);
+ok('tuning' in f1 && f1.tuning?.forgePane === false && f1.tuning?.forge?.success?.[0] === 'เย้ {0}', 'forge switch and lines saved');
+ok('error' in checkNpcTalkTuning({ forge: { nope: ['x'] } }, true), 'unknown forge line refused');
+ok(FORGE_LINE_KEYS.every((k) => codeNpcTalk().forge[k].length > 0), 'every forge line has a code default');
+const fm = mergeNpcTalk({ forgePane: false, forge: { fail: ['พลาด'] } });
+ok(!fm.forgePane && fm.forge.fail[0] === 'พลาด' && fm.forge.success[0] === codeNpcTalk().forge.success[0], 'forge merge');
+const fc = npcTalkChanges(codeNpcTalk(), fm);
+ok(fc.some((l) => l.includes('ช่างตีเหล็กในหน้าต่างคุย')) && fc.some((l) => l.includes('บทพูดช่างตีเหล็ก')), 'forge audit lines');
 
 finish('sell-many');

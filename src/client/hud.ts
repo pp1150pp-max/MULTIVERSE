@@ -1353,11 +1353,22 @@ export class Hud {
     this.stash.openStash();
   }
 
-  private openForge(): void {
+  private openForge(inTalk = false): void {
     this.shop.closeShop();
     this.stash.closeStash();
     this.market.close();
-    this.forge.openForge();
+    this.forge.openForge(inTalk);
+  }
+
+  /** The blacksmith's window inside the NPC talk window (npcForgePane.ts): no bag window beside it. */
+  openForgeInTalk(): void {
+    this.toggleBag(false);
+    this.openForge(true);
+  }
+
+  /** The blacksmith window (the talk window's blacksmith pane drives it). */
+  get forgeWin(): ForgeWindow {
+    return this.forge;
   }
 
   /** True while the blacksmith window is open (Game skips your own overhead enhance text then: the window shows it). */

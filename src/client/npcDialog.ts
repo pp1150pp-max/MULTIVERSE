@@ -9,6 +9,7 @@ import { currentBalance } from '../shared/balance';
 import { tutRows, TUT_STEP_NAME } from '../shared/tutorial';
 import { imgUrl } from './img';
 import { NpcShopPane } from './ui/npcShopPane';
+import { NpcForgePane } from './ui/npcForgePane';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -56,9 +57,11 @@ export class NpcDialog {
   /** A story being paged through in the box (The Seeker's), and what runs after its last line. */
   private story: { lines: readonly string[]; at: number; done: () => void } | null = null;
   private drawn = '';
-  /** The merchant's shop grown out of this window (owner 2026-11-27, npcShopPane.ts); null = talking. */
+  /** The windows that grow out of this one (owner 2026-11-27): the merchant's shop and the blacksmith. */
   private readonly shopPane: NpcShopPane;
-  private shopping = false;
+  private readonly forgePane: NpcForgePane;
+  /** Which of them is open (null = talking). */
+  private pane: 'shop' | 'forge' | null = null;
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -76,9 +79,11 @@ export class NpcDialog {
     const close = el('button', 'nt-close', '✕');
     close.onclick = () => this.close();
     const back = el('button', 'nt-back', '◀ กลับไปคุย');
-    back.onclick = () => this.leaveShop(true);
+    back.onclick = () => this.leavePane(true);
     this.shopPane = new NpcShopPane(g, (text) => this.say(text));
-    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, back, close);
+    this.forgePane = new NpcForgePane(g, (text) => this.say(text));
+    g.hud.forgeWin.onTalk = (key, ...args) => { if (this.pane === 'forge') this.forgePane.line(key, ...args); };
+    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.forgePane.root, back, close);
     document.getElementById('hud')!.append(this.win);
   }
 
@@ -87,7 +92,7 @@ export class NpcDialog {
   }
 
   show(id: NpcId): void {
-    if (this.shopping) this.leaveShop(false);
+    this.leavePane(false);
     this.npc = id;
     this.zoneSeq = this.g.backend.zoneSeq;
     this.story = null;
@@ -111,7 +116,7 @@ export class NpcDialog {
 
   close(): void {
     if (!this.open) return;
-    if (this.shopping) this.leaveShop(false);
+    this.leavePane(false);
     this.win.classList.add('hidden');
     this.npc = null;
     this.story = null;
@@ -123,12 +128,16 @@ export class NpcDialog {
     if (!this.open || !id) return;
     const p = this.g.player;
     const n = this.g.backend.terrain.npcPos[id];
-    // Shopping: the server trades only within NPC_USE_RANGE, so the window closes there (and when the HUD closed the shop).
-    const reach = this.shopping ? NPC_USE_RANGE : NPC_USE_RANGE + 1;
+    // Shop / blacksmith: the server deals only within NPC_USE_RANGE, so the window closes there (and when the HUD closed theirs).
+    const reach = this.pane ? NPC_USE_RANGE : NPC_USE_RANGE + 1;
     if (!n || !p.alive || this.g.backend.zoneSeq !== this.zoneSeq || Math.hypot(p.x - n.x, p.z - n.z) > reach) return this.close();
-    if (this.shopping) {
+    if (this.pane === 'shop') {
       if (!this.g.hud.shopOpen) return this.close();
       return this.shopPane.update();
+    }
+    if (this.pane === 'forge') {
+      if (!this.g.hud.forgeWin.isOpen) return this.close();
+      return this.forgePane.update();
     }
     const list = this.story ? [] : this.answerList(id);
     const sig = JSON.stringify(list.map((a) => [a.icon, a.label, a.note]));
@@ -150,7 +159,8 @@ export class NpcDialog {
   private say(line: string): void {
     this.text.textContent = line;
     this.next.classList.toggle('hidden', !this.story);
-    if (this.shopping) this.shopPane.setLine(line);
+    if (this.pane === 'shop') this.shopPane.setLine(line);
+    else if (this.pane === 'forge') this.forgePane.setLine(line);
   }
 
   /** Whether the merchant's shop shows inside this window (/admin: talk window on and "ร้านพ่อค้าในหน้าต่างคุย" on). */
@@ -161,7 +171,7 @@ export class NpcDialog {
 
   /** Closes a prompt open inside the shop (Esc); false when there was none. */
   dismissPrompt(): boolean {
-    return this.shopping && this.shopPane.dismissPrompt();
+    return this.pane === 'shop' && this.shopPane.dismissPrompt();
   }
 
   /** Opens this window on the merchant's shop straight away (the quest card's button). */
@@ -170,23 +180,55 @@ export class NpcDialog {
     this.enterShop(id, 'buy');
   }
 
+  /** Whether the blacksmith's menus open inside this window (/admin: talk window on and "ช่างตีเหล็กในหน้าต่างคุย" on). */
+  get forgeInTalk(): boolean {
+    const t = currentBalance().npcTalk;
+    return t.on && t.forgePane;
+  }
+
+  /** Opens this window on the blacksmith's menu `mode` straight away (the quest card's button). */
+  openForge(id: NpcId, mode = 'enhance'): void {
+    this.show(id);
+    this.enterForge(id, mode);
+  }
+
+  /** The face shown in the medallion, and whether it is a square harbour portrait. */
+  private medalFace(id: NpcId): [string, boolean] {
+    const look = npcLook(id, this.g.backend.zone.town);
+    return [this.face.classList.contains('hidden') ? '' : this.face.src, !!look.portrait];
+  }
+
   /** "ซื้อ/ขายของ": the window grows into the merchant's shop (owner 2026-11-27, layout A). */
   private enterShop(id: NpcId, tab: 'buy' | 'bb'): void {
     this.g.hud.openShopInTalk();
-    this.shopping = true;
-    const look = npcLook(id, this.g.backend.zone.town);
-    this.shopPane.open(tab, this.face.classList.contains('hidden') ? '' : this.face.src, !!look.portrait);
+    this.pane = 'shop';
+    this.shopPane.open(tab, ...this.medalFace(id));
     this.win.classList.add('shop');
     this.shopPane.line(tab === 'bb' ? 'openBuyback' : 'open');
   }
 
-  /** Back from the shop: `talk` = to the talk window (◀), else the window is closing. */
-  private leaveShop(talk: boolean): void {
-    if (!this.shopping) return;
-    this.shopping = false;
-    this.shopPane.close();
-    this.win.classList.remove('shop');
-    if (this.g.hud.shopOpen) this.g.hud.closeShop();
+  /** A blacksmith menu: the window grows into the blacksmith's window, on that menu (owner 2026-11-27). */
+  private enterForge(id: NpcId, mode: string): void {
+    this.g.hud.openForgeInTalk();
+    this.pane = 'forge';
+    this.win.classList.add('shop', 'forge');
+    this.forgePane.open(mode, ...this.medalFace(id));
+    this.forgePane.line('open', this.g.hud.forgeWin.modeLabel());
+  }
+
+  /** Back from the shop or the blacksmith: `talk` = to the talk window (◀), else the window is closing. */
+  private leavePane(talk: boolean): void {
+    const was = this.pane;
+    if (!was) return;
+    this.pane = null;
+    if (was === 'shop') {
+      this.shopPane.close();
+      if (this.g.hud.shopOpen) this.g.hud.closeShop();
+    } else {
+      if (this.g.hud.forgeWin.isOpen) this.g.hud.forgeWin.closeForge();
+      this.forgePane.close();
+    }
+    this.win.classList.remove('shop', 'forge');
     this.drawn = '';
     if (talk) {
       this.say(this.nextGreet());
@@ -267,9 +309,11 @@ export class NpcDialog {
         out.push({ icon: 'sell', label: 'ซื้อคืนของที่ขายไป', run: () => this.openThen(id, '#shop-tabs [data-tab="buyback"]') });
         break;
       case 'blacksmith':
+        // /admin "ช่างตีเหล็กในหน้าต่างคุย" off = the old blacksmith window.
         for (const b of document.querySelectorAll<HTMLElement>('#forge-menu [data-mode]')) {
           const mode = b.dataset.mode!;
-          out.push({ icon: FORGE_ICON[mode] ?? 'enhance', label: b.textContent?.trim() || mode, run: () => this.openThen(id, `#forge-menu [data-mode="${mode}"]`) });
+          const run = currentBalance().npcTalk.forgePane ? () => this.enterForge(id, mode) : () => this.openThen(id, `#forge-menu [data-mode="${mode}"]`);
+          out.push({ icon: FORGE_ICON[mode] ?? 'enhance', label: b.textContent?.trim() || mode, run });
         }
         if (!out.length) out.push({ icon: 'enhance', label: 'ตีบวกอุปกรณ์', run: () => this.openThen(id) });
         break;

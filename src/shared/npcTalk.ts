@@ -23,7 +23,29 @@ export interface NpcTalkConfig {
   chat: Record<NpcId, string[]>;
   /** What the merchant says while shopping in the talk window (one picked at random); {0} {1} = the values SHOP_LINES names. */
   shop: Record<ShopLineKey, string[]>;
+  /** The blacksmith's menus open inside the talk window (owner 2026-11-27). Off = the old blacksmith window. */
+  forgePane: boolean;
+  /** What the blacksmith says there; {0} {1} = the values FORGE_LINES names. */
+  forge: Record<ForgeLineKey, string[]>;
 }
+
+/** The blacksmith's lines in the talk window (npcForgePane.ts), with what {0} and {1} stand for. */
+export const FORGE_LINES = {
+  open: { name: 'เปิดหน้าช่างตีเหล็ก', args: '{0} = ชื่อเมนู' },
+  place: { name: 'วางของลงช่อง', args: '{0} = ชื่อของ' },
+  success: { name: 'ตีบวกสำเร็จ', args: '{0} = ระดับใหม่ (+N)' },
+  fail: { name: 'ตีบวกล้มเหลว ระดับเท่าเดิม', args: '' },
+  drop: { name: 'ตีบวกล้มเหลว ระดับลด', args: '{0} = ระดับใหม่ (+N)' },
+  saved: { name: 'ล้มเหลวแต่หินกันระดับลดช่วยไว้', args: '{0} = ระดับ (+N)' },
+  reroll: { name: 'สุ่มค่า/สุ่มสเตตัสเสร็จ', args: '{0} = ชื่อเมนู' },
+  drillOk: { name: 'เจาะรูได้ช่อง', args: '{0} = จำนวนช่อง' },
+  drillNone: { name: 'เจาะรูไม่ได้ช่อง', args: '' },
+  fuse: { name: 'รวมการ์ดเสร็จ', args: '{0} = ชื่อการ์ดที่ได้' },
+  poor: { name: 'ทองไม่พอ', args: '' },
+  noStone: { name: 'หินไม่พอ', args: '' },
+} as const;
+export type ForgeLineKey = keyof typeof FORGE_LINES;
+export const FORGE_LINE_KEYS = Object.keys(FORGE_LINES) as ForgeLineKey[];
 
 /** The merchant's lines in the shop inside the talk window (npcShopPane.ts), with what {0} and {1} stand for. */
 export const SHOP_LINES = {
@@ -43,6 +65,13 @@ export const SHOP_LINES = {
 } as const;
 export type ShopLineKey = keyof typeof SHOP_LINES;
 export const SHOP_LINE_KEYS = Object.keys(SHOP_LINES) as ShopLineKey[];
+/** Line sets of the windows that grow out of the talk window, as saved (`shop`, `forge`) with their /admin label. */
+export const PANE_LINES = {
+  shop: { label: 'ร้านพ่อค้า', lines: SHOP_LINES },
+  forge: { label: 'ช่างตีเหล็ก', lines: FORGE_LINES },
+} as const;
+export const PANE_PARTS = ['shop', 'forge'] as const;
+export type PanePart = (typeof PANE_PARTS)[number];
 
 export interface NpcTalkTuning {
   on?: boolean;
@@ -54,6 +83,8 @@ export interface NpcTalkTuning {
   greet?: Partial<Record<NpcId, string[]>>;
   chat?: Partial<Record<NpcId, string[]>>;
   shop?: Partial<Record<ShopLineKey, string[]>>;
+  forgePane?: boolean;
+  forge?: Partial<Record<ForgeLineKey, string[]>>;
 }
 
 /** Every NPC whose lines /admin can edit, in the order it lists them. */
@@ -134,6 +165,21 @@ export function codeNpcTalk(): NpcTalkConfig {
       bound: ['อันนี้ผูกกับตัวเจ้า ข้ารับซื้อไม่ได้หรอก'],
       orb: ['ข้าไม่รับซื้อลูกแก้วนะ ลองเทรดหรือลงตลาดดู'],
     },
+    forgePane: true,
+    forge: {
+      open: ['{0}ใช่ไหม? วางอุปกรณ์ลงบนแท่นมาเลย'],
+      place: ['{0}… เนื้อเหล็กดีนี่ ลงมือกันเลยไหม?'],
+      success: ['โป๊ก! สำเร็จ ขึ้นเป็น {0} แล้ว!'],
+      fail: ['ชิ… พลาดไปหน่อย ระดับยังเท่าเดิม'],
+      drop: ['อ๊ะ! เหล็กร้าว ระดับตกเหลือ {0}'],
+      saved: ['หินกันระดับลดช่วยไว้ ยังเป็น {0} อยู่'],
+      reroll: ['{0}เสร็จแล้ว ลองดูค่าใหม่สิ'],
+      drillOk: ['เจาะได้ {0} ช่อง! เอาการ์ดมาเสียบได้เลย'],
+      drillNone: ['เจาะแล้ว… แต่ไม่ได้ช่องเลย เสียใจด้วยนะ'],
+      fuse: ['หลอมรวมเสร็จ! ได้{0}'],
+      poor: ['ทองไม่พอนะ ค่าแรงข้าไม่ลดให้หรอก'],
+      noStone: ['หินไม่พอ ไปหาหินมาเพิ่มก่อน'],
+    },
   };
 }
 const CODE = codeNpcTalk();
@@ -149,7 +195,9 @@ export function mergeNpcTalk(t: NpcTalkTuning | undefined): NpcTalkConfig {
     if (t.greet?.[id]) c.greet[id] = [...t.greet[id]!];
     if (t.chat?.[id]) c.chat[id] = [...t.chat[id]!];
   }
+  if (t.forgePane !== undefined) c.forgePane = t.forgePane;
   for (const k of SHOP_LINE_KEYS) if (t.shop?.[k]) c.shop[k] = [...t.shop[k]!];
+  for (const k of FORGE_LINE_KEYS) if (t.forge?.[k]) c.forge[k] = [...t.forge[k]!];
   return c;
 }
 
@@ -175,7 +223,7 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
   if (!isObj(x)) return strict ? { error: 'ค่าหน้าต่างคุย NPC ไม่ถูกต้อง' } : { tuning: undefined };
   const out: NpcTalkTuning = {};
   const fail = (msg: string): { error: string } | null => (strict ? { error: `หน้าต่างคุย NPC: ${msg}` } : null);
-  for (const k of ['on', 'shopPane', 'bubbles'] as const) {
+  for (const k of ['on', 'shopPane', 'forgePane', 'bubbles'] as const) {
     if (x[k] === undefined) continue;
     if (typeof x[k] !== 'boolean') { const f = fail('สวิตช์ไม่ถูกต้อง'); if (f) return f; continue; }
     if (x[k] !== CODE[k]) out[k] = x[k] as boolean;
@@ -201,19 +249,21 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
     }
     if (Object.keys(lines).length) out[part] = lines;
   }
-  if (x.shop !== undefined) {
-    const v = x.shop;
-    if (!isObj(v)) { const f = fail('บทพูดในร้านไม่ถูกต้อง'); if (f) return f; }
-    else {
-      const lines: Partial<Record<ShopLineKey, string[]>> = {};
-      for (const [k, raw] of Object.entries(v)) {
-        if (!(SHOP_LINE_KEYS as string[]).includes(k)) { const f = fail(`ไม่รู้จักบทพูดร้าน "${k.slice(0, 20)}"`); if (f) return f; continue; }
-        const c = checkLines(raw);
-        if (typeof c === 'string') { const f = fail(c); if (f) return f; continue; }
-        if (!sameLines(c, CODE.shop[k as ShopLineKey])) lines[k as ShopLineKey] = c;
-      }
-      if (Object.keys(lines).length) out.shop = lines;
+  // The lines said inside a grown window (the merchant's shop, the blacksmith).
+  for (const part of PANE_PARTS) {
+    const v = x[part];
+    if (v === undefined) continue;
+    if (!isObj(v)) { const f = fail(`บทพูด${PANE_LINES[part].label}ไม่ถูกต้อง`); if (f) return f; continue; }
+    const keys = Object.keys(PANE_LINES[part].lines);
+    const code = CODE[part] as Record<string, string[]>;
+    const lines: Record<string, string[]> = {};
+    for (const [k, raw] of Object.entries(v)) {
+      if (!keys.includes(k)) { const f = fail(`ไม่รู้จักบทพูด${PANE_LINES[part].label} "${k.slice(0, 20)}"`); if (f) return f; continue; }
+      const c = checkLines(raw);
+      if (typeof c === 'string') { const f = fail(c); if (f) return f; continue; }
+      if (!sameLines(c, code[k])) lines[k] = c;
     }
+    if (Object.keys(lines).length) (out as Record<string, unknown>)[part] = lines;
   }
   return { tuning: Object.keys(out).length ? out : undefined };
 }
@@ -230,8 +280,14 @@ export function npcTalkChanges(a: NpcTalkConfig, b: NpcTalkConfig): string[] {
     if (!sameLines(a.greet[id], b.greet[id])) out.push(`บทพูดทักทาย ${id}: ${b.greet[id].length} บรรทัด (แก้ข้อความ)`);
     if (!sameLines(a.chat[id], b.chat[id])) out.push(`คำพูดเหนือหัว ${id}: ${b.chat[id].length} บรรทัด (แก้ข้อความ)`);
   }
-  for (const k of SHOP_LINE_KEYS) {
-    if (!sameLines(a.shop[k], b.shop[k])) out.push(`บทพูดร้านพ่อค้า "${SHOP_LINES[k].name}": ${b.shop[k].length} บรรทัด (แก้ข้อความ)`);
+  if (a.forgePane !== b.forgePane) out.push(`ช่างตีเหล็กในหน้าต่างคุย ${onOff(a.forgePane)} → ${onOff(b.forgePane)}`);
+  for (const part of PANE_PARTS) {
+    const la = a[part] as Record<string, string[]>;
+    const lb = b[part] as Record<string, string[]>;
+    const def = PANE_LINES[part].lines as Record<string, { name: string }>;
+    for (const k of Object.keys(def)) {
+      if (!sameLines(la[k], lb[k])) out.push(`บทพูด${PANE_LINES[part].label} "${def[k].name}": ${lb[k].length} บรรทัด (แก้ข้อความ)`);
+    }
   }
   return out;
 }

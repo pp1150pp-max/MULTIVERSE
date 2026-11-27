@@ -271,6 +271,23 @@
 #npc-talk .ns-qty .v { min-width: 3em; font-size: 1em; padding: 0.1em 0.5em; border-radius: 6px; background: rgba(8, 6, 4, 0.5); border: 1px solid #7a5a24; }
 #npc-talk .ns-row { display: flex; gap: 0.5em; justify-content: center; }
 
+/* ---------- The blacksmith inside the talk window (owner 2026-11-27; src/client/ui/npcForgePane.ts): the forge window
+   (forge.ts) moved in as it is on the left (zoomed to fit by the pane), the bag with a "สวมอยู่" tab on the right. ---------- */
+#npc-talk .nf { display: none; }
+#npc-talk.forge .nf { display: block; }
+#npc-talk.forge .ns:not(.nf) { display: none; }
+#npc-talk .nf-forge { left: 0.7em; width: 39.6em; transition-delay: 0.2s; padding: 1.1em 0.5em 0.5em; }
+#npc-talk .nf-bag { left: 41.2em; width: 20.1em; transition-delay: 0.3s; }
+#npc-talk .nf-box { flex: 1; min-height: 0; overflow: auto; }
+#npc-talk .nf-box #forge {
+  position: relative; left: auto; top: auto; right: auto; transform: none; width: auto; max-width: none; margin: 0;
+  background: none; border: 0; outline: 0; box-shadow: none; padding: 0.2em 0 0; z-index: auto; font-size: 14px;
+}
+#npc-talk .nf-box #forge::before, #npc-talk .nf-box #forge::after { display: none; }
+#npc-talk .nf-box #forge > .panel-head { display: none; }
+#npc-talk .nf-grid { grid-template-columns: repeat(5, 1fr); }
+#npc-talk .cell.nf-on { outline: 2px solid #ffd86a; outline-offset: 1px; }
+
 /* While shopping in the talk window, tooltips and the HUD's own prompts go above it. */
 body:has(#npc-talk.shop:not(.hidden)) :is(#tooltip, #confirm, #amount) { z-index: 41; }
 /* Touch: tabs and buttons tall enough for a finger. */
