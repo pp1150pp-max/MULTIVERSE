@@ -1035,6 +1035,7 @@ export class OnlineBackend implements Backend {
       m.freed = ms.fr === 1;
       m.noHit = m.fade;
       m.debuffs = ms.db ?? 0;
+      m.elemShown = ms.el ?? 0;
       m.debuffSkill = ms.ds ?? '';
     }
     for (const [id, m] of this.monsterMap) {

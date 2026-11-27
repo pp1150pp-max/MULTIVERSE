@@ -65,7 +65,7 @@ export function withExtras(sim: Sim, p: Player, m: Monster, src: string, opts: H
         o.kb = Math.max(o.kb ?? 0, e.v * KB_PER_METRE);
         break;
       case 'dot':
-        burn(sim, p, m, src, e.v, e.t);
+        addDot(sim, p, m, src, e.v, e.t);
         break;
     }
   }
@@ -80,7 +80,7 @@ function stronger(own: number | undefined, ownT: number, v: number, t: number): 
 }
 
 /** Burning / poison: `mult` × ATK every second for `secs` seconds through hitMonster (crit, boss rules, aggro). */
-function burn(sim: Sim, p: Player, m: Monster, src: string, mult: number, secs: number): void {
+export function addDot(sim: Sim, p: Player, m: Monster, src: string, mult: number, secs: number): void {
   const key = `${p.id}:${src}`;
   const until = sim.time + secs;
   m.dotUntil = Math.max(m.dotUntil, until);

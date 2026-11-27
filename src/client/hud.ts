@@ -1,6 +1,7 @@
 import { SPACE_COLOUR } from './island';
 import { SHRINE_BUFF_ICON, SHRINE_BUFF_NAME } from '../shared/treasure';
 import { SHRINE_BUFFS } from '../shared/mapSchema';
+import { elementBadge } from './elementBadge';
 import { CLASS_PASSIVES } from '../shared/classPassives';
 import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
@@ -854,7 +855,7 @@ export class Hud {
     tip.innerHTML =
       `<div class="tt-name">${sk.name} (${sk.nameTh})</div>` +
       `<div class="tt-sub">ปุ่ม ${key}</div>` +
-      `<div class="tt-stats"><div>${sk.desc}</div>${stats}</div>` +
+      `<div class="tt-stats"><div>${elementBadge(sk.id)}${sk.desc}</div>${stats}</div>` +
       (remain > 0 ? `<div class="tt-hint">คูลดาวน์เหลือ ${remain.toFixed(1)} วิ</div>` : '');
     this.placeTip(tip, e);
     this.g.showSkillRange(reach ? reachRadius(reach) : null);
