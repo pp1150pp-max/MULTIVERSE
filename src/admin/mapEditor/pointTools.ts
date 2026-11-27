@@ -3,7 +3,7 @@
 // Each is one `Tool` added with `ed.addTool`; every change is one command of the PR 6 stack (ed.exec / live + commitLive).
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONES } from '../../shared/data/zones';
-import { ROOM_SPAWN_OFFSET, roomSpawnOf, type MapData, type MapSpawn } from '../../shared/mapSchema';
+import { ROOM_SPAWN_OFFSET, roomSpawnOf, SHRINE_KINDS, TREASURE_MAP_IDS, type MapData, type MapSpawn, type ShrineKind } from '../../shared/mapSchema';
 import type { EdPointer, Editor, Tool } from './editor';
 import { pick, type MapPatch } from './history';
 import { btn, el, note, numField, selectField } from './ui';
@@ -26,9 +26,19 @@ export function keyOf(ed: Editor, kind: string): string | null {
 
 // ---------------------------------------------------------------- pins
 
-type PinKind = 'npc' | 'portal' | 'rest' | 'lair' | 'warp' | 'warpTo';
+type PinKind = 'npc' | 'portal' | 'rest' | 'lair' | 'warp' | 'warpTo' | 'chest' | 'shrine';
 interface Pin { key: string; kind: PinKind; id: string; x: number; z: number; label: string; color: string }
-const PIN_COLOR: Record<PinKind, string> = { npc: '#4ac0e8', portal: '#b070f0', rest: '#e8c040', lair: '#e05050', warp: '#40e0c0', warpTo: '#a0fff0' };
+const PIN_COLOR: Record<PinKind, string> = {
+  npc: '#4ac0e8', portal: '#b070f0', rest: '#e8c040', lair: '#e05050', warp: '#40e0c0', warpTo: '#a0fff0', chest: '#d08a30', shrine: '#f070c0',
+};
+/** A shrine's buff, as the editor names it. */
+export const SHRINE_KIND_NAME: Record<ShrineKind, string> = { atk: 'พลังโจมตี', speed: 'ความเร็ว', exp: 'EXP', random: 'สุ่ม 1 ใน 3' };
+/** A new chest or shrine id not used on this map yet (c1, c2, … / s1, s2, …). */
+function freshId(list: readonly { id: string }[], prefix: string): string {
+  let n = list.length + 1;
+  while (list.some((c) => c.id === `${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
+}
 
 /** Zones a door may lead to: the maps themselves (boss rooms are reached by the boss summoner, not by a door). */
 /** Where a door may lead: the game's maps, then (set by the page from its map list) the maps made in the editor. */
@@ -47,6 +57,8 @@ function pinsOf(m: MapData): Pin[] {
     out.push({ key: `warp:${i}`, kind: 'warp', id: String(i), x: w.x, z: w.z, label: `วงวาร์ป ${i + 1}`, color: PIN_COLOR.warp });
     out.push({ key: `warpTo:${i}`, kind: 'warpTo', id: String(i), x: w.toX, z: w.toZ, label: `ปลายทางวาร์ป ${i + 1}`, color: PIN_COLOR.warpTo });
   });
+  for (const c of m.chests ?? []) out.push({ key: `chest:${c.id}`, kind: 'chest', id: c.id, x: c.x, z: c.z, label: `หีบ ${c.id}`, color: PIN_COLOR.chest });
+  for (const c of m.shrines ?? []) out.push({ key: `shrine:${c.id}`, kind: 'shrine', id: c.id, x: c.x, z: c.z, label: `ศาล ${c.id} · ${SHRINE_KIND_NAME[c.buff] ?? c.buff}`, color: PIN_COLOR.shrine });
   return out;
 }
 
@@ -59,12 +71,21 @@ function movePin(m: MapData, pin: Pin, x: number, z: number): MapPatch {
     case 'lair': return { lair: m.lair ? { ...m.lair, x, z } : m.lair };
     case 'warp': return { warps: (m.warps ?? []).map((w, i) => (String(i) === pin.id ? { ...w, x, z } : w)) };
     case 'warpTo': return { warps: (m.warps ?? []).map((w, i) => (String(i) === pin.id ? { ...w, toX: x, toZ: z } : w)) };
+    case 'chest': return { chests: (m.chests ?? []).map((c) => (c.id === pin.id ? { ...c, x, z } : c)) };
+    case 'shrine': return { shrines: (m.shrines ?? []).map((c) => (c.id === pin.id ? { ...c, x, z } : c)) };
   }
 }
-const pinKeys = (k: PinKind): (keyof MapData)[] => [k === 'npc' ? 'npcs' : k === 'portal' ? 'portals' : k === 'rest' ? 'rest' : k === 'lair' ? 'lair' : 'warps'];
+const pinKeys = (k: PinKind): (keyof MapData)[] => [k === 'npc' ? 'npcs' : k === 'portal' ? 'portals' : k === 'rest' ? 'rest' : k === 'lair' ? 'lair'
+  : k === 'chest' ? 'chests' : k === 'shrine' ? 'shrines' : 'warps'];
 
 function removePortal(ed: Editor, i: number): void {
   ed.exec('ลบประตู', { portals: ed.map.portals.filter((_, k) => k !== i) });
+  ed.select([]);
+}
+/** Takes a chest or shrine off the map. */
+function removeTreasure(ed: Editor, p: Pin): void {
+  if (p.kind === 'chest') ed.exec(`ลบหีบ ${p.id}`, { chests: (ed.map.chests ?? []).filter((c) => c.id !== p.id) });
+  else ed.exec(`ลบศาล ${p.id}`, { shrines: (ed.map.shrines ?? []).filter((c) => c.id !== p.id) });
   ed.select([]);
 }
 
@@ -88,7 +109,7 @@ export function pinTool(): Tool {
     id: 'pins',
     label: 'NPC / ประตู',
     icon: '📍',
-    hint: 'คลิกหมุดเพื่อเลือก ลากเพื่อย้าย (Alt = ปิด snap) · ฟ้า = NPC (หนึ่งตัวมีหมุดเดียว ย้ายได้ เพิ่ม/ลบไม่ได้) · ม่วง = ประตู เลือกปลายทางและเลเวลขั้นต่ำที่ช่องขวา · เหลือง = จุดพัก · แดง = ที่เรียกบอส · เขียว = วงวาร์ปบนพื้น (ยืนกด T) เขียวอ่อน = ที่ที่วาร์ปไปถึง · Delete ลบประตู',
+    hint: 'คลิกหมุดเพื่อเลือก ลากเพื่อย้าย (Alt = ปิด snap) · ฟ้า = NPC (หนึ่งตัวมีหมุดเดียว ย้ายได้ เพิ่ม/ลบไม่ได้) · ม่วง = ประตู เลือกปลายทางและเลเวลขั้นต่ำที่ช่องขวา · เหลือง = จุดพัก · แดง = ที่เรียกบอส · เขียว = วงวาร์ปบนพื้น (ยืนกด T) เขียวอ่อน = ที่ที่วาร์ปไปถึง · ส้ม = หีบสมบัติ · ชมพู = ศาลเจ้า (เฉพาะแมพฟาร์มชั้น 1) · Delete ลบประตู/หีบ/ศาล',
     activate(ed) { ed.select([]); },
     pointerDown(ed, e) {
       const hit = hitPin(ed, e.px, e.py);
@@ -112,6 +133,7 @@ export function pinTool(): Tool {
       const p = selected(ed);
       if (!p) return false;
       if ((e.key === 'Delete' || e.key === 'Backspace') && p.kind === 'portal') { removePortal(ed, Number(p.id)); return true; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (p.kind === 'chest' || p.kind === 'shrine')) { removeTreasure(ed, p); return true; }
       if (e.key === 'Escape') { ed.select([]); return true; }
       return false;
     },
@@ -131,8 +153,24 @@ export function pinTool(): Tool {
         ed.exec('เพิ่มประตู', { portals: [...ed.map.portals, { to: DOOR_TARGETS[0]?.[0] ?? 'nexus_city', x, z, minLevel: 0 }] });
         ed.select([`portal:${ed.map.portals.length - 1}`]);
       }, 'วางประตูใหม่กลางจอ แล้วลากไปที่ที่ต้องการ');
-      if (!p) { box.append(note('ยังไม่ได้เลือกหมุด คลิกหมุดบนแมพ'), addDoor); return box; }
+      // Chests and shrines: floor 1's farm maps only (validateMap refuses them elsewhere).
+      const farm = TREASURE_MAP_IDS.includes(ed.map.id);
+      const addChest = farm ? btn('＋ เพิ่มหีบสมบัติ', () => {
+        const [x, z] = gridSnap(ed, ed.view.cx, ed.view.cz, false);
+        const id = freshId(ed.map.chests ?? [], 'c');
+        ed.exec('เพิ่มหีบสมบัติ', { chests: [...(ed.map.chests ?? []), { id, x, z }] });
+        ed.select([`chest:${id}`]);
+      }, 'วางหีบใหม่กลางจอ แล้วลากไปที่ที่ต้องการ (ค่าเปิด/เกิดใหม่/ของในหีบอยู่ในการ์ด "หีบสมบัติ + ศาลเจ้า" ด้านล่าง)') : null;
+      const addShrine = farm ? btn('＋ เพิ่มศาลเจ้า', () => {
+        const [x, z] = gridSnap(ed, ed.view.cx, ed.view.cz, false);
+        const id = freshId(ed.map.shrines ?? [], 's');
+        ed.exec('เพิ่มศาลเจ้า', { shrines: [...(ed.map.shrines ?? []), { id, x, z, buff: 'random' }] });
+        ed.select([`shrine:${id}`]);
+      }, 'วางศาลใหม่กลางจอ แล้วลากไปที่ที่ต้องการ เลือกบัฟที่ช่องขวา') : null;
+      const adds = [addDoor, ...(addChest && addShrine ? [addChest, addShrine] : [])];
+      if (!p) { box.append(note('ยังไม่ได้เลือกหมุด คลิกหมุดบนแมพ'), ...adds); return box; }
       const kindName = p.kind === 'npc' ? 'NPC' : p.kind === 'portal' ? 'ประตู' : p.kind === 'rest' ? 'จุดพัก' : p.kind === 'lair' ? 'ที่เรียกบอส'
+        : p.kind === 'chest' ? 'หีบสมบัติ' : p.kind === 'shrine' ? 'ศาลเจ้า'
         : p.kind === 'warp' ? 'วงวาร์ป (ยืนกด T)' : 'ปลายทางวงวาร์ป';
       box.append(el('div', { class: 'me-title' }, `${kindName} · ${p.label}`),
         el('div', { class: 'me-grid2' },
@@ -149,8 +187,16 @@ export function pinTool(): Tool {
             btn('🗑 ลบประตูนี้ (Delete)', () => removePortal(ed, i)));
         }
       }
+      if (p.kind === 'shrine') {
+        const s = ed.map.shrines?.find((c) => c.id === p.id);
+        if (s) {
+          box.append(selectField('บัฟที่ให้', s.buff, SHRINE_KINDS.map((k): [string, string] => [k, SHRINE_KIND_NAME[k]]),
+            (v) => ed.exec('แก้บัฟศาลเจ้า', { shrines: (ed.map.shrines ?? []).map((c) => (c.id === p.id ? { ...c, buff: v as ShrineKind } : c)) })));
+        }
+      }
+      if (p.kind === 'chest' || p.kind === 'shrine') box.append(btn(`🗑 ลบ${kindName}นี้ (Delete)`, () => removeTreasure(ed, p)));
       if (p.kind === 'npc') box.append(note('NPC ย้ายตำแหน่งได้เท่านั้น (id ผูกกับระบบเกม)'));
-      box.append(addDoor);
+      box.append(...adds);
       return box;
     },
   };

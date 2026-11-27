@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WhirlpoolViews } from './whirlpool';
 import { WarpPadViews } from './warpPads';
+import { TreasureViews } from './treasureViews';
 import { currentBalance } from '../shared/balance';
 import { clearingRadius as arenaClearing, floorOf, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
 
@@ -538,6 +539,8 @@ export class World {
   private whirlpools: WhirlpoolViews | null = null;
   /** Warp circles on the ground (src/client/warpPads.ts). */
   private warpPads: WarpPadViews | null = null;
+  /** Treasure chests and shrines (src/client/treasureViews.ts); Game updates them with what the server says. */
+  treasure: TreasureViews | null = null;
   /** Everything added to the scene, so a zone change can take it all down again. */
   private readonly objects: THREE.Object3D[] = [];
   private readonly ownMats: THREE.Material[] = [];
@@ -730,6 +733,10 @@ export class World {
     if (terrain.zone.warps?.length) {
       this.warpPads = new WarpPadViews(terrain.zone.warps);
       this.add(this.warpPads.group);
+    }
+    if (terrain.zone.chests?.length || terrain.zone.shrines?.length) {
+      this.treasure = new TreasureViews(terrain.zone.chests ?? [], terrain.zone.shrines ?? []);
+      this.add(this.treasure.group);
     }
     if (this.groundUniforms && !harbor) {
       this.addDecor(mulberry32(terrain.zone.seed + 11));
@@ -1374,6 +1381,7 @@ export class World {
     this.whirlpools?.dispose();
     this.cloudSea?.dispose();
     this.warpPads?.dispose();
+    this.treasure?.dispose();
   }
 
   /**

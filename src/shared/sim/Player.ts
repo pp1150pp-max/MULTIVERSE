@@ -35,6 +35,7 @@ import { attackRootTime } from '../attackRootTuning';
 import { classPassiveOn } from '../classPassives';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
+import type { ShrineBuff } from '../mapSchema';
 
 /** Seconds after the last hit taken, attack or skill before out-of-combat regen kicks in. */
 export const COMBAT_LINGER = 5;
@@ -467,6 +468,19 @@ export class Player extends Unit {
   forgeAt = -Infinity;
   /** Seconds until the fountain or a campfire can restore this player again (Sim.rest). */
   restCd = 0;
+  /**
+   * Shrine buffs running (docs/systems/chests-shrines.md): seconds left, seconds given and the % it gives. Countdowns (not sim time),
+   * so the server can carry them to the next map (each Sim keeps its own clock). Death ends them; not saved.
+   */
+  shrineBuffs: Partial<Record<ShrineBuff, { left: number; total: number; pct: number }>> = {};
+  /** Shrines this player used, by `<zoneId>:<shrineId>`: seconds until the same shrine works for them again. Not saved. */
+  shrineCd: Record<string, number> = {};
+  /** Opening a treasure chest: seconds left (0 = not opening), how long it takes, which chest and where it started. */
+  chestT = 0;
+  chestTotal = 0;
+  chestId = '';
+  chestX = 0;
+  chestZ = 0;
   /** Seconds left on a return-scroll cast (0 = not casting), and where it started (moving away cancels it). */
   castT = 0;
   castX = 0;
@@ -861,6 +875,10 @@ export class Player extends Unit {
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
     for (const b of this.statBuffs) addInto(s, b.mods);
+    // Shrine buffs: attack in % of the whole, move speed in % points outside the gear's cap (like a skill buff).
+    const sb = this.shrineBuffs;
+    if (sb.atk) s.atk *= 1 + sb.atk.pct / 100;
+    if (sb.speed) s.moveSpeed += sb.speed.pct;
     // Crit rate tops out at the cap (owner 2026-11-25, /admin "อัตราคริสูงสุด %").
     s.crit = Math.min(s.crit, currentBalance().critCap);
     this.stats = s;
@@ -1237,6 +1255,24 @@ export class Player extends Unit {
     passiveOnDash(this);
   }
 
+  /** Counts down the shrine buffs and cooldowns; a buff that ran out changes the stats back. */
+  tickShrines(dt: number): void {
+    for (const k of Object.keys(this.shrineCd)) if ((this.shrineCd[k] -= dt) <= 0) delete this.shrineCd[k];
+    let ended = false;
+    for (const k of Object.keys(this.shrineBuffs) as ShrineBuff[]) {
+      const b = this.shrineBuffs[k]!;
+      if ((b.left -= dt) > 0) continue;
+      delete this.shrineBuffs[k];
+      ended = true;
+    }
+    if (ended) this.recompute();
+  }
+
+  /** The % of a shrine buff running on this player (0 = none). */
+  shrinePct(b: ShrineBuff): number {
+    return this.shrineBuffs[b]?.pct ?? 0;
+  }
+
   /** Starts (or restarts) a timed stat buff from a skill: the same id replaces the one running. */
   addStatBuff(id: string, seconds: number, mods: Partial<Stats>): void {
     this.statBuffs = this.statBuffs.filter((b) => b.id !== id);
@@ -1281,7 +1317,10 @@ export class Player extends Unit {
     this.shield = 0;
     this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = 0;
     this.skillBuffs = {};
-    if (this.statBuffs.length) {
+    // Shrine buffs end with death too (owner 2026-11-27).
+    const shrine = Object.keys(this.shrineBuffs).length > 0;
+    this.shrineBuffs = {};
+    if (this.statBuffs.length || shrine) {
       this.statBuffs = [];
       this.recompute();
     }

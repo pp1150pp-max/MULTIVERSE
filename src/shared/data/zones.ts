@@ -2,7 +2,7 @@ import { mulberry32 } from '../rng';
 import { setDropBands } from './items';
 import { HARBOR_CORNERS, HARBOR_ID, HARBOR_PIER, HARBOR_RETURN } from './harbor';
 import { MapRegistry } from '../mapRegistry';
-import type { MapData } from '../mapSchema';
+import type { MapChest, MapData, MapShrine } from '../mapSchema';
 
 export interface SpawnArea {
   monster: string;
@@ -140,6 +140,9 @@ export interface ZoneDef {
   whirlpools?: Whirlpool[];
   /** Warp circles on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back). */
   warps?: WarpPad[];
+  /** Treasure chests and shrines (floor 1's farm maps, docs/systems/chests-shrines.md). */
+  chests?: MapChest[];
+  shrines?: MapShrine[];
   /** Size of the boss's arena, marked by the ring of stones (default DEFAULT_ARENA). Auto Play stays out of it. */
   arenaRadius?: number;
   /** The boss can't be walked through (for one that never moves). */
@@ -793,14 +796,41 @@ export const ZONE_HARBOR: ZoneDef = {
   ],
 };
 
+/**
+ * Where the farm maps' treasure chests and shrines start (owner 2026-11-27: 4 chests and 2 shrines a map, moved in the map editor
+ * afterwards). Final map units (after grownFarm and rotateZone), picked on open ground away from the camp, the doors and the boss.
+ */
+const FARM_TREASURE: Record<string, { chests: MapChest[]; shrines: MapShrine[] }> = {
+  emerald_forest: {
+    chests: [{ id: 'c1', x: -25, z: -5 }, { id: 'c2', x: 83, z: -83 }, { id: 'c3', x: -79, z: 83 }, { id: 'c4', x: -83, z: -83 }],
+    shrines: [{ id: 's1', x: 1, z: -83, buff: 'atk' }, { id: 's2', x: 45, z: -21, buff: 'random' }],
+  },
+  misty_marsh: {
+    chests: [{ id: 'c1', x: -25, z: 5 }, { id: 'c2', x: 81, z: -83 }, { id: 'c3', x: 83, z: 83 }, { id: 'c4', x: -81, z: -83 }],
+    shrines: [{ id: 's1', x: 63, z: 1, buff: 'speed' }, { id: 's2', x: -1, z: -73, buff: 'random' }],
+  },
+  frost_reach: {
+    chests: [{ id: 'c1', x: -25, z: -43 }, { id: 'c2', x: 83, z: 83 }, { id: 'c3', x: -39, z: 83 }, { id: 'c4', x: 83, z: -83 }],
+    shrines: [{ id: 's1', x: 51, z: 1, buff: 'exp' }, { id: 's2', x: -83, z: 25, buff: 'random' }],
+  },
+  ashen_isle: {
+    chests: [{ id: 'c1', x: -21, z: -7 }, { id: 'c2', x: 83, z: 83 }, { id: 'c3', x: -83, z: 83 }, { id: 'c4', x: -83, z: -83 }],
+    shrines: [{ id: 's1', x: 1, z: 73, buff: 'atk' }, { id: 's2', x: 49, z: 21, buff: 'random' }],
+  },
+};
+const withTreasure = (z: ZoneDef): ZoneDef => {
+  const t = FARM_TREASURE[z.id];
+  return t ? { ...z, chests: t.chests.map((c) => ({ ...c })), shrines: t.shrines.map((c) => ({ ...c })) } : z;
+};
+
 /** The floor-1 zones as the generators above make them. Only tools/bake_maps.ts and the bake test read these. */
 export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_HUB.id]: ZONE_HUB,
   [ZONE_HARBOR.id]: ZONE_HARBOR,
-  [ZONE_1.id]: ZONE_1,
-  [ZONE_2.id]: ZONE_2,
-  [ZONE_3.id]: ZONE_3,
-  [ZONE_4.id]: ZONE_4,
+  [ZONE_1.id]: withTreasure(ZONE_1),
+  [ZONE_2.id]: withTreasure(ZONE_2),
+  [ZONE_3.id]: withTreasure(ZONE_3),
+  [ZONE_4.id]: withTreasure(ZONE_4),
   [ZONE_BEACH.id]: ZONE_BEACH,
   [ZONE_COVE.id]: ZONE_COVE,
   [ZONE_GRAVE.id]: ZONE_GRAVE,
@@ -833,6 +863,8 @@ export function zoneWithMap(zone: ZoneDef, map: MapData): ZoneDef {
     }),
     portals: map.portals.map((p) => ({ ...p })),
     warps: zone.warps || map.warps?.length ? (map.warps ?? []).map((w) => ({ ...w })) : undefined,
+    chests: zone.chests || map.chests?.length ? (map.chests ?? []).map((c) => ({ ...c })) : undefined,
+    shrines: zone.shrines || map.shrines?.length ? (map.shrines ?? []).map((c) => ({ ...c })) : undefined,
     lair: map.lair ? { ...map.lair } : undefined,
   };
 }

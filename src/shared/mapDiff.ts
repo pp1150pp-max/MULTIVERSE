@@ -9,7 +9,7 @@ export interface MapDiff { added: number; removed: number; changed: number }
 /** What changed between two layouts, counting pieces: things with an id by id, the rest by what they hold (see below). */
 export function diffMaps(a: MapData | undefined, b: MapData): MapDiff {
   const out: MapDiff = { added: 0, removed: 0, changed: 0 };
-  const lists = ['props', 'blockers', 'npcs', 'paths', 'water', 'rest', 'portals', 'spawns', 'colliders', 'waveSpots', 'warps'] as const;
+  const lists = ['props', 'blockers', 'npcs', 'paths', 'water', 'rest', 'portals', 'spawns', 'colliders', 'waveSpots', 'warps', 'chests', 'shrines'] as const;
   for (const k of lists) {
     const x = (a?.[k] ?? []) as { id?: string }[];
     const y = (Array.isArray(b[k]) ? b[k] : []) as { id?: string }[];
@@ -67,7 +67,7 @@ export interface DiffItem {
   fields?: string[];
 }
 
-const DIFF_LISTS = ['props', 'blockers', 'npcs', 'paths', 'water', 'rest', 'portals', 'spawns', 'colliders', 'waveSpots', 'warps'] as const;
+const DIFF_LISTS = ['props', 'blockers', 'npcs', 'paths', 'water', 'rest', 'portals', 'spawns', 'colliders', 'waveSpots', 'warps', 'chests', 'shrines'] as const;
 type Entry = Record<string, unknown> & { id?: string; x?: number; z?: number; pts?: Pos[] };
 
 function posOf(e: Entry): Pos | undefined {
@@ -96,6 +96,8 @@ function labelOf(list: DiffList, e: Entry): string {
     case 'colliders': return 'วงกั้น (ไม่มีภาพ)';
     case 'waveSpots': return 'จุดเกิดระลอก';
     case 'warps': return 'วงวาร์ป';
+    case 'chests': return `หีบสมบัติ ${String(e.id)}`;
+    case 'shrines': return `ศาลเจ้า ${String(e.id)} (${String(e.buff)})`;
     case 'lair': return `ที่เรียกบอส ${String(e.boss)}`;
     default: return 'ค่าของแมพ (จุดเริ่ม/เขตปลอดภัย/กรอบเดิน)';
   }

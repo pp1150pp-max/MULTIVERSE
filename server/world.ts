@@ -9,7 +9,8 @@ import { cfEdge, clientIp } from './clientIp';
 import { directIp, directOriginOk, directSettings, saveDirectSettings, type DirectSettings } from './direct';
 import type { Db } from './db';
 import { Sim } from '../src/shared/sim/Sim';
-import type { MapData } from '../src/shared/mapSchema';
+import type { MapData, ShrineBuff } from '../src/shared/mapSchema';
+import type { ShrineSnap } from '../src/shared/treasure';
 import { HUB_ID, hubOf, lairExitSpot, ZONES, zoneWithLayout, type ZoneDef } from '../src/shared/data/zones';
 import { loginHub } from '../src/shared/floors';
 import { applyMaps, previewLayout } from './maps-live';
@@ -374,6 +375,8 @@ export class GameWorld {
   private readonly friendDroppedAt = new Map<number, number>();
   /** Auto that was on when a character dropped (or was taken over): it carries on if the character is back at the same spot (join). */
   private readonly autoBack = new Map<number, { auto: AutoPlay; at: number }>();
+  /** Character → its shrine cooldowns and buffs when it left (Date.now()), so a new login carries on with them (docs/systems/chests-shrines.md). */
+  private readonly shrineMemo = new Map<number, ShrineMemo>();
   /**
    * One live stash per account with a character online, shared by all of them (the same object),
    * so nothing can be copied by having two characters open it.
@@ -836,6 +839,12 @@ export class GameWorld {
     // same AutoPlay (its farm spot), and the welcome tells the browser so.
     const autoBack = pv ? undefined : this.autoBack.get(charId);
     this.autoBack.delete(charId);
+    // Shrines used before logging out: their cooldowns (and buffs) go on, minus the time away.
+    const memo = pv ? undefined : this.shrineMemo.get(charId);
+    if (memo) {
+      this.shrineMemo.delete(charId);
+      restoreShrines(player, memo, (Date.now() - memo.at) / 1000);
+    }
     if (back && autoBack && sim.zone.allowAutoPlay) s.auto = autoBack.auto;
     // Taken back (or never owned) while offline: off.
     this.keepToOwned(s);
@@ -945,6 +954,7 @@ export class GameWorld {
       if (why) this.leave(s, 'drop', `Auto away ended: ${why}, after ${fmtAgo(now - s.awayAt)}`);
     }
     for (const [id, a] of this.autoBack) if (now - a.at > CH_RECONNECT_MS) this.autoBack.delete(id);
+    for (const [id, m] of this.shrineMemo) if (now - m.at > SHRINE_MEMO_MS) this.shrineMemo.delete(id);
   }
 
   /** Every running Sim: the channels, the boss rooms and the map-editor previews. */
@@ -967,6 +977,10 @@ export class GameWorld {
     // Auto was on and the character can come back to the same spot: it carries on then (join).
     if (how !== 'quit' && s.auto && s.player.alive && !this.rooms.sims().includes(s.sim) && !this.waveRooms.has(s.sim)) this.autoBack.set(s.charId, { auto: s.auto, at: Date.now() });
     else this.autoBack.delete(s.charId);
+    // Shrine cooldowns and buffs are not saved: kept here so logging out and in again does not reset a shrine.
+    if (Object.keys(s.player.shrineCd).length || Object.keys(s.player.shrineBuffs).length) {
+      this.shrineMemo.set(s.charId, { cd: { ...s.player.shrineCd }, buffs: structuredClone(s.player.shrineBuffs), at: Date.now() });
+    }
     // Whatever the reason (quit, lost connection, a login from elsewhere): the trade ends, nothing moves.
     this.trades.cancelChar(s.charId, `${s.player.name} ออกจากเกม`);
     // Before saving: a summoning this character led gives its keys back now.
@@ -1403,6 +1417,13 @@ export class GameWorld {
       case 'rest':
         // Sim.rest checks the distance, that the player is alive and the cooldown.
         if (sim.rest(p)) this.save(s);
+        break;
+      case 'chest':
+        // Sim.startChest checks the switch, alive, no Auto, the range and that the chest is there (guests may open chests too).
+        if (typeof m.id === 'string' && m.id.length <= 40) sim.startChest(p, m.id);
+        break;
+      case 'shrine':
+        if (typeof m.id === 'string' && m.id.length <= 40) sim.useShrine(p, m.id);
         break;
       case 'warp':
         // Sim.useWarp checks the player is alive and standing at one of this map's warp circles; the 'warped' event bumps the epoch.
@@ -2461,6 +2482,8 @@ export class GameWorld {
     p.charges = { ...old.charges };
     p.potCd = old.potCd;
     p.restCd = old.restCd;
+    // Shrine buffs and cooldowns are countdowns: they go along (a portal or a channel switch does not reset a shrine).
+    carryShrines(old, p);
     p.stash = old.stash;
     // The account's tutorial (shared object, like the stash). Left out before 2026-11-18: every map change
     // reset it to nothing done and the save below wrote that, so the steps (and their gold) could be taken again.
@@ -2524,6 +2547,8 @@ export class GameWorld {
     const me: PrivateSnap = {
       hp: r2(p.hp), mp: r2(p.mp), exp: p.exp, level: p.level, gold: p.gold,
       cd: p.cd, ...(Object.keys(p.charges).length ? { ch: p.charges } : {}), potCd: r2(p.potCd), restCd: r2(Math.max(0, p.restCd)), castT: p.castT > 0 ? r2(p.castT) : undefined,
+      ...(p.chestT > 0 ? { chestT: [r2(p.chestT), r2(p.chestTotal)] as [number, number] } : {}),
+      ...shrineField(p, s.sim.zone.id),
       ...(Object.keys(p.buffs).length ? { buffs: roundBuffs(p.buffs) } : {}),
       ...skillBuffField(p, s.sim.time),
       // Slowed (the Bog Witch's poison): the browser walks slower too, or its moves would be refused.
@@ -2624,6 +2649,7 @@ export class GameWorld {
         : { hazards: sim.hazards.filter(near) }),
       room: this.rooms.snap(sim, p),
       waves: this.waveRooms.snap(sim, p),
+      ...(sim.chestGone.size ? { chestsGone: sim.chestsGone() } : {}),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),
@@ -3220,6 +3246,32 @@ function debuffField(m: Monster, now: number, viewer: number): { db?: number; ds
 function buffField(p: Player, now: number): { bf?: number; bs?: string } {
   const bf = p.alive ? buffMask(p, now) : 0;
   return bf ? (p.buffSkill ? { bf, bs: p.buffSkill } : { bf }) : {};
+}
+/** How long a logged-out character's shrine cooldowns are remembered (the longest cooldown /admin allows). */
+const SHRINE_MEMO_MS = 86_400_000;
+type ShrineMemo = { cd: Player['shrineCd']; buffs: Player['shrineBuffs']; at: number };
+/** Copies the shrine countdowns to the character's next Player (a map or channel change). */
+function carryShrines(from: Player, to: Player): void {
+  to.shrineCd = { ...from.shrineCd };
+  to.shrineBuffs = structuredClone(from.shrineBuffs);
+  if (Object.keys(to.shrineBuffs).length) to.recompute();
+}
+/** Puts remembered shrine countdowns back, `gone` seconds shorter. */
+function restoreShrines(p: Player, m: ShrineMemo, gone: number): void {
+  for (const [k, v] of Object.entries(m.cd)) if (v - gone > 0) p.shrineCd[k] = v - gone;
+  for (const [k, b] of Object.entries(m.buffs) as [keyof Player['shrineBuffs'], { left: number; total: number; pct: number }][]) {
+    if (b.left - gone > 0) p.shrineBuffs[k] = { ...b, left: b.left - gone };
+  }
+  if (Object.keys(p.shrineBuffs).length) p.recompute();
+}
+/** Our shrine buffs and this map's shrine cooldowns, for the private part of the snapshot (nothing when none). */
+function shrineField(p: Player, zoneId: string): { shr?: ShrineSnap } {
+  const b = (Object.entries(p.shrineBuffs) as [ShrineBuff, { left: number; total: number; pct: number }][]).map(([k, v]): [ShrineBuff, number, number, number] => [k, r2(v.left), r2(v.total), v.pct]);
+  const pre = `${zoneId}:`;
+  const cd: Record<string, number> = {};
+  for (const [k, v] of Object.entries(p.shrineCd)) if (k.startsWith(pre)) cd[k.slice(pre.length)] = Math.ceil(v);
+  const has = Object.keys(cd).length > 0;
+  return b.length || has ? { shr: { ...(b.length ? { b } : {}), ...(has ? { cd } : {}) } } : {};
 }
 /** Our own skill buffs running, for the private part of the snapshot (nothing when none). */
 function skillBuffField(p: Player, now: number): { sb?: [string, number, number][] } {

@@ -59,6 +59,8 @@ export interface Backend {
   readonly room: RoomSnap | null;
   /** The "รอดมอนเป็นระลอก" run you are in (null elsewhere); its seconds count down locally between snapshots. */
   readonly waves: WaveSnap | null;
+  /** Treasure chests of this map opened now (docs/systems/chests-shrines.md): not drawn, nothing to open. */
+  readonly chestsGone: ReadonlySet<string>;
   /** Simulation clock (seconds). */
   readonly time: number;
   /** Players in your map and channel right now, you included. */
@@ -82,6 +84,9 @@ export interface Backend {
   rest(): void;
   /** Step through the warp circle you stand at (ZoneDef.warps): the server checks the range. */
   useWarp(): void;
+  /** Start opening treasure chest `id` / touch shrine `id` (the server checks range, Auto, the switch and cooldowns). */
+  openChest(id: string): void;
+  useShrine(id: string): void;
   /** Pick up a drop the player clicked and walked to, even one the loot filter skips (the server checks). */
   pickup(lootId: number): void;
   equip(bagIndex: number, slot?: EquipSlot): void;

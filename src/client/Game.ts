@@ -1,4 +1,12 @@
 import * as THREE from 'three';
+import { SHRINE_BUFF_NAME, shrinePct } from '../shared/treasure';
+import type { ShrineKind } from '../shared/mapSchema';
+
+/** "9:58" or "45 วิ". */
+const fmtSecs = (sec: number): string => {
+  const t = Math.max(0, Math.ceil(sec));
+  return t >= 60 ? `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')} นาที` : `${t} วิ`;
+};
 import { HazardViews } from './hazards';
 import { floorOf, inBossArena, islandAt, WARP_RANGE, warpPadNear } from '../shared/data/zones';
 import { autoBlocked } from '../shared/sim/autoplay';
@@ -79,7 +87,9 @@ type ClickGoal =
   | { kind: 'npc'; id: NpcId; x: number; z: number }
   | { kind: 'rest'; x: number; z: number }
   | { kind: 'summoner'; x: number; z: number }
-  | { kind: 'warp'; x: number; z: number };
+  | { kind: 'warp'; x: number; z: number }
+  | { kind: 'chest'; id: string; x: number; z: number }
+  | { kind: 'shrine'; id: string; x: number; z: number };
 
 export interface Npc { id: NpcId; name: string; action: string; icon: string; role: string; portrait?: string; x: number; z: number; actor: SpriteActor }
 
@@ -796,7 +806,40 @@ export class Game {
     const sm = this.backend.terrain.summoner;
     if (sm && side(sm.x, sm.z)) consider({ kind: 'summoner', x: sm.x, z: sm.z }, 1.4, Math.max(22, 1.2 * pxPerUnit));
     for (const w of zone.warps ?? []) if (side(w.x, w.z)) consider({ kind: 'warp', x: w.x, z: w.z }, 0.05, Math.max(22, 1.1 * pxPerUnit));
+    // Treasure chests and shrines: only when playing by hand (Auto never uses them, owner 2026-11-27).
+    if (!this.autoPlay) {
+      const t = currentBalance().treasure;
+      if (t.chests) for (const c of zone.chests ?? []) if (!this.backend.chestsGone.has(c.id)) consider({ kind: 'chest', id: c.id, x: c.x, z: c.z }, 0.5, Math.max(22, 0.9 * pxPerUnit));
+      if (t.shrines) for (const c of zone.shrines ?? []) consider({ kind: 'shrine', id: c.id, x: c.x, z: c.z }, 1.2, Math.max(22, 1 * pxPerUnit));
+    }
     return best;
+  }
+
+  /** The nearest treasure chest (still there) or shrine within reach of the player, if any. */
+  private treasureNear(): { kind: 'chest' | 'shrine'; id: string; x: number; z: number; buff?: ShrineKind } | null {
+    const t = currentBalance().treasure;
+    const zone = this.backend.terrain.zone;
+    const p = this.player;
+    let best: { kind: 'chest' | 'shrine'; id: string; x: number; z: number; buff?: ShrineKind } | null = null;
+    let bd = t.range;
+    if (t.chests) for (const c of zone.chests ?? []) {
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d <= bd && !this.backend.chestsGone.has(c.id)) { bd = d; best = { kind: 'chest', ...c }; }
+    }
+    if (t.shrines) for (const c of zone.shrines ?? []) {
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d <= bd) { bd = d; best = { kind: 'shrine', ...c }; }
+    }
+    return best;
+  }
+
+  /** The line over a chest or shrine within reach. */
+  private treasurePrompt(tr: { kind: 'chest' | 'shrine'; id: string; buff?: ShrineKind }, key: string): string {
+    const p = this.player;
+    if (tr.kind === 'chest') return p.chestT > 0 ? 'กำลังเปิดหีบสมบัติ…' : `หีบสมบัติ — ${key}เพื่อเปิด`;
+    const cd = p.shrineCd[`${this.backend.terrain.zone.id}:${tr.id}`] ?? 0;
+    const what = !tr.buff || tr.buff === 'random' ? 'สุ่มพร 1 ใน 3' : `${SHRINE_BUFF_NAME[tr.buff]} +${shrinePct(currentBalance().treasure, tr.buff)}%`;
+    return cd > 0 ? `ศาลเจ้า — ใช้ได้อีกใน ${fmtSecs(cd)}` : `ศาลเจ้า (${what}) — ${key}เพื่อรับพร`;
   }
 
   /** Walking to a clicked goal: once there, pick it up / talk / rest, then forget it. */
@@ -830,6 +873,12 @@ export class Game {
     } else if (g.kind === 'warp') {
       if (d < WARP_RANGE - 0.4) {
         this.useWarp();
+        this.goal = null;
+      }
+    } else if (g.kind === 'chest' || g.kind === 'shrine') {
+      if (d < currentBalance().treasure.range - 0.4) {
+        if (g.kind === 'chest') this.backend.openChest(g.id);
+        else this.backend.useShrine(g.id);
         this.goal = null;
       }
     } else {
@@ -918,6 +967,8 @@ export class Game {
     const zone = this.backend.terrain.zone;
     const pad = !near && !summ && p.alive ? warpPadNear(zone, p.x, p.z) : null;
     const rest = !near && !summ && !pad && p.alive ? restSpotNear(spots, p) : null;
+    // A treasure chest or shrine within reach (docs/systems/chests-shrines.md): only when playing by hand.
+    const tr = !near && !summ && !pad && !rest && p.alive && !this.autoPlay ? this.treasureNear() : null;
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
     // Touch: no T key — tap the NPC, rest spot or altar itself; near an NPC a "พูดคุย" button shows too.
@@ -928,6 +979,7 @@ export class Game {
       : pad ? `วงวาร์ป — ${key}เพื่อ${islandAt(zone, pad.toX, pad.toZ) ? 'ข้ามไปเกาะกลางน้ำวน' : 'กลับขึ้นฝั่ง'}`
       // No prompt line at the hub's fountain (owner 2026-11-19): its "ฟื้นพลัง" badge says it already. Campfires keep theirs.
       : rest && rest.kind !== 'fountain' ? (restIn > 0 ? `${restName} — พักได้อีกใน ${restIn} วิ` : `${restName} — ${key}เพื่อฟื้น HP/MP ให้เต็ม`)
+      : tr ? this.treasurePrompt(tr, key)
       : null;
     this.talkReady = !!near && !this.hud.dialogOpen && !this.npcDialog.open;
     this.floating.npcBadges(this, shown);
@@ -935,6 +987,7 @@ export class Game {
     if (near) this.floating.npcPrompt(this, near.x, 3.7, near.z, prompt);
     else if (summ) this.floating.npcPrompt(this, summ.x, SUMMONER_HEIGHT + 0.6, summ.z, prompt);
     else if (pad) this.floating.npcPrompt(this, pad.x, 1.4, pad.z, prompt);
+    else if (tr) this.floating.npcPrompt(this, tr.x, tr.kind === 'chest' ? 1.4 : 2.8, tr.z, prompt);
     // Rest spots: stack the label just above the spot's own badge (same anchor, lifted by the badge's
     // height plus room for its 4px bob) so the two never overlap whatever the zoom.
     else if (rest) this.floating.npcPrompt(this, rest.x, Floating.restBadgeY(rest.kind), rest.z, prompt, this.floating.restBadgeHeight(spots.indexOf(rest)) + 8);
@@ -943,6 +996,10 @@ export class Game {
     else if (summ && i.pressed('KeyT')) this.rooms.toggle();
     else if (pad && i.pressed('KeyT')) this.useWarp();
     else if (rest && i.pressed('KeyT')) this.backend.rest();
+    else if (tr && i.pressed('KeyT') && p.chestT <= 0) {
+      if (tr.kind === 'chest') this.backend.openChest(tr.id);
+      else this.backend.useShrine(tr.id);
+    }
 
     // Farming circle: while Auto runs (around where it started) and while the settings window is open
     // (around the player if Auto is off), following the number as it is typed.
@@ -961,6 +1018,8 @@ export class Game {
     this.fx.update(vdt);
     this.hazardViews.update(this.backend.hazards, this.backend.time, p);
     this.world.update(dt, p.x, p.z);
+    const tz = this.backend.terrain.zone.id;
+    this.world.treasure?.update(performance.now() / 1000, this.backend.chestsGone, (id) => (p.shrineCd[`${tz}:${id}`] ?? 0) > 0, currentBalance().treasure);
     this.updateCamera(dt);
     this.cosmetics.update();
     this.cashShop.update();

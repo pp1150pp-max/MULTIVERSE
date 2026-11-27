@@ -1841,5 +1841,15 @@
   {"monster":"polar_bear","x":37,"z":38,"radius":3,"count":2,"respawn":[16,22]},
   {"monster":"polar_bear","x":80,"z":20,"radius":2.5,"count":1,"respawn":[16,22]}
  ],
+ "chests": [
+  {"id":"c1","x":-25,"z":-43},
+  {"id":"c2","x":83,"z":83},
+  {"id":"c3","x":-39,"z":83},
+  {"id":"c4","x":83,"z":-83}
+ ],
+ "shrines": [
+  {"id":"s1","x":51,"z":1,"buff":"exp"},
+  {"id":"s2","x":-83,"z":25,"buff":"random"}
+ ],
  "lair": {"boss":"yeti","x":63,"z":63}
 }

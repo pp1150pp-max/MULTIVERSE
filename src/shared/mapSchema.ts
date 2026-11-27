@@ -63,6 +63,21 @@ export interface MapPortal {
   /** Its picture, when not the usual 'portal' (PortalDef.prop: the harbour's dock and lighthouse gates). */
   prop?: string;
 }
+/**
+ * Treasure chests and shrines (owner 2026-11-27, docs/systems/chests-shrines.md): only on floor 1's four farm maps for now
+ * (TREASURE_MAP_IDS). A chest: the first player to open it gets what is inside, then it is gone until it comes back. A shrine:
+ * touching it gives a timed buff (its `buff`, or one of the three at random).
+ */
+export interface MapChest { id: string; x: number; z: number }
+export type ShrineBuff = 'atk' | 'speed' | 'exp';
+export type ShrineKind = ShrineBuff | 'random';
+export const SHRINE_BUFFS: readonly ShrineBuff[] = ['atk', 'speed', 'exp'];
+export const SHRINE_KINDS: readonly ShrineKind[] = ['atk', 'speed', 'exp', 'random'];
+export interface MapShrine { id: string; x: number; z: number; buff: ShrineKind }
+/** The maps that may have chests and shrines (floor 1's farm maps, owner 2026-11-27: "เริ่มที่แมพฟาร์มชั้น 1"). */
+export const TREASURE_MAP_IDS: readonly string[] = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
+/** Most of each one map may have. */
+export const TREASURE_MAX = 30;
 export interface MapSpawn { monster: string; x: number; z: number; radius: number; count: number; respawn: [number, number] }
 export interface MapLair { boss: string; x: number; z: number }
 /**
@@ -108,6 +123,10 @@ export interface MapData {
   lair?: MapLair;
   /** Warp circles on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back). Absent = none. */
   warps?: MapWarp[];
+  /** Treasure chests (TREASURE_MAP_IDS only). Absent = none. */
+  chests?: MapChest[];
+  /** Shrines (TREASURE_MAP_IDS only). Absent = none. */
+  shrines?: MapShrine[];
   /** Only boss rooms have it. Absent on every other map. */
   room?: MapRoom;
 }
@@ -136,7 +155,7 @@ export interface MapIssue {
   severity: 'error' | 'warn';
   code: MapIssueCode;
   /** Which collection and id the issue is about, so the editor can jump to it. */
-  kind?: 'zone' | 'prop' | 'blocker' | 'path' | 'water' | 'npc' | 'rest' | 'portal' | 'spawn' | 'lair' | 'walkable' | 'wave' | 'warp';
+  kind?: 'zone' | 'prop' | 'blocker' | 'path' | 'water' | 'npc' | 'rest' | 'portal' | 'spawn' | 'lair' | 'walkable' | 'wave' | 'warp' | 'chest' | 'shrine';
   id?: string;
   message: string;
 }
@@ -380,6 +399,19 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
     placed('warp', id, w?.x, w?.z, `วงวาร์ป ${i + 1}`);
     placed('warp', id, w?.toX, w?.toZ, `ปลายทางวงวาร์ป ${i + 1}`);
   });
+  // Treasure chests and shrines: lists of at most TREASURE_MAX, unique ids, standing where a player can, on a farm map only.
+  for (const [list, kind, name] of [[map.chests, 'chest', 'หีบสมบัติ'], [map.shrines, 'shrine', 'ศาลเจ้า']] as const) {
+    if (list === undefined) continue;
+    if (!Array.isArray(list)) { err('schema', `"${kind === 'chest' ? 'chests' : 'shrines'}" must be a list`, kind); continue; }
+    if (list.length && !TREASURE_MAP_IDS.includes(map.id)) err('locked', `${name}วางได้เฉพาะแมพฟาร์มชั้น 1 (ป่ามรกต หนองน้ำหมอก ดินแดนหิมะ เกาะภูเขาไฟ)`, kind);
+    if (list.length > TREASURE_MAX) err('range', `${name}ได้ไม่เกิน ${TREASURE_MAX} จุดต่อแมพ`, kind);
+    dup(kind, list.map((c) => c?.id));
+    list.forEach((c, i) => {
+      const id = typeof c?.id === 'string' ? c.id : String(i);
+      if (kind === 'shrine' && !SHRINE_KINDS.includes((c as MapShrine).buff)) err('range', `${name} "${id}" ต้องเลือกบัฟ (atk / speed / exp / random)`, kind, id);
+      placed(kind, id, c?.x, c?.z, `${name} "${id}"`);
+    });
+  }
   if (map.lair) {
     if (mons && !mons.has(map.lair.boss)) err('bad_ref', `lair boss "${map.lair.boss}" is unknown`, 'lair');
     // The lair is where the boss summoner stands, solid itself, so it is only checked against the frame (not "in collision").
@@ -455,7 +487,8 @@ function validateRoom(map: MapData, ctx: MapValidateCtx, err: Err, whalf: number
   if (map.lair) locked('ที่เรียกบอส (lair)', 'lair');
   if (map.zone.quadrants || map.zone.safe) locked('เขตปลอดภัย/ควอดแรนท์');
   const lists: [string, unknown[], MapIssue['kind']][] = [['ประตู', map.portals, 'portal'], ['จุดเกิดมอน', map.spawns, 'spawn'], ['NPC', map.npcs, 'npc'],
-    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water'], ['จุดเกิดระลอก', map.waveSpots ?? [], 'wave'], ['วงวาร์ป', map.warps ?? [], 'warp']];
+    ['จุดพัก', map.rest, 'rest'], ['ทางเดิน', map.paths, 'path'], ['ทะเลสาบ/ลาวา', map.water, 'water'], ['จุดเกิดระลอก', map.waveSpots ?? [], 'wave'], ['วงวาร์ป', map.warps ?? [], 'warp'],
+    ['หีบสมบัติ', map.chests ?? [], 'chest'], ['ศาลเจ้า', map.shrines ?? [], 'shrine']];
   for (const [name, list, kind] of lists) if (list.length) err('locked', `ห้องบอสห้ามมี${name} (ลบออก)`, kind);
   const b = ctx.baseline;
   if (b) {

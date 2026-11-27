@@ -27,6 +27,7 @@ import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, type Npc
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
 import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
+import { checkTreasureTuning, codeTreasure, mergeTreasure, treasureChanges, type TreasureConfig, type TreasureTuning } from './treasure';
 import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
 import { addInto, emptyStats, setExpTune } from './formulas';
@@ -298,6 +299,8 @@ export interface Balance {
   auto: AutoConfig;
   /** Minigame "รอดมอนเป็นระลอก" (waveGame.ts). */
   waves: WaveConfig;
+  /** Treasure chests and shrines on the farm maps (treasure.ts). */
+  treasure: TreasureConfig;
   /** Buying more bag slots (bagTabs.ts), off in the code. */
   bagExpand: BagExpandCfg;
   /** The skill effects' extra layer: glow, ground light, particles, hit feel (fxLayerTuning.ts). */
@@ -429,6 +432,8 @@ export interface BalanceTuning {
   auto?: AutoTuning;
   /** Wave minigame numbers that differ from the code. */
   waves?: WaveTuning;
+  /** Treasure chest / shrine numbers that differ from the code. */
+  treasure?: TreasureTuning;
   /** Bag slot buying settings that differ from the code. */
   bagExpand?: BagExpandTuning;
   /** Skill effect extra-layer numbers that differ from the code. */
@@ -572,6 +577,7 @@ export function codeBalance(): Balance {
     reviveGuardSec: CODE_REVIVE_GUARD_SEC,
     auto: codeAuto(),
     waves: codeWaves(),
+    treasure: codeTreasure(),
     bagExpand: codeBagExpand(),
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
@@ -664,6 +670,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
   b.auto = mergeAuto(t.auto);
   b.waves = mergeWaves(t.waves);
+  b.treasure = mergeTreasure(t.treasure);
   b.bagExpand = mergeBagExpand(t.bagExpand);
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
@@ -818,7 +825,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1386,6 +1393,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.waves = c.tuning;
     return null;
   };
+  const treasure = (): string | null => {
+    const c = checkTreasureTuning(o.treasure, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.treasure = c.tuning;
+    return null;
+  };
   const bagExpand = (): string | null => {
     const c = checkBagExpand(o.bagExpand, strict);
     if ('error' in c) return c.error;
@@ -1524,6 +1537,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     one('reviveGuardSec', BALANCE_RANGE.reviveGuardSec, 'อมตะหลังชุบด้วยขนนกฟีนิกซ์ (วินาที)') ??
     auto() ??
     waves() ??
+    treasure() ??
     bagExpand() ??
     tutorial() ??
     npcTalk() ??
@@ -1685,6 +1699,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...gearChanges(a.gear, b.gear));
   out.push(...autoChanges(a.auto, b.auto));
   out.push(...waveChanges(a.waves, b.waves));
+  out.push(...treasureChanges(a.treasure, b.treasure));
   out.push(...bagExpandChanges(a.bagExpand, b.bagExpand));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...npcTalkChanges(a.npcTalk, b.npcTalk));

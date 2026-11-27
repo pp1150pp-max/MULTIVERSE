@@ -172,6 +172,9 @@ const markers: Layer = {
       dot(w.x, w.z, '#40e0c0', `วงวาร์ป ${i + 1}`);
       dot(w.toX, w.toZ, '#a0fff0', `→ ${i + 1}`);
     });
+    // Treasure chests and shrines (floor 1's farm maps).
+    for (const c of m.chests ?? []) dot(c.x, c.z, '#d08a30', `📦 ${c.id}`);
+    for (const c of m.shrines ?? []) dot(c.x, c.z, '#f070c0', `⛩ ${c.id} ${c.buff}`);
   },
 };
 
