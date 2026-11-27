@@ -326,6 +326,8 @@ export interface MonsterSnap {
   db?: number;
   /** With `db`: the skill whose debuff it got last (its magic circle). */
   ds?: string;
+  /** Its element mark (sim/elements.ts markCode: index in ELEMENTS + 1), left out when none. */
+  el?: number;
 }
 
 export interface ProjectileSnap { id: number; x: number; z: number; vx: number; vz: number; color: string; size: number; art?: ShotArt }

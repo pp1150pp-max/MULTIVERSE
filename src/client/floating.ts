@@ -429,7 +429,8 @@ export class Floating {
     const seen = new Set<Monster>();
     for (const m of g.monsters) {
       // A debuffed monster shows its plate too, for the debuff icons (owner 2026-11-15).
-      const shownDebuffs = debuffsOn() ? m.debuffs : 0;
+      // The element mark rides along in the same key (bits 8+), so the icons row redraws when either changes.
+      const shownDebuffs = debuffsOn() ? m.debuffs | (m.elemShown << 8) : 0;
       if (!m.alive || !(m === g.hovered || m.hp < m.maxHp || m.isBoss || shownDebuffs)) continue;
       const s = g.toScreen(m.x, m.topY + 0.3, m.z);
       if (!s.on) continue;
@@ -457,7 +458,7 @@ export class Floating {
       setWidth(pl, (Math.max(0, m.hp) / m.maxHp) * 100);
       if (pl.debuffs && pl.mask !== shownDebuffs) {
         pl.mask = shownDebuffs;
-        pl.debuffs.innerHTML = debuffIconsHtml(shownDebuffs);
+        pl.debuffs.innerHTML = debuffIconsHtml(shownDebuffs & 0xff, shownDebuffs >> 8);
       }
       // Grey name = too weak to give full EXP.
       const trivial = m.level < g.player.level && expGapMult(g.player.level, m.level) < 1;

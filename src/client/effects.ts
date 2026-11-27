@@ -9,6 +9,8 @@ import { playLayer, ShotLayer, type FxLayerHooks, type FxLayerHost } from './fxL
 import type { QuarksFx } from './quarksFx';
 import { currentBalance } from '../shared/balance';
 import { gfxOthers, gfxParticles, gfxQuality } from './gfxPrefs';
+import { playReaction } from './reactionFx';
+import type { ReactionId } from '../shared/elementTuning';
 import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
 import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash, playWarp } from './dashFx';
 import { cosTune } from './cosTune';
@@ -690,6 +692,11 @@ export class Effects implements FxApi {
       mesh.scale.setScalar(radius * (0.3 + 0.7 * Math.sqrt(k)));
       m.opacity = 0.9 * (1 - k);
     });
+  }
+
+  /** An element reaction, drawn in code per reaction (src/client/reactionFx.ts). */
+  reaction(id: string, x: number, z: number, r: number, hits: number[]): void {
+    playReaction((o, life, tick) => this.add(o, life, tick), id as ReactionId, x, z, r, hits);
   }
 
   disc(x: number, z: number, radius: number, color: string, life = 0.35): void {

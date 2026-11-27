@@ -1,6 +1,7 @@
 // The shared online world: one Sim per zone, driven by the input of the players in it. Walking
 // through a portal moves a player's session to the other zone's Sim. The server decides all combat,
 // loot and EXP; clients only move their own character, and the server checks those moves are possible.
+import { markCode } from '../src/shared/sim/elements';
 import type { AutoTally } from '../src/shared/sim/autoTally';
 import { suctionSpeed } from '../src/shared/sim/kraken';
 import { buffMask, debuffMask, runningSkillBuffs } from '../src/shared/sim/debuffs';
@@ -2639,6 +2640,7 @@ export class GameWorld {
         ...(m.fade ? { inv: 1 as const } : {}),
         ...(m.freed ? { fr: 1 as const } : {}),
         ...debuffField(m, sim.time, s.player.id),
+        ...(markCode(m, sim.time) ? { el: markCode(m, sim.time) } : {}),
         ...withLook<MonsterLook>(s.seenM, nextM, m.id, monsterLook(m, looks)),
       })),
       projectiles: sim.projectiles.filter(near).map((pr) => ({

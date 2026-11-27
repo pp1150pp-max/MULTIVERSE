@@ -1,5 +1,7 @@
 // The game rules, with no rendering. The game server runs one of these per zone. Whoever drives it calls step() every frame and reads drainEvents()
 // to show effects, damage numbers and messages.
+import { hitElement, markDamageMult, runReaction } from './elements';
+import type { ReactionId } from '../elementTuning';
 import { addItem, type AutoTally } from './autoTally';
 import { floorOf, hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
@@ -556,7 +558,8 @@ export class Sim {
     const bossMult = m.isBoss ? classBalance(p.cls.id).bossDmgMult * (1 + fx.bossDmg / 100) : 1;
     // Hiding in a shell (hermit crab, the Giant Cannon Crab's low-HP hide): less damage for a moment (sim/beachMoves.ts).
     const guarded = this.time < m.guardUntil ? 1 - m.guard : 1;
-    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1) * guarded));
+    // A lightning mark: every hit lands harder while it is on (sim/elements.ts).
+    const dmg = Math.max(1, Math.round(mitigate(raw, def) * bossMult * (under ? BOSS_UNDERLEVEL_MULT : 1) * guarded * markDamageMult(m, this.time)));
     if (!m.damageBy.has(p.id)) {
       m.damageBy.set(p.id, 0);
       m.addFighter(m.damageBy.size);
@@ -585,6 +588,9 @@ export class Sim {
     // Extra effects the owner added to this skill on /admin, merged in (the stronger wins): sim/extraEffects.ts.
     const src = opts.src ?? opts.skill?.id ?? this.casterSkill;
     if (src && !opts.noExtra) opts = withExtras(this, p, m, src, opts);
+    // The element system: a mark (its small effect merged in), or a reaction that runs once this hit is done.
+    let reaction: ReactionId | null = null;
+    if (src) ({ opts, reaction } = hitElement(this, p, m, src, opts));
     if (opts.kb && !m.isBoss && !m.def.anchored) m.knockback(opts.fromX ?? p.x, opts.fromZ ?? p.z, opts.kb);
     if (opts.stun && !m.def.pattern) m.stunT = Math.max(m.stunT, m.isBoss ? opts.stun * 0.3 : opts.stun);
     if (opts.slow) {
@@ -620,6 +626,7 @@ export class Sim {
       this.killMonster(m);
       p.onKill(m);
     }
+    if (reaction) runReaction(this, p, m, reaction);
   }
 
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
