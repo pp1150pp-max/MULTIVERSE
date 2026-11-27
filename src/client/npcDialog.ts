@@ -8,6 +8,7 @@ import { npcLook, NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import { currentBalance } from '../shared/balance';
 import { tutRows, TUT_STEP_NAME } from '../shared/tutorial';
 import { imgUrl } from './img';
+import { NpcShopPane } from './ui/npcShopPane';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -55,6 +56,9 @@ export class NpcDialog {
   /** A story being paged through in the box (The Seeker's), and what runs after its last line. */
   private story: { lines: readonly string[]; at: number; done: () => void } | null = null;
   private drawn = '';
+  /** The merchant's shop grown out of this window (owner 2026-11-27, npcShopPane.ts); null = talking. */
+  private readonly shopPane: NpcShopPane;
+  private shopping = false;
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -71,7 +75,10 @@ export class NpcDialog {
     box.onclick = () => this.advance();
     const close = el('button', 'nt-close', '✕');
     close.onclick = () => this.close();
-    this.win.append(this.scene, this.face, this.answers, box, close);
+    const back = el('button', 'nt-back', '◀ กลับไปคุย');
+    back.onclick = () => this.leaveShop(true);
+    this.shopPane = new NpcShopPane(g, (html) => this.say(html, true));
+    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, back, close);
     document.getElementById('hud')!.append(this.win);
   }
 
@@ -80,6 +87,7 @@ export class NpcDialog {
   }
 
   show(id: NpcId): void {
+    if (this.shopping) this.leaveShop(false);
     this.npc = id;
     this.zoneSeq = this.g.backend.zoneSeq;
     this.story = null;
@@ -103,6 +111,7 @@ export class NpcDialog {
 
   close(): void {
     if (!this.open) return;
+    if (this.shopping) this.leaveShop(false);
     this.win.classList.add('hidden');
     this.npc = null;
     this.story = null;
@@ -114,7 +123,13 @@ export class NpcDialog {
     if (!this.open || !id) return;
     const p = this.g.player;
     const n = this.g.backend.terrain.npcPos[id];
-    if (!n || !p.alive || this.g.backend.zoneSeq !== this.zoneSeq || Math.hypot(p.x - n.x, p.z - n.z) > NPC_USE_RANGE + 1) return this.close();
+    // Shopping: the server trades only within NPC_USE_RANGE, so the window closes there (and when the HUD closed the shop).
+    const reach = this.shopping ? NPC_USE_RANGE : NPC_USE_RANGE + 1;
+    if (!n || !p.alive || this.g.backend.zoneSeq !== this.zoneSeq || Math.hypot(p.x - n.x, p.z - n.z) > reach) return this.close();
+    if (this.shopping) {
+      if (!this.g.hud.shopOpen) return this.close();
+      return this.shopPane.update();
+    }
     const list = this.story ? [] : this.answerList(id);
     const sig = JSON.stringify(list.map((a) => [a.icon, a.label, a.note]));
     if (sig === this.drawn) return;
@@ -131,9 +146,41 @@ export class NpcDialog {
     }));
   }
 
-  private say(line: string): void {
-    this.text.textContent = line;
+  /** What the NPC says: in the text box, or (shopping) the bubble beside the medallion. `html` = trusted markup of ours. */
+  private say(line: string, html = false): void {
+    if (html) this.text.innerHTML = line;
+    else this.text.textContent = line;
     this.next.classList.toggle('hidden', !this.story);
+    if (this.shopping) {
+      if (html) this.shopPane.setLine(line);
+      else this.shopPane.setLine(this.text.innerHTML);
+    }
+  }
+
+  /** "ซื้อ/ขายของ": the window grows into the merchant's shop (owner 2026-11-27, layout A). */
+  private enterShop(id: NpcId, tab: 'buy' | 'bb'): void {
+    this.g.hud.openShopInTalk();
+    this.shopping = true;
+    const look = npcLook(id, this.g.backend.zone.town);
+    this.shopPane.open(tab, this.face.classList.contains('hidden') ? '' : this.face.src, !!look.portrait);
+    this.win.classList.add('shop');
+    this.say(tab === 'bb'
+      ? 'อ้าว เปลี่ยนใจเหรอ? ของที่ขายไปซื้อคืนได้ แต่แพงขึ้น 20% นะ'
+      : 'เลือกดูได้ตามสบาย! อยากขายอะไรก็คลิกของในกระเป๋ามาได้เลย', true);
+  }
+
+  /** Back from the shop: `talk` = to the talk window (◀), else the window is closing. */
+  private leaveShop(talk: boolean): void {
+    if (!this.shopping) return;
+    this.shopping = false;
+    this.shopPane.close();
+    this.win.classList.remove('shop');
+    if (this.g.hud.shopOpen) this.g.hud.closeShop();
+    this.drawn = '';
+    if (talk) {
+      this.say(this.nextGreet());
+      this.update();
+    }
   }
 
   private nextGreet(): string {
@@ -199,6 +246,12 @@ export class NpcDialog {
         out.push({ icon: 'quest', label: 'ทางขึ้นชั้น 2', run: () => this.openThen(id) });
         break;
       case 'merchant':
+        // /admin "ร้านพ่อค้าในหน้าต่างคุย" off = the old small shop window.
+        if (currentBalance().npcTalk.shopPane) {
+          out.push({ icon: 'buy', label: 'ซื้อ/ขายของ', run: () => this.enterShop(id, 'buy') });
+          out.push({ icon: 'sell', label: 'ซื้อคืนของที่ขายไป', run: () => this.enterShop(id, 'bb') });
+          break;
+        }
         out.push({ icon: 'buy', label: 'ซื้อ/ขายของ', run: () => this.openThen(id, '#shop-tabs [data-tab="buy"]') });
         out.push({ icon: 'sell', label: 'ซื้อคืนของที่ขายไป', run: () => this.openThen(id, '#shop-tabs [data-tab="buyback"]') });
         break;

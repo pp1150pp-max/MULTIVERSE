@@ -10,7 +10,7 @@ import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { cfEdge, clientIp } from './clientIp';
 import { directIp, directOriginOk, directSettings, saveDirectSettings, type DirectSettings } from './direct';
 import type { Db } from './db';
-import { Sim } from '../src/shared/sim/Sim';
+import { Sim, type SellPick } from '../src/shared/sim/Sim';
 import type { MapData, ShrineBuff } from '../src/shared/mapSchema';
 import type { ShrineSnap } from '../src/shared/treasure';
 import { HUB_ID, hubOf, lairExitSpot, ZONES, zoneWithLayout, type ZoneDef } from '../src/shared/data/zones';
@@ -101,7 +101,7 @@ const FRIEND_QUIET_MS = 60_000;
  * party actions are fine.
  */
 const TRADE_LOCKED = new Set([
-  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'enhance', 'reroll',
+  'equip', 'unequip', 'drop', 'buy', 'move', 'sort', 'bagExpand', 'buyBack', 'sell', 'split', 'sellRarity', 'sellMany', 'enhance', 'reroll',
   'drill', 'socketCard', 'unsocketCard', 'fuseCards',
   'stashPut', 'stashTake', 'stashMove', 'stashSort', 'stashBuy', 'stashGold', 'stashSplit',
   'mktSearch', 'mktMine', 'mktPrice', 'mktList', 'mktCancel', 'mktBuy', 'mktClaim',
@@ -1585,6 +1585,19 @@ export class GameWorld {
       case 'sellRarity':
         if (RARITIES.includes(m.rarity)) sim.sellAllOfRarity(p, m.rarity);
         break;
+      case 'sellMany': {
+        // The sell basket: at most one pick per bag slot, each a plain { i, uid? | k? }. Sim.sellMany checks every slot again.
+        if (!Array.isArray(m.picks) || m.picks.length > p.bag.length) break;
+        const picks: SellPick[] = [];
+        for (const pk of m.picks as unknown[]) {
+          if (!pk || typeof pk !== 'object') continue;
+          const o = pk as Record<string, unknown>;
+          if (!Number.isInteger(o.i)) continue;
+          picks.push({ i: o.i as number, uid: typeof o.uid === 'string' ? o.uid : undefined, k: typeof o.k === 'string' ? o.k : undefined });
+        }
+        if (picks.length) sim.sellMany(p, picks);
+        break;
+      }
       // Stash: the Sim also checks the player stands by the keeper and is alive, and each slot and amount.
       case 'stashPut':
       case 'stashTake': {

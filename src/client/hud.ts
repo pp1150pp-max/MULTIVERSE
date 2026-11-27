@@ -1322,11 +1322,26 @@ export class Hud {
     playSound('trade');
   }
 
-  private openShop(): void {
+  private openShop(inTalk = false): void {
     this.market.close();
     this.forge.closeForge();
     this.stash.closeStash();
-    this.shop.openShop();
+    this.shop.openShop(inTalk);
+  }
+
+  /** The merchant's shop inside the NPC talk window (npcShopPane.ts): marks the shop open without its old window. */
+  openShopInTalk(): void {
+    this.toggleBag(false);
+    this.openShop(true);
+  }
+
+  /** Whether the merchant's shop counts as open (the HUD closes it when the player walks away or dies). */
+  get shopOpen(): boolean {
+    return this.shop.isOpen;
+  }
+
+  closeShop(): void {
+    this.shop.closeShop();
   }
 
   private openStash(): void {

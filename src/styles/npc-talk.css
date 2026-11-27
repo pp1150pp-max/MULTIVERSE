@@ -119,3 +119,159 @@
   border: 7px solid transparent; border-top-color: #b8862e;
 }
 .npc-say.off { opacity: 0; }
+
+/* ---------- The merchant's shop grown out of the talk window (owner 2026-11-27, layout A; src/client/ui/npcShopPane.ts).
+   Sizes are in em of the window (62em wide), so the whole window scales as one piece like the talk view. ---------- */
+#npc-talk { transition: width 0.5s cubic-bezier(.2, .8, .2, 1), font-size 0.5s cubic-bezier(.2, .8, .2, 1); }
+#npc-talk.shop { --nt-w: min(1240px, 98vw, calc(94vh * 16 / 9)); }
+#npc-talk .nt-scene { transition: filter 0.5s; }
+#npc-talk.shop .nt-scene { filter: saturate(0.75) brightness(0.5) blur(1.5px); }
+#npc-talk .nt-face, #npc-talk .nt-answers, #npc-talk .nt-box { transition: opacity 0.35s, transform 0.45s cubic-bezier(.2, .8, .2, 1); }
+#npc-talk.shop .nt-face { opacity: 0; transform: translate(-6%, -30%) scale(0.3); transform-origin: left top; }
+#npc-talk.shop .nt-answers { opacity: 0; transform: translateX(3em); pointer-events: none; }
+#npc-talk.shop .nt-box { opacity: 0; transform: translateY(2em); pointer-events: none; }
+#npc-talk .nt-back {
+  position: absolute; right: 3.6em; top: 0.75em; z-index: 6; height: 1.9em; padding: 0 0.8em; border-radius: 6px; font-size: 0.85em;
+  background: #3a2414; border: 2px solid #c99a3a; color: #f2d58a; opacity: 0; pointer-events: none; transition: opacity 0.3s 0.25s;
+}
+#npc-talk.shop .nt-back { opacity: 1; pointer-events: auto; }
+#npc-talk .nt-back:hover, #npc-talk .nt-close:hover { border-color: #ffd86a; color: #fff; }
+#npc-talk .nt-close { z-index: 7; }
+/* The NPC's own words in the talk box may carry a highlighted part. */
+#npc-talk .hl { color: #ffd86a; }
+
+#npc-talk .ns { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+#npc-talk.shop .ns { pointer-events: auto; }
+#npc-talk .ns > * { opacity: 0; transition: opacity 0.35s, transform 0.45s cubic-bezier(.2, .8, .2, 1); }
+#npc-talk.shop .ns > * { opacity: 1; }
+#npc-talk .ns > .hidden { display: none; }
+
+/* Medallion: the portrait's head in a round gold frame, top left. */
+#npc-talk .ns-medal {
+  position: absolute; left: 0.9em; top: 0.7em; width: 5.2em; height: 5.2em; border-radius: 50%; overflow: hidden;
+  border: 3px solid #c99a3a; background: radial-gradient(#6a5030, #2c1a0e); box-shadow: 0 0 0 2px #5a3a14, 0 4px 10px rgba(0, 0, 0, 0.6);
+  transform: scale(0.4); transition-delay: 0.15s;
+}
+#npc-talk.shop .ns-medal { transform: none; }
+#npc-talk .ns-medal img { position: absolute; left: -3.6em; top: -2.1em; width: 12.35em; height: 16.5em; object-fit: contain; }
+#npc-talk .ns-medal.small img { left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Speech bubble beside it. */
+#npc-talk .ns-bubble {
+  position: absolute; left: 7em; top: 1.1em; width: 23.5em; min-height: 3.5em; padding: 0.5em 0.8em; border-radius: 12px;
+  background: #f4e6c4; color: #3a2614; border: 2px solid #b8862e; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); font-size: 0.82em; line-height: 1.45;
+  transition-delay: 0.25s;
+}
+#npc-talk .ns-bubble::after { content: ''; position: absolute; left: -18px; top: 1.2em; border: 9px solid transparent; border-right-color: #b8862e; }
+#npc-talk .ns-bubble .hl { color: #a0361a; font-weight: 600; }
+#npc-talk .ns-bubble.pop { animation: ns-pop 0.3s ease-out; }
+@keyframes ns-pop { from { transform: scale(0.95); opacity: 0.5; } }
+
+/* The two panels. */
+#npc-talk .ns-pnl {
+  position: absolute; top: 7em; height: 27.2em; display: flex; flex-direction: column; padding: 1.1em 0.7em 0.6em;
+  background: linear-gradient(rgba(62, 38, 22, 0.97), rgba(40, 24, 13, 0.97)); border: 3px solid #c99a3a; border-radius: 9px;
+  box-shadow: inset 0 0 0 2px #5a3a14, 0 8px 18px rgba(0, 0, 0, 0.55); color: #f4e6c4; transform: translateY(1.3em) scale(0.97);
+}
+#npc-talk.shop .ns-pnl { transform: none; }
+#npc-talk .ns-mer { left: 0.7em; width: 29.9em; transition-delay: 0.2s; }
+#npc-talk .ns-bag { left: 31.3em; width: 30em; transition-delay: 0.3s; }
+#npc-talk .ns-title {
+  position: absolute; left: 50%; top: 0; transform: translate(-50%, -55%); white-space: nowrap; padding: 0.15em 1.5em;
+  background: linear-gradient(#f2c654, #c99a3a); color: #3a2010; font-weight: 600; font-size: 0.8em;
+  clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+}
+#npc-talk .ns-tabs { display: flex; gap: 0.2em; border-bottom: 2px solid #7a5a24; margin-bottom: 0.5em; flex: none; }
+#npc-talk .ns-tab {
+  padding: 0.25em 0.7em 0.2em; border: 2px solid #8a6a2c; border-bottom: none; border-radius: 7px 7px 0 0; font-size: max(9px, 0.75em);
+  background: linear-gradient(#3a2414, #2a180c); color: #c8b48a;
+}
+#npc-talk .ns-tab:hover { color: #f4e6c4; }
+#npc-talk .ns-tab.on { background: linear-gradient(#f2c654, #c99a3a); color: #3a2010; font-weight: 600; border-color: #ffd86a; }
+#npc-talk .ns-tab .n { font-size: 0.85em; opacity: 0.8; }
+#npc-talk .ns-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 0.2em; }
+#npc-talk .ns-note { display: flex; justify-content: space-between; gap: 0.4em; margin-bottom: 0.4em; color: #c8b48a; font-size: max(9px, 0.62em); }
+#npc-talk .ns-note b { color: #ffd86a; font-weight: 400; }
+#npc-talk .ns-empty { color: #c8b48a; font-size: max(9px, 0.65em); text-align: center; padding: 2em 0.5em; }
+
+/* Buy list. */
+#npc-talk .ns-goods { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35em; }
+#npc-talk .ns-good {
+  display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0.4em; border-radius: 7px; text-align: left; color: #f4e6c4; min-width: 0;
+  background: rgba(10, 6, 3, 0.4); border: 1px solid #6a4a1c;
+}
+#npc-talk .ns-good:hover { border-color: #ffd86a; background: rgba(90, 58, 20, 0.45); }
+#npc-talk .ns-good.poor { opacity: 0.55; }
+#npc-talk .ns-good .ic { width: 2.1em; height: 2.1em; flex: none; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--rc); background: rgba(8, 6, 4, 0.5); }
+#npc-talk .ns-good .ic .gi, #npc-talk .ns-good .ic img, #npc-talk .ns-good .ic svg { width: 80%; height: 80%; }
+#npc-talk .ns-good .tx { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+#npc-talk .ns-good .nm { font-size: max(9px, 0.72em); line-height: 1.25; }
+#npc-talk .ns-good .sub { font-size: max(9px, 0.56em); color: #c8b48a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#npc-talk .ns-good .pr { color: #ffd86a; font-size: max(9px, 0.68em); white-space: nowrap; }
+
+/* Item grids. */
+#npc-talk .ns-grid { display: grid; gap: 0.3em; grid-template-columns: repeat(auto-fill, minmax(2.6em, 1fr)); }
+#npc-talk .ns-grid .cell { width: auto; height: auto; aspect-ratio: 1; position: relative; cursor: pointer; font-size: 0.5em; }
+#npc-talk .ns-grid .cell .ilv, #npc-talk .ns-grid .cell .iplus, #npc-talk .ns-grid .cell .psize { font-size: 1.25em; }
+#npc-talk .ns-baggrid { grid-template-columns: repeat(6, 1fr); width: 78%; margin: 0 auto; }
+#npc-talk .ns-bb { grid-template-columns: repeat(auto-fill, minmax(3.3em, 1fr)); }
+#npc-talk .ns-bbcell { display: flex; flex-direction: column; gap: 0.1em; }
+#npc-talk .ns-bbcell .pr { text-align: center; font-size: max(9px, 0.58em); color: #ffd86a; }
+#npc-talk .cell.poor { opacity: 0.55; }
+#npc-talk .cell.ns-picked::after {
+  content: '✓'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 2.6em; color: #ffe39a;
+  background: rgba(160, 60, 20, 0.55); text-shadow: 0 0 4px #000;
+}
+#npc-talk .cell.ns-nosell { filter: grayscale(0.7) brightness(0.75); }
+
+/* Sell tab. */
+#npc-talk .ns-chips { display: flex; flex-wrap: wrap; gap: 0.3em; margin-bottom: 0.45em; }
+#npc-talk .ns-chip { padding: 0.15em 0.55em; border-radius: 1em; font-size: max(9px, 0.65em); background: rgba(10, 6, 3, 0.5); border: 1.5px solid var(--rc); color: var(--rc); }
+#npc-talk .ns-chip.on { background: var(--rc); color: #241408; font-weight: 600; }
+#npc-talk .ns-chip:disabled { opacity: 0.4; cursor: default; }
+#npc-talk .ns-chip .n { opacity: 0.75; font-size: 0.9em; }
+#npc-talk .ns-basket { min-height: 6.6em; padding: 0.4em; border-radius: 8px; border: 2px dashed #7a5a24; background: rgba(8, 6, 4, 0.35); }
+#npc-talk .ns-sellbar { display: flex; align-items: center; gap: 0.4em; margin-top: 0.5em; }
+#npc-talk .ns-sellbar .sum { flex: 1; font-size: max(9px, 0.75em); }
+#npc-talk .ns-sellbar .sum b, #npc-talk .ns-tot b { color: #ffd86a; }
+#npc-talk .ns-big {
+  padding: 0.35em 0.9em; border-radius: 7px; font-size: max(9px, 0.75em); font-weight: 600; color: #3a2010;
+  background: linear-gradient(#f2c654, #c99a3a); border: 2px solid #ffd86a; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+#npc-talk .ns-big:hover { filter: brightness(1.1); }
+#npc-talk .ns-big:disabled, #npc-talk .ns-ghost:disabled { filter: grayscale(1) brightness(0.6); cursor: default; }
+#npc-talk .ns-ghost { padding: 0.35em 0.7em; border-radius: 7px; font-size: max(9px, 0.7em); color: #f4e6c4; background: #3a2414; border: 2px solid #8a6a2c; }
+
+/* Bag foot. */
+#npc-talk .ns-hint { flex: none; margin-top: 0.3em; text-align: center; color: #c8b48a; font-size: max(9px, 0.56em); }
+#npc-talk .ns-hint b { color: #ffc6a0; font-weight: 400; }
+#npc-talk .ns-foot {
+  flex: none; display: flex; justify-content: space-between; align-items: center; gap: 0.5em; margin-top: 0.4em; padding: 0.25em 0.6em;
+  border-radius: 1em; background: rgba(8, 6, 4, 0.5); border: 1px solid #7a5a24; font-size: max(9px, 0.72em);
+}
+#npc-talk .ns-foot .g { color: #ffd86a; }
+
+/* Prompts inside the window (the HUD's confirm/amount boxes would sit under it). */
+#npc-talk .ns-modal { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); }
+#npc-talk .ns-modal.hidden { display: none; }
+#npc-talk .ns-card {
+  position: relative; width: 19em; padding: 1.5em 1.1em 0.9em; text-align: center; animation: ns-rise 0.25s ease-out;
+  background: linear-gradient(#3e2616, #2c1a0e); border: 3px solid #c99a3a; border-radius: 10px; box-shadow: inset 0 0 0 2px #5a3a14, 0 10px 30px rgba(0, 0, 0, 0.7);
+}
+@keyframes ns-rise { from { transform: translateY(0.8em) scale(0.96); } }
+#npc-talk .ns-card .nm { font-size: 0.85em; margin: 0.2em 0; }
+#npc-talk .ns-cardic { display: inline-grid; place-items: center; width: 3.2em; height: 3.2em; border-radius: 8px; border: 2px solid var(--rc); background: rgba(8, 6, 4, 0.5); }
+#npc-talk .ns-cardic .gi, #npc-talk .ns-cardic img, #npc-talk .ns-cardic svg { width: 80%; height: 80%; }
+#npc-talk .ns-confirm { grid-template-columns: repeat(auto-fit, 2.4em); justify-content: center; margin-bottom: 0.4em; }
+#npc-talk .ns-more, #npc-talk .ns-msg, #npc-talk .ns-max { color: #c8b48a; font-size: max(9px, 0.65em); }
+#npc-talk .ns-msg { margin: 0.3em 0; }
+#npc-talk .ns-warn { color: #ffb08a; font-size: max(9px, 0.65em); margin: 0.4em 0; line-height: 1.5; }
+#npc-talk .ns-tot { font-size: 0.85em; margin: 0.4em 0 0.7em; }
+#npc-talk .ns-qty { display: flex; align-items: center; justify-content: center; gap: 0.4em; margin: 0.5em 0; }
+#npc-talk .ns-qty button { width: 1.7em; height: 1.7em; padding: 0; border-radius: 6px; background: #3a2414; border: 2px solid #8a6a2c; color: #f4e6c4; font-size: 0.9em; }
+#npc-talk .ns-qty .v { min-width: 3em; font-size: 1em; padding: 0.1em 0.5em; border-radius: 6px; background: rgba(8, 6, 4, 0.5); border: 1px solid #7a5a24; }
+#npc-talk .ns-row { display: flex; gap: 0.5em; justify-content: center; }
+
+/* While shopping in the talk window, tooltips and the HUD's own prompts go above it. */
+body:has(#npc-talk.shop:not(.hidden)) :is(#tooltip, #confirm, #amount) { z-index: 41; }
+/* Touch: tabs and buttons tall enough for a finger. */
+.touch-ui #npc-talk .ns-tab, .touch-ui #npc-talk .ns-big, .touch-ui #npc-talk .ns-ghost { min-height: 34px; }

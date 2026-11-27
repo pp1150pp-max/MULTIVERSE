@@ -1,5 +1,6 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
+import type { SellPick } from '../sim/Sim';
 import type { AutoTally } from '../sim/autoTally';
 import type { SkillSlot, WearSlot } from '../data/classes';
 import type { WaveSnap } from '../waveGame';
@@ -136,6 +137,7 @@ export type ActionMsg =
   | { t: 'act'; a: 'stashSplit'; from: 'bag' | 'stash'; i: number; to: 'bag' | 'stash'; j: number; n: number }
   | { t: 'act'; a: 'buyBack'; i: number; uid: string }
   | { t: 'act'; a: 'sellRarity'; rarity: Rarity }
+  | { t: 'act'; a: 'sellMany'; picks: SellPick[] }
   /** `protect` = use a protection stone if a fail would drop the level. */
   | { t: 'act'; a: 'enhance'; uid: string; protect?: boolean; req: number }
   /** Blacksmith reroll (see Sim.reroll); answered with `rerolled`. */

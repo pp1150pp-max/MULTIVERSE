@@ -7,6 +7,8 @@ import type { NpcId } from './data/npcs';
 export interface NpcTalkConfig {
   /** Clicking an NPC opens the talk window first. Off = its own window opens at once, as before. */
   on: boolean;
+  /** "ซื้อ/ขายของ" grows the talk window into the merchant's shop (owner 2026-11-27). Off = the old small shop window. */
+  shopPane: boolean;
   /** Short lines over NPC heads when the player walks near. */
   bubbles: boolean;
   /** How near (world units) the player must be for a line to show. */
@@ -23,6 +25,7 @@ export interface NpcTalkConfig {
 
 export interface NpcTalkTuning {
   on?: boolean;
+  shopPane?: boolean;
   bubbles?: boolean;
   bubbleRange?: number;
   bubbleSec?: number;
@@ -47,6 +50,7 @@ export const TALK_LINE_LEN = 150;
 export function codeNpcTalk(): NpcTalkConfig {
   return {
     on: true,
+    shopPane: true,
     bubbles: true,
     bubbleRange: 7,
     bubbleSec: 4,
@@ -101,6 +105,7 @@ export function mergeNpcTalk(t: NpcTalkTuning | undefined): NpcTalkConfig {
   const c = codeNpcTalk();
   if (!t) return c;
   if (t.on !== undefined) c.on = t.on;
+  if (t.shopPane !== undefined) c.shopPane = t.shopPane;
   if (t.bubbles !== undefined) c.bubbles = t.bubbles;
   for (const k of TALK_NUM_KEYS) if (t[k] !== undefined) c[k] = t[k]!;
   for (const id of TALK_NPCS) {
@@ -132,7 +137,7 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
   if (!isObj(x)) return strict ? { error: 'ค่าหน้าต่างคุย NPC ไม่ถูกต้อง' } : { tuning: undefined };
   const out: NpcTalkTuning = {};
   const fail = (msg: string): { error: string } | null => (strict ? { error: `หน้าต่างคุย NPC: ${msg}` } : null);
-  for (const k of ['on', 'bubbles'] as const) {
+  for (const k of ['on', 'shopPane', 'bubbles'] as const) {
     if (x[k] === undefined) continue;
     if (typeof x[k] !== 'boolean') { const f = fail('สวิตช์ไม่ถูกต้อง'); if (f) return f; continue; }
     if (x[k] !== CODE[k]) out[k] = x[k] as boolean;
@@ -166,6 +171,7 @@ const onOff = (b: boolean): string => (b ? 'เปิด' : 'ปิด');
 export function npcTalkChanges(a: NpcTalkConfig, b: NpcTalkConfig): string[] {
   const out: string[] = [];
   if (a.on !== b.on) out.push(`หน้าต่างคุย NPC ${onOff(a.on)} → ${onOff(b.on)}`);
+  if (a.shopPane !== b.shopPane) out.push(`ร้านพ่อค้าในหน้าต่างคุย ${onOff(a.shopPane)} → ${onOff(b.shopPane)}`);
   if (a.bubbles !== b.bubbles) out.push(`คำพูดเหนือหัว NPC ${onOff(a.bubbles)} → ${onOff(b.bubbles)}`);
   for (const k of TALK_NUM_KEYS) if (a[k] !== b[k]) out.push(`${TALK_NUMS[k].name} ${a[k]} → ${b[k]}`);
   for (const id of TALK_NPCS) {

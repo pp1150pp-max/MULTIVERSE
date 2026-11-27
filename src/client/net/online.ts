@@ -9,7 +9,7 @@ import type { CardId } from '../../shared/data/cards';
 import { Player, type AutoSettings, type CharacterData, type LootFilter, type SortKey } from '../../shared/sim/Player';
 import { Monster } from '../../shared/sim/Monster';
 import { Loot } from '../../shared/sim/Loot';
-import type { Sim } from '../../shared/sim/Sim';
+import type { Sim, SellPick } from '../../shared/sim/Sim';
 import { IDLE_INTENT, type Intent, type SimEvent } from '../../shared/sim/types';
 import { MONSTERS } from '../../shared/data/monsters';
 import { validOrbCode } from '../../shared/data/enhance';
@@ -1436,6 +1436,7 @@ export class OnlineBackend implements Backend {
   }
   buyBack(i: number, uid: string): void { this.send({ t: 'act', a: 'buyBack', i, uid }); }
   sellAllOfRarity(rarity: Rarity): void { this.send({ t: 'act', a: 'sellRarity', rarity }); }
+  sellMany(picks: SellPick[]): void { this.send({ t: 'act', a: 'sellMany', picks }); }
   stashPut(i: number, to: number): void { this.send({ t: 'act', a: 'stashPut', i, to }); }
   stashTake(i: number, to: number): void { this.send({ t: 'act', a: 'stashTake', i, to }); }
   stashMove(from: number, to: number): void { this.send({ t: 'act', a: 'stashMove', from, to }); }

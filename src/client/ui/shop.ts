@@ -145,9 +145,13 @@ export class ShopWindow {
 
   // ------------------------------------------------------------ merchant
 
-  /** Opens the window (hud.ts closes the other NPC windows first). */
-  openShop(): void {
+  /**
+   * Opens the window (hud.ts closes the other NPC windows first). `inTalk` = the shop shows inside the NPC talk window
+   * (npcShopPane.ts): only "open" is marked (wearing is blocked, the bag's right click sells), the old window stays hidden.
+   */
+  openShop(inTalk = false): void {
     this.shopOpen = true;
+    if (inTalk) return;
     $('shop').classList.remove('hidden');
     this.host.toggleBag(true);
     this.renderShopMoney();

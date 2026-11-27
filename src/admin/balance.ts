@@ -1688,7 +1688,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   const drawTalk = (): void => {
     const t = draft.npcTalk;
     const ct = code.npcTalk;
-    const flag = (k: 'on' | 'bubbles', label: string): HTMLElement =>
+    const flag = (k: 'on' | 'shopPane' | 'bubbles', label: string): HTMLElement =>
       h('label', { title: `ค่าในโค้ด: ${ct[k] ? 'เปิด' : 'ปิด'}`, class: t[k] !== ct[k] ? 'bal-changed' : '' },
         h('input', { type: 'checkbox', checked: t[k], onchange: (e: Event) => { t[k] = (e.target as HTMLInputElement).checked; updateSummary(); drawTalk(); } }),
         ` ${label}`);
@@ -1712,7 +1712,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     talkCard.replaceChildren(
       h('h2', {}, 'หน้าต่างคุย NPC'),
       h('div', { class: 'muted' }, 'คลิก NPC = หน้าต่างคุย (ฉากสถานที่ของ NPC รูปครึ่งตัวซ้าย บทพูดล่าง ปุ่มคำตอบมีไอคอน) กดคำตอบแล้วเปิดหน้าต่างของ NPC (ร้าน เมนูช่างตีเหล็ก คลัง แท็บตลาด/กล่องรับของ แคชช็อป เควสกุญแจ) · ปิด = คลิกแล้วเปิดหน้าต่างของ NPC ทันทีแบบเดิม · คำพูดเหนือหัว: เดินเข้าใกล้ NPC แล้วมีคำพูดสั้น ๆ ลอยเหนือหัว · ฝั่งเบราว์เซอร์เท่านั้น มีผลทันที'),
-      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
+      h('div', { class: 'row bal-line' }, flag('on', 'ใช้หน้าต่างคุย NPC'), flag('shopPane', 'ร้านพ่อค้าในหน้าต่างคุย (ปิด = หน้าต่างร้านเล็กแบบเดิม)'), flag('bubbles', 'คำพูดเหนือหัว NPC')),
       h('div', { class: 'row bal-line' }, ...TALK_NUM_KEYS.map(num)),
       h('div', { class: 'muted' }, `บทพูด: บรรทัดละ 1 ประโยค (ไม่เกิน ${TALK_LINES_MAX} บรรทัด บรรทัดละ ${TALK_LINE_LEN} ตัวอักษร) สุ่มทีละบรรทัด · ทักทาย = ในหน้าต่างคุย (ปุ่ม "พูดคุย" สุ่มบรรทัดใหม่) · เหนือหัว = ลอยเหนือหัวเมื่อเดินเข้าใกล้ · NPC ท่าเรือใช้บทของงานเดียวกัน`),
       ...TALK_NPCS.map((id) => h('details', { style: 'margin:4px 0' },
