@@ -66,7 +66,10 @@ try {
     sim.drainEvents();
     const before = other.hp;
     sim.hitMonster(p, m, 1, { src: 'mg_chainlightning' });
-    ok(texts(sim).includes('ไฟฟ้าลาม!'), 'water + lightning: "ไฟฟ้าลาม!"');
+    const evs = sim.drainEvents();
+    ok(evs.some((e) => e.t === 'text' && (e as { text: string }).text === 'ไฟฟ้าลาม!'), 'water + lightning: "ไฟฟ้าลาม!"');
+    const fxEv = evs.find((e) => e.t === 'fx' && (e as { name: string }).name === 'reaction') as { args: [string, number, number, number, number[]] } | undefined;
+    ok(!!fxEv && fxEv.args[0] === 'water+lightning' && fxEv.args[4].length >= 4, 'its own effect goes out, with the monsters it reached');
     ok(markOf(m, sim.time) === null, 'both marks are gone');
     ok(other.hp < before && other.stunT <= 0, 'it spreads to the monster next to it, no stun (owner 2026-11-27)');
     ok(codeElements().reactCd === 1, 'code: 1 s');

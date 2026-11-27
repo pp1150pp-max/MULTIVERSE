@@ -7,7 +7,7 @@ import type { Player } from './Player';
 import type { Monster } from './Monster';
 import type { HitOpts } from './types';
 import { currentBalance } from '../balance';
-import { ELEMENTS, ELEMENT_COLOR, REACTION_NAME, reactionOf, skillElement, type Element, type ElementConfig, type ReactionId, type SkillElement } from '../elementTuning';
+import { ELEMENTS, REACTION_NAME, reactionOf, skillElement, type Element, type ElementConfig, type ReactionId, type SkillElement } from '../elementTuning';
 import { addDot } from './extraEffects';
 
 /** A knockback is a launch speed that dies away (Unit.knockback): × 10 travels about that many metres. */
@@ -100,10 +100,10 @@ export function runReaction(sim: Sim, p: Player, m: Monster, rid: ReactionId): v
   const near = rc.r > 0
     ? sim.monsters.filter((t) => t.alive && !t.untargetable && Math.hypot(t.x - m.x, t.z - m.z) <= rc.r + t.radius)
     : m.alive ? [m] : [];
-  const [a, b] = rid.split('+') as [Element, Element];
   sim.text(m.x, m.topY + 0.6, m.z, `${REACTION_NAME[rid]}!`, 'crit', 1.1);
-  sim.fx('ring', m.x, m.z, Math.max(1.2, rc.r), ELEMENT_COLOR[a], 0.4);
-  sim.fx('burst', m.x, m.def.height * 0.6, m.z, ELEMENT_COLOR[b], 14, 4);
+  // Its own code-drawn effect, mixing the two elements (client/reactionFx.ts); positions rounded to keep the event small.
+  const hits = near.filter((t) => !(t.isBoss && !rc.boss)).flatMap((t) => [Math.round(t.x * 10) / 10, Math.round(t.z * 10) / 10]);
+  sim.fx('reaction', rid, m.x, m.z, rc.r, hits);
   for (const t of near) {
     if (!t.alive || (t.isBoss && !rc.boss)) continue;
     if (rc.dmg > 0) {
