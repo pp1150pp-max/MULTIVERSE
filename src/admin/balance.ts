@@ -39,6 +39,8 @@ import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { CODE_SET_STEPS, SET_BONUS_MAX, SET_IDS, SET_MAX_PIECES, SET_NAME, setPieceKinds } from '../shared/data/sets';
 import { MOVE_GROUPS } from '../shared/moveTuning';
+import { PET_LOOT_FLAG_NAME, PET_LOOT_NUM_NAME, PET_LOOT_RANGE, petIds } from '../shared/petLootTuning';
+import { COSMETICS } from '../shared/data/cosmetics';
 import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
 type Kids = (Node | string | null | undefined | false)[];
@@ -1231,6 +1233,35 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- pets pick up loot (src/shared/petLootTuning.ts, docs/systems/pet-loot.md)
+  const petCard = h('div', { class: 'card' });
+  const drawPet = (): void => {
+    const pl = draft.petLoot;
+    const cp = code.petLoot;
+    const flag = (k: keyof typeof PET_LOOT_FLAG_NAME) =>
+      h('label', { title: `ค่าในโค้ด: ${cp[k] ? 'เปิด' : 'ปิด'}` },
+        h('input', { type: 'checkbox', checked: pl[k], onchange: (e: Event) => { pl[k] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+        ` ${PET_LOOT_FLAG_NAME[k]}`);
+    const num = (k: keyof typeof PET_LOOT_RANGE, step: number) =>
+      h('label', {}, `${PET_LOOT_NUM_NAME[k]} `, numBox(() => pl[k], (n) => { pl[k] = n; }, cp[k], PET_LOOT_RANGE[k][0], PET_LOOT_RANGE[k][1], step, () => updateSummary()),
+        h('span', { class: 'muted' }, ` ค่าในโค้ด ${cp[k]}`));
+    const pet = (id: string) =>
+      h('label', { title: 'ค่าในโค้ด: เก็บ' },
+        h('input', { type: 'checkbox', checked: pl.pets[id] !== false, onchange: (e: Event) => { pl.pets[id] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+        ` ${COSMETICS.find((c) => c.id === id)?.name ?? id}`);
+    petCard.replaceChildren(
+      h('h2', {}, 'สัตว์เลี้ยงช่วยเก็บของ'),
+      h('div', { class: 'muted' },
+        'สวมสัตว์เลี้ยง (ของแต่งตัว) ที่ติ๊กไว้ = สัตว์เลี้ยงเก็บของให้ทีละชิ้นตามเวลาที่ตั้ง (server ตัดสิน ของบินเข้าตัวผู้เล่น) · ' +
+        'เปิด Auto = เก็บได้ทั้งวง Auto ตามกติกาเดียวกับที่ Auto เก็บ (สิทธิ์ 10 วิ ตัวกรองกระเป๋า ตัวเลือกเก็บของคนอื่น ผู้เล่นปิดเก็บของใน Auto = ไม่เก็บ กระเป๋าเต็ม = ข้าม ไม่เก็บในลาวา/ลานบอส) · ' +
+        'เล่นเอง = เก็บเฉพาะของจากมอนที่เราได้สิทธิ์เก็บ (ทำดาเมจมากสุด ไม่รวมของเพื่อนในปาร์ตี้) ในระยะรอบตัว ตามตัวกรองกระเป๋า · ของที่ผู้เล่นวางลงพื้นไม่เก็บ · มีผลทันที'),
+      h('div', { class: 'row bal-line' }, flag('on'), flag('auto'), flag('hand')),
+      h('div', { class: 'row bal-line' }, num('handRadius', 0.5), num('interval', 0.1)),
+      h('h3', {}, 'สัตว์เลี้ยงที่เก็บของ'),
+      h('div', { class: 'row bal-line' }, ...petIds().map(pet)),
+    );
+  };
+
   // ---------------------------------------------------------- skill effects' extra layer (src/shared/fxLayerTuning.ts)
   const fxCard = h('div', { class: 'card' });
   // level-up effect (owner 2026-11-25, src/client/levelUpFx.ts); its preview canvas stays across redraws
@@ -1726,6 +1757,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawMoves();
     drawLang();
     drawAuto();
+    drawPet();
     drawTut();
     drawTalk();
     drawFx();
@@ -1779,7 +1811,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (ทุกการ์ดทุกหมวด: อาชีพ tier ตัวคูณมอน ห้องบอส เมืองกลาง ตัวคูณ EXP VIP ยา กระเป๋า ตีบวก เซ็ตไอเทม Auto Play รางวัลเควสสอนระบบ หน้าตา UI เอฟเฟกต์สกิล เสียง และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (ทุกการ์ดทุกหมวด: อาชีพ tier ตัวคูณมอน ห้องบอส เมืองกลาง ตัวคูณ EXP VIP ยา กระเป๋า ตีบวก เซ็ตไอเทม Auto Play สัตว์เลี้ยงเก็บของ รางวัลเควสสอนระบบ หน้าตา UI เอฟเฟกต์สกิล เสียง และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
@@ -1789,7 +1821,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard, dodgeCard] },
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
-    { name: 'Auto Play', cards: [autoCard] },
+    { name: 'Auto Play', cards: [autoCard, petCard] },
     { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, shaderCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
     { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, gearCard, tutCard, talkCard, langCard] },
   ];

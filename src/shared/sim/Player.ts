@@ -494,6 +494,10 @@ export class Player extends Unit {
   buffs: Buffs;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
+  /** Centre of the Auto circle while Auto runs (set by the server with autoOn; the pet loots inside it, sim/petLoot.ts). Never saved. */
+  autoAnchor: { x: number; z: number } | null = null;
+  /** Seconds until the worn pet may pick up its next drop (sim/petLoot.ts). Never saved. */
+  petLootCd = 0;
   /** What the running Auto Play has earned (the server's AutoPlay keeps it; the browser's copy comes from the snapshot). Never saved. */
   autoTally: AutoTally | null = null;
   /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */

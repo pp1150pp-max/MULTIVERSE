@@ -12,6 +12,7 @@ import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
 import { splitOnDeath, tickCurses } from './graveMoves';
+import { tickPetLoot } from './petLoot';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -2472,6 +2473,8 @@ export class Sim {
 
     for (const pr of this.projectiles) pr.update(dt);
     this.projectiles = this.projectiles.filter((pr) => !pr.dead);
+    // Worn pets fetch drops for their owner (owner 2026-11-27, sim/petLoot.ts).
+    tickPetLoot(this, dt);
     for (const l of this.loots) l.update(dt, this);
     this.loots = this.loots.filter((l) => !l.dead);
 

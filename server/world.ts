@@ -2338,6 +2338,8 @@ export class GameWorld {
       s.outbox.push({ t: 'autoOff', to: p.id, msg: blocked });
     }
     p.autoOn = !!s.auto;
+    // The pet loots inside the Auto circle while Auto runs (src/shared/sim/petLoot.ts).
+    p.autoAnchor = s.auto?.anchorPoint ?? null;
     p.autoTally = s.auto?.tally ?? null;
     if (s.auto) s.tally = s.auto.tally;
     // VIP bonuses (src/shared/vip.ts) stop the moment it runs out.
