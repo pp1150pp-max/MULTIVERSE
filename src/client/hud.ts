@@ -198,6 +198,8 @@ export class Hud {
     this.showZoneName();
     $('hud-online').classList.toggle('hidden', !g.backend.online);
     $('hud-guest').classList.toggle('hidden', !g.backend.guest);
+    // The guest's "บันทึกตัวละคร" (accountUi.ts): the system menu builds it (it knows whether Google is on).
+    $('btn-hud-guest-save').onclick = () => g.sysMenu.openGuestSave();
     this.buildSkillbar();
     onKeysChange(() => this.buildSkillbar());
 

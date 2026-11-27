@@ -2,6 +2,7 @@ import { type AdminServerState, type AdminShutdownText, type AdminSnapDelta, typ
 import { checkShutdownText, countdownTime, SHUTDOWN_CHOICES, SHUTDOWN_SECONDS, SHUTDOWN_TEXT_MAX, SHUTDOWN_TIME_TOKEN, shutdownWarning, type ShutdownMode } from '../../shared/net/protocol';
 import { h, api, fmt, time, me, view, can } from '../core';
 import { backupCard } from './backups';
+import { ACCOUNT_RECOVER_MIN_MAX, ACCOUNT_RENAME_DAYS_MAX, type AccountTuning } from '../../shared/api';
 
 // ------------------------------------------------------------ server (owner)
 
@@ -12,6 +13,7 @@ export async function renderServer(): Promise<void> {
   if (can('directWs')) view.append(directWsCard());
   if (can('netDelta')) view.append(snapDeltaCard());
   if (can('googleLogin')) view.append(googleCard());
+  if (can('accountAuth')) view.append(accountAuthCard());
   if (can('backup')) view.append(backupCard());
   await restart;
 }
@@ -323,4 +325,67 @@ function shutdownTextCard(): HTMLElement {
     h('div', { class: 'muted', style: 'margin:-6px 0 10px' },
       `ป้ายนับถอยหลังที่ผู้เล่นเห็น ใช้กับทุกวิธี (ปุ่มด้านบน, npm run stop-server, Ctrl+C) · ใส่ ${SHUTDOWN_TIME_TOKEN} ตรงที่ให้เกมแทนด้วยเวลาที่เหลือ เช่น "${SHUTDOWN_SECONDS} วินาที" (ต้องมี) · เกมใส่ ⚠ ข้างหน้าให้เอง`),
     ...rows.map((r) => r.el), h('div', { class: 'row', style: 'align-items:center' }, h('span', { style: 'flex:1' }), save), msg);
+}
+
+/** The player's account tools (feature accountAuth): five switches and two numbers; yellow = differs from the code. */
+function accountAuthCard(): HTMLElement {
+  type State = { tuning: AccountTuning; defaults: AccountTuning };
+  const msg = h('div', { class: 'msg' });
+  const body = h('div', { style: 'line-height:2' });
+  const save = h('button', { class: 'primary' }, 'บันทึก');
+  const SWITCHES: [keyof AccountTuning, string][] = [
+    ['setPassword', 'บัญชีที่สมัครด้วย Google ตั้งรหัสผ่านได้ (แล้วเข้าได้ 2 ทาง และยกเลิกผูก Google ได้)'],
+    ['guestUpgrade', 'Guest บันทึกตัวละคร (ตั้งชื่อผู้ใช้/รหัสผ่าน) ในเกมได้โดยไม่ต้องออก'],
+    ['changePassword', 'เปลี่ยนรหัสผ่าน (ต้องใส่รหัสเดิม)'],
+    ['rename', 'เปลี่ยนชื่อผู้ใช้ (ทุกบัญชีที่ไม่ใช่ Guest)'],
+    ['recover', 'ลืมรหัสผ่าน: เข้าด้วย Google แล้วตั้งรหัสใหม่โดยไม่ต้องใส่รหัสเดิม (บัญชีที่ผูก Google)'],
+  ];
+  let state: State | null = null;
+  const inputs = new Map<keyof AccountTuning, HTMLInputElement>();
+  const load = (st: State) => {
+    state = st;
+    inputs.clear();
+    const rows: HTMLElement[] = SWITCHES.map(([k, label]) => {
+      const box = h('input', { type: 'checkbox' }) as HTMLInputElement;
+      box.checked = st.tuning[k] as boolean;
+      inputs.set(k, box);
+      const row = h('label', { style: 'display:block' }, box, ` ${label}`);
+      if (st.tuning[k] !== st.defaults[k]) row.style.background = 'rgba(255,207,106,.15)';
+      return row;
+    });
+    const num = (k: 'renameDays' | 'recoverMin', label: string, min: number, max: number, unit: string) => {
+      const el = h('input', { type: 'number', min: String(min), max: String(max), step: '1', style: 'width:80px' }) as HTMLInputElement;
+      el.value = String(st.tuning[k]);
+      inputs.set(k, el);
+      const row = h('label', { style: 'display:block' }, `${label} `, el, ` ${unit} (ค่าในโค้ด ${st.defaults[k]})`);
+      if (st.tuning[k] !== st.defaults[k]) row.style.background = 'rgba(255,207,106,.15)';
+      return row;
+    };
+    rows.push(num('renameDays', 'เปลี่ยนชื่อผู้ใช้ได้ 1 ครั้งทุก', 0, ACCOUNT_RENAME_DAYS_MAX, 'วัน (0 = ไม่จำกัด)'));
+    rows.push(num('recoverMin', 'หลังเข้าด้วย Google ตั้งรหัสใหม่ได้ภายใน', 1, ACCOUNT_RECOVER_MIN_MAX, 'นาที'));
+    body.replaceChildren(...rows);
+  };
+  const fail = (e: Error) => {
+    msg.className = 'msg bad';
+    msg.textContent = e.message;
+  };
+  save.onclick = async () => {
+    if (!state) return;
+    const tuning: Record<string, unknown> = {};
+    for (const [k, el] of inputs) tuning[k] = el.type === 'checkbox' ? el.checked : Number(el.value);
+    save.disabled = true;
+    try {
+      load(await api<State>('POST', '/admin/account-auth', { tuning }));
+      msg.className = 'msg ok';
+      msg.textContent = 'บันทึกแล้ว — มีผลทันที (ค่าที่ผิดช่วงกลับเป็นค่าในโค้ด)';
+    } catch (e) {
+      fail(e as Error);
+    } finally {
+      save.disabled = false;
+    }
+  };
+  void api<State>('GET', '/admin/account-auth').then(load, fail);
+  return h('div', { class: 'card' }, h('h2', {}, 'บัญชีผู้เล่น'),
+    h('div', { class: 'muted', style: 'margin-bottom:8px' }, 'เครื่องมือบัญชีของผู้เล่นในหน้า "จัดการบัญชี" · พื้นเหลือง = ต่างจากค่าในโค้ด · server ตรวจสวิตช์ทุกครั้ง ปิดแล้วทำผ่าน API ไม่ได้ด้วย · ทุกการบันทึกลงประวัติ'),
+    body, h('div', { class: 'row', style: 'margin-top:8px' }, save), msg);
 }

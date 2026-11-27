@@ -3,6 +3,7 @@
 // which is simpler and safer than tearing the 3D scene down by hand.
 import type { Game } from './Game';
 import { googleEnabled, logout } from './net/api';
+import { openAccountWindow, openGuestSave } from './accountUi';
 import { imgUrl } from './img';
 import { gfxMenuOn } from './gfxPrefs';
 import { renderGfxSettings } from './gfxPanel';
@@ -23,6 +24,8 @@ export const AFTER_EXIT_KEY = 'multiverse-after-exit';
 export type AfterExit = 'characters' | 'title';
 /** sessionStorage: 'link' / 'upgrade' = go on to Google once the game is left (menu.ts buildMenu). */
 export const GOOGLE_AFTER_EXIT_KEY = 'multiverse-google-after-exit';
+/** sessionStorage: a character id to go straight back into after the page reloads (a guest saved itself in the game: accountUi.ts). */
+export const RESUME_CHAR_KEY = 'multiverse-resume-character';
 
 /** Leaving while in combat waits this long; moving or getting hit cancels it (owner). */
 const EXIT_COUNTDOWN = 5;
@@ -146,7 +149,7 @@ export class SystemMenu {
           <button data-act="chars" class="set-big">${guest ? 'กลับไปหน้า Guest' : 'เลือกตัวละคร'}</button>
           <button data-act="logout" class="set-big danger">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
         </div>
-        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
+        ${guest ? '<div class="sys-note">กด "บันทึกตัวละคร" ในหน้านี้ เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
       </div>
       <div class="sys-view hidden" data-view="settings-old">
         <button data-act="hudstyle" id="sys-hudstyle"></button>
@@ -155,10 +158,10 @@ export class SystemMenu {
         <button data-act="rest" id="sys-rest">พักหน้าจอ</button>
         ${guest ? '' : '<button data-act="tradeblock" id="sys-tradeblock"></button>'}
         <div class="sys-sep"></div>
-        <button data-act="google" id="sys-google" class="hidden">${guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google'}</button>
+        <button data-act="${guest ? 'guestsave' : 'account'}" id="sys-account">${guest ? 'บันทึกตัวละคร' : '⚙ จัดการบัญชี'}</button>
         <button data-act="chars">${guest ? 'กลับไปหน้า Guest' : 'กลับไปเลือกตัวละคร'}</button>
         <button data-act="logout">${guest ? 'กลับหน้าแรก' : 'ออกจากระบบ'}</button>
-        ${guest ? '<div class="sys-note">สมัครสมาชิกที่หน้าแรก<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
+        ${guest ? '<div class="sys-note">กด "บันทึกตัวละคร"<br>เพื่อเก็บตัวละคร Guest นี้ไว้ถาวร</div>' : ''}
         <div class="sys-sep"></div>
         <button data-act="resume" class="primary">กลับเข้าเกม</button>
         <button data-act="back">‹ กลับ</button>
@@ -169,7 +172,6 @@ export class SystemMenu {
     oldView.insertBefore(legacyLangButton(), oldView.querySelector('#sys-keybinds'));
     void googleEnabled().then((on) => {
       this.googleOn = on;
-      this.panel.querySelector('#sys-google')?.classList.toggle('hidden', !on);
       if (this.tab === 'general') this.drawTab();
     });
     this.panel.addEventListener('click', (e) => {
@@ -354,13 +356,11 @@ export class SystemMenu {
       rest.textContent = 'เริ่มพักหน้าจอ';
       rows.append(setRow('พักหน้าจอ', rest, 'จอมืดทั้งจอ ไม่วาดภาพเกม เหลือหน้าสรุปผล Auto นับต่อเรื่อย ๆ · ปิดด้วย ✕ หรือดับเบิลคลิก'));
     }
-    if (this.googleOn) {
-      const b = document.createElement('button');
-      b.className = 'set-btn';
-      b.dataset.act = 'google';
-      b.textContent = g.backend.guest ? 'บันทึกตัวละครด้วย Google' : 'ผูกบัญชี Google';
-      rows.append(setRow('บัญชี Google', b));
-    }
+    const b = document.createElement('button');
+    b.className = 'set-btn';
+    b.dataset.act = g.backend.guest ? 'guestsave' : 'account';
+    b.textContent = g.backend.guest ? 'บันทึกตัวละคร' : '⚙ จัดการบัญชี';
+    rows.append(setRow('บัญชี', b));
   }
 
   /** Opens the menu straight on a settings tab (the menu tiles, top-row icons and admins' shortcuts). */
@@ -494,6 +494,12 @@ export class SystemMenu {
       case 'chars':
         this.toGoogle = false;
         return this.requestExit('characters');
+      case 'guestsave':
+        this.toggle(false);
+        return this.openGuestSave();
+      case 'account':
+        this.toggle(false);
+        return openAccountWindow({ linkGoogle: () => this.onAct('google') });
       case 'google':
         if (!confirm(this.g.backend.guest
           ? 'ออกจากเกมแล้วไปหน้า Google เพื่อเก็บตัวละคร Guest นี้ไว้ในบัญชี Google?'
@@ -504,6 +510,27 @@ export class SystemMenu {
         this.toGoogle = false;
         return this.requestExit('title');
     }
+  }
+
+  /** The guest's "บันทึกตัวละคร" (the menu's row and the HUD's Guest label). */
+  openGuestSave(): void {
+    openGuestSave({
+      googleOn: this.googleOn,
+      google: () => this.onAct('google'),
+      // The account now owns the character: the page reloads and goes straight back in with it, at the same
+      // spot (a page reload keeps the map, channel and spot on the server for a while: world.ts leave 'drop').
+      saved: () => {
+        try {
+          const id = this.g.backend.characterId;
+          if (id !== null) sessionStorage.setItem(RESUME_CHAR_KEY, String(id));
+        } catch {
+          // Storage blocked: the page opens on the character list instead.
+        }
+        this.countdownEl.textContent = 'บันทึกแล้ว — กำลังต่อเข้าเกม…';
+        this.countdownEl.classList.remove('hidden');
+        location.reload();
+      },
+    });
   }
 
   private requestExit(to: AfterExit): void {

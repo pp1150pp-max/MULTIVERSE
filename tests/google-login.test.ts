@@ -236,7 +236,7 @@ try {
   const daveId = card.data.links.find((l: any) => l.username === 'dave').accountId;
   const unl = await api('POST', '/admin/google', { unlink: daveId }, owner);
   ok(unl.status === 200 && unl.data.links.length === 1, 'admin unlinks an account');
-  const audit = sql.prepare("SELECT action, details FROM admin_audit WHERE action LIKE 'google%' ORDER BY id").all() as { action: string; details: string }[];
+  const audit = sql.prepare("SELECT action, details FROM admin_audit WHERE action LIKE 'google%' AND admin_id IS NOT NULL ORDER BY id").all() as { action: string; details: string }[];
   ok(audit.map((r) => r.action).join(',') === 'google-login,google-login,google-unlink' && audit[2]!.details.includes('dave@example.com'), 'switch and unlink go into the audit log');
   sql.close();
 } catch (e) {
