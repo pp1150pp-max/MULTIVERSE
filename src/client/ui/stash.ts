@@ -4,6 +4,7 @@ import { nextRowPrice, STASH_MAX, STASH_ROW, STASH_ROW_PRICES, STASH_START } fro
 import type { BagEntry } from '../../shared/types';
 import { COIN_ICON } from '../icons';
 import { $ } from './hudShared';
+import type { StashLineKey } from '../../shared/npcTalk';
 
 /** What the stash window needs from the HUD. */
 export interface StashHost {
@@ -22,6 +23,8 @@ export interface StashHost {
  */
 export class StashWindow {
   private stashOpen = false;
+  /** The talk window's keeper says something about what just happened (npcTalk.stash lines); null = nobody listens. */
+  onTalk: ((key: StashLineKey, ...args: (string | number)[]) => void) | null = null;
 
   constructor(private readonly g: Game, private readonly host: StashHost) {
     $('stash-close').onclick = () => this.closeStash();
@@ -46,11 +49,11 @@ export class StashWindow {
 
   // ------------------------------------------------------------ warehouse keeper (stash)
 
-  /** Opens the window (hud.ts closes the other NPC windows first). */
-  openStash(): void {
+  /** Opens the window (hud.ts closes the other NPC windows first). `inTalk` = inside the NPC talk window: no bag window. */
+  openStash(inTalk = false): void {
     this.stashOpen = true;
     $('stash').classList.remove('hidden');
-    this.host.toggleBag(true);
+    if (!inTalk) this.host.toggleBag(true);
     this.host.markInventory();
     this.renderStash();
   }
@@ -99,6 +102,7 @@ export class StashWindow {
       () => {
         this.g.backend.stashBuyRow();
         this.host.markInventory();
+        this.onTalk?.('row', p.stash.size + STASH_ROW);
       },
     );
   }
@@ -125,6 +129,7 @@ export class StashWindow {
       return;
     }
     this.g.backend.stashGold(dir * amount);
+    this.onTalk?.(dir > 0 ? 'goldIn' : 'goldOut', amount.toLocaleString());
     input.value = '';
     this.host.markInventory();
   }

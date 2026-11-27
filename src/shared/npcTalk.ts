@@ -27,7 +27,25 @@ export interface NpcTalkConfig {
   forgePane: boolean;
   /** What the blacksmith says there; {0} {1} = the values FORGE_LINES names. */
   forge: Record<ForgeLineKey, string[]>;
+  /** The warehouse keeper's stash opens inside the talk window (owner 2026-11-27). Off = the old stash window. */
+  stashPane: boolean;
+  /** What the keeper says there; {0} = the values STASH_LINES names. */
+  stash: Record<StashLineKey, string[]>;
 }
+
+/** The warehouse keeper's lines in the talk window (npcStashPane.ts), with what {0} stands for. */
+export const STASH_LINES = {
+  open: { name: 'เปิดคลัง', args: '' },
+  put: { name: 'ฝากของ', args: '{0} = ชื่อของ' },
+  take: { name: 'เบิกของ', args: '{0} = ชื่อของ' },
+  goldIn: { name: 'ฝากทอง', args: '{0} = จำนวนทอง' },
+  goldOut: { name: 'ถอนทอง', args: '{0} = จำนวนทอง' },
+  row: { name: 'ซื้อแถวคลังเพิ่ม', args: '{0} = จำนวนช่องใหม่' },
+  bound: { name: 'ของผูกตัว (ฝากไม่ได้)', args: '' },
+  guest: { name: 'Guest (ใช้คลังไม่ได้)', args: '' },
+} as const;
+export type StashLineKey = keyof typeof STASH_LINES;
+export const STASH_LINE_KEYS = Object.keys(STASH_LINES) as StashLineKey[];
 
 /** The blacksmith's lines in the talk window (npcForgePane.ts), with what {0} and {1} stand for. */
 export const FORGE_LINES = {
@@ -69,8 +87,9 @@ export const SHOP_LINE_KEYS = Object.keys(SHOP_LINES) as ShopLineKey[];
 export const PANE_LINES = {
   shop: { label: 'ร้านพ่อค้า', lines: SHOP_LINES },
   forge: { label: 'ช่างตีเหล็ก', lines: FORGE_LINES },
+  stash: { label: 'ผู้ดูแลคลัง', lines: STASH_LINES },
 } as const;
-export const PANE_PARTS = ['shop', 'forge'] as const;
+export const PANE_PARTS = ['shop', 'forge', 'stash'] as const;
 export type PanePart = (typeof PANE_PARTS)[number];
 
 export interface NpcTalkTuning {
@@ -85,6 +104,8 @@ export interface NpcTalkTuning {
   shop?: Partial<Record<ShopLineKey, string[]>>;
   forgePane?: boolean;
   forge?: Partial<Record<ForgeLineKey, string[]>>;
+  stashPane?: boolean;
+  stash?: Partial<Record<StashLineKey, string[]>>;
 }
 
 /** Every NPC whose lines /admin can edit, in the order it lists them. */
@@ -180,6 +201,17 @@ export function codeNpcTalk(): NpcTalkConfig {
       poor: ['ทองไม่พอนะ ค่าแรงข้าไม่ลดให้หรอก'],
       noStone: ['หินไม่พอ ไปหาหินมาเพิ่มก่อน'],
     },
+    stashPane: true,
+    stash: {
+      open: ['ของในคลังนี้ใช้ได้ทุกตัวละครในบัญชี ฝากอะไรก็คลิกมาได้เลย'],
+      put: ['{0}… เก็บให้อย่างดีเลย'],
+      take: ['เอ้า {0} คืนให้แล้ว'],
+      goldIn: ['ฝาก {0} G เรียบร้อย ปลอดภัยแน่นอน'],
+      goldOut: ['ถอนไป {0} G ใช้ให้คุ้มนะ'],
+      row: ['ขยายคลังเป็น {0} ช่องแล้ว!'],
+      bound: ['อันนี้ผูกกับตัวเจ้า ฝากไว้กับข้าไม่ได้หรอก'],
+      guest: ['Guest ยังใช้คลังไม่ได้นะ สมัครสมาชิกก่อนแล้วค่อยมาใหม่'],
+    },
   };
 }
 const CODE = codeNpcTalk();
@@ -198,6 +230,8 @@ export function mergeNpcTalk(t: NpcTalkTuning | undefined): NpcTalkConfig {
   if (t.forgePane !== undefined) c.forgePane = t.forgePane;
   for (const k of SHOP_LINE_KEYS) if (t.shop?.[k]) c.shop[k] = [...t.shop[k]!];
   for (const k of FORGE_LINE_KEYS) if (t.forge?.[k]) c.forge[k] = [...t.forge[k]!];
+  if (t.stashPane !== undefined) c.stashPane = t.stashPane;
+  for (const k of STASH_LINE_KEYS) if (t.stash?.[k]) c.stash[k] = [...t.stash[k]!];
   return c;
 }
 
@@ -223,7 +257,7 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
   if (!isObj(x)) return strict ? { error: 'ค่าหน้าต่างคุย NPC ไม่ถูกต้อง' } : { tuning: undefined };
   const out: NpcTalkTuning = {};
   const fail = (msg: string): { error: string } | null => (strict ? { error: `หน้าต่างคุย NPC: ${msg}` } : null);
-  for (const k of ['on', 'shopPane', 'forgePane', 'bubbles'] as const) {
+  for (const k of ['on', 'shopPane', 'forgePane', 'stashPane', 'bubbles'] as const) {
     if (x[k] === undefined) continue;
     if (typeof x[k] !== 'boolean') { const f = fail('สวิตช์ไม่ถูกต้อง'); if (f) return f; continue; }
     if (x[k] !== CODE[k]) out[k] = x[k] as boolean;
@@ -280,6 +314,7 @@ export function npcTalkChanges(a: NpcTalkConfig, b: NpcTalkConfig): string[] {
     if (!sameLines(a.greet[id], b.greet[id])) out.push(`บทพูดทักทาย ${id}: ${b.greet[id].length} บรรทัด (แก้ข้อความ)`);
     if (!sameLines(a.chat[id], b.chat[id])) out.push(`คำพูดเหนือหัว ${id}: ${b.chat[id].length} บรรทัด (แก้ข้อความ)`);
   }
+  if (a.stashPane !== b.stashPane) out.push(`คลังในหน้าต่างคุย ${onOff(a.stashPane)} → ${onOff(b.stashPane)}`);
   if (a.forgePane !== b.forgePane) out.push(`ช่างตีเหล็กในหน้าต่างคุย ${onOff(a.forgePane)} → ${onOff(b.forgePane)}`);
   for (const part of PANE_PARTS) {
     const la = a[part] as Record<string, string[]>;

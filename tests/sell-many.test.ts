@@ -7,7 +7,7 @@ import { sellValue } from '../src/shared/data/enhance';
 import { makeItem } from '../src/shared/data/items';
 import { anyStackValue } from '../src/shared/data/potions';
 import type { BagEntry, Item } from '../src/shared/types';
-import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS } from '../src/shared/npcTalk';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS, STASH_LINE_KEYS } from '../src/shared/npcTalk';
 import { finish, ok } from './check';
 
 const sim = new Sim(Object.values(ZONES)[0]);
@@ -106,5 +106,16 @@ const fm = mergeNpcTalk({ forgePane: false, forge: { fail: ['พลาด'] } })
 ok(!fm.forgePane && fm.forge.fail[0] === 'พลาด' && fm.forge.success[0] === codeNpcTalk().forge.success[0], 'forge merge');
 const fc = npcTalkChanges(codeNpcTalk(), fm);
 ok(fc.some((l) => l.includes('ช่างตีเหล็กในหน้าต่างคุย')) && fc.some((l) => l.includes('บทพูดช่างตีเหล็ก')), 'forge audit lines');
+
+// The stash inside the talk window (npcTalk.stashPane + npcTalk.stash lines).
+ok(codeNpcTalk().stashPane === true, 'stash pane: on in the code');
+ok(STASH_LINE_KEYS.every((k) => codeNpcTalk().stash[k].length > 0), 'every stash line has a code default');
+const s1 = checkNpcTalkTuning({ stashPane: false, stash: { put: ['เก็บ {0}'] } }, true);
+ok('tuning' in s1 && s1.tuning?.stashPane === false && s1.tuning?.stash?.put?.[0] === 'เก็บ {0}', 'stash switch and lines saved');
+ok('error' in checkNpcTalkTuning({ stash: { nope: ['x'] } }, true), 'unknown stash line refused');
+const sm = mergeNpcTalk({ stashPane: false, stash: { take: ['คืน'] } });
+ok(!sm.stashPane && sm.stash.take[0] === 'คืน' && sm.stash.put[0] === codeNpcTalk().stash.put[0], 'stash merge');
+const sc = npcTalkChanges(codeNpcTalk(), sm);
+ok(sc.some((l) => l.includes('คลังในหน้าต่างคุย')) && sc.some((l) => l.includes('บทพูดผู้ดูแลคลัง')), 'stash audit lines');
 
 finish('sell-many');

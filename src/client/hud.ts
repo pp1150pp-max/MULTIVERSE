@@ -1346,11 +1346,22 @@ export class Hud {
     this.shop.closeShop();
   }
 
-  private openStash(): void {
+  private openStash(inTalk = false): void {
     this.shop.closeShop();
     this.forge.closeForge();
     this.market.close();
-    this.stash.openStash();
+    this.stash.openStash(inTalk);
+  }
+
+  /** The stash inside the NPC talk window (npcStashPane.ts): no bag window beside it. */
+  openStashInTalk(): void {
+    this.toggleBag(false);
+    this.openStash(true);
+  }
+
+  /** The stash window (the talk window's keeper pane drives it). */
+  get stashWin(): StashWindow {
+    return this.stash;
   }
 
   private openForge(inTalk = false): void {

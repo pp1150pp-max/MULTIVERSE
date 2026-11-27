@@ -254,9 +254,10 @@ export class Game {
     this.rooms = new RoomUI(this);
     this.quests = new QuestUI(this, () => this.hud.openDialog());
     this.questTracker = new QuestTracker(this);
-    // The merchant's / blacksmith's button on a quest card opens their window inside the talk window too, when /admin has it on.
+    // The merchant's / blacksmith's / keeper's button on a quest card opens their window inside the talk window too, when /admin has it on.
     this.tutorial = new TutorialUI(this, (id) => (id === 'merchant' && this.npcDialog.shopInTalk ? this.npcDialog.openShop(id)
       : id === 'blacksmith' && this.npcDialog.forgeInTalk ? this.npcDialog.openForge(id)
+      : id === 'keeper' && this.npcDialog.stashInTalk && !this.backend.guest ? this.npcDialog.openStash(id)
       : this.hud.openNpcWindow(id)));
     this.navigator = new NavigatorUI(this);
     this.npcDialog = new NpcDialog(this);

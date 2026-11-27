@@ -9,7 +9,15 @@ import { currentBalance } from '../shared/balance';
 import { tutRows, TUT_STEP_NAME } from '../shared/tutorial';
 import { imgUrl } from './img';
 import { NpcShopPane } from './ui/npcShopPane';
-import { NpcForgePane } from './ui/npcForgePane';
+import { npcForgePane } from './ui/npcForgePane';
+import { npcStashPane } from './ui/npcStashPane';
+import type { NpcHostPane } from './ui/npcHostPane';
+
+/** The NPC windows that open inside the talk window, how to tell they are still open, and how to close them. */
+type HostKind = 'forge' | 'stash';
+const HOST_KINDS: readonly HostKind[] = ['forge', 'stash'];
+const HOST_OPEN: Record<HostKind, (g: Game) => boolean> = { forge: (g) => g.hud.forgeWin.isOpen, stash: (g) => g.hud.stashWin.isOpen };
+const HOST_CLOSE: Record<HostKind, (g: Game) => void> = { forge: (g) => g.hud.forgeWin.closeForge(), stash: (g) => g.hud.stashWin.closeStash() };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -59,9 +67,10 @@ export class NpcDialog {
   private drawn = '';
   /** The windows that grow out of this one (owner 2026-11-27): the merchant's shop and the blacksmith. */
   private readonly shopPane: NpcShopPane;
-  private readonly forgePane: NpcForgePane;
+  /** The NPC windows moved into this one (the blacksmith's, the stash). */
+  private readonly hosts: Record<HostKind, NpcHostPane>;
   /** Which of them is open (null = talking). */
-  private pane: 'shop' | 'forge' | null = null;
+  private pane: 'shop' | HostKind | null = null;
 
   constructor(private readonly g: Game) {
     this.win = el('div', 'panel hidden');
@@ -81,9 +90,10 @@ export class NpcDialog {
     const back = el('button', 'nt-back', '◀ กลับไปคุย');
     back.onclick = () => this.leavePane(true);
     this.shopPane = new NpcShopPane(g, (text) => this.say(text));
-    this.forgePane = new NpcForgePane(g, (text) => this.say(text));
-    g.hud.forgeWin.onTalk = (key, ...args) => { if (this.pane === 'forge') this.forgePane.line(key, ...args); };
-    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.forgePane.root, back, close);
+    this.hosts = { forge: npcForgePane(g, (text) => this.say(text)), stash: npcStashPane(g, (text) => this.say(text)) };
+    g.hud.forgeWin.onTalk = (key, ...args) => { if (this.pane === 'forge') this.hosts.forge.line(key, ...args); };
+    g.hud.stashWin.onTalk = (key, ...args) => { if (this.pane === 'stash') this.hosts.stash.line(key, ...args); };
+    this.win.append(this.scene, this.face, this.answers, box, this.shopPane.root, this.hosts.forge.root, this.hosts.stash.root, back, close);
     document.getElementById('hud')!.append(this.win);
   }
 
@@ -128,16 +138,16 @@ export class NpcDialog {
     if (!this.open || !id) return;
     const p = this.g.player;
     const n = this.g.backend.terrain.npcPos[id];
-    // Shop / blacksmith: the server deals only within NPC_USE_RANGE, so the window closes there (and when the HUD closed theirs).
+    // Shop / blacksmith / stash: the server deals only within NPC_USE_RANGE, so the window closes there (and when the HUD closed theirs).
     const reach = this.pane ? NPC_USE_RANGE : NPC_USE_RANGE + 1;
     if (!n || !p.alive || this.g.backend.zoneSeq !== this.zoneSeq || Math.hypot(p.x - n.x, p.z - n.z) > reach) return this.close();
     if (this.pane === 'shop') {
       if (!this.g.hud.shopOpen) return this.close();
       return this.shopPane.update();
     }
-    if (this.pane === 'forge') {
-      if (!this.g.hud.forgeWin.isOpen) return this.close();
-      return this.forgePane.update();
+    if (this.pane) {
+      if (!HOST_OPEN[this.pane](this.g)) return this.close();
+      return this.hosts[this.pane].update();
     }
     const list = this.story ? [] : this.answerList(id);
     const sig = JSON.stringify(list.map((a) => [a.icon, a.label, a.note]));
@@ -160,7 +170,7 @@ export class NpcDialog {
     this.text.textContent = line;
     this.next.classList.toggle('hidden', !this.story);
     if (this.pane === 'shop') this.shopPane.setLine(line);
-    else if (this.pane === 'forge') this.forgePane.setLine(line);
+    else if (this.pane) this.hosts[this.pane].setLine(line);
   }
 
   /** Whether the merchant's shop shows inside this window (/admin: talk window on and "ร้านพ่อค้าในหน้าต่างคุย" on). */
@@ -186,6 +196,18 @@ export class NpcDialog {
     return t.on && t.forgePane;
   }
 
+  /** Whether the stash opens inside this window (/admin: talk window on and "คลังในหน้าต่างคุย" on). */
+  get stashInTalk(): boolean {
+    const t = currentBalance().npcTalk;
+    return t.on && t.stashPane;
+  }
+
+  /** Opens this window on the stash straight away (the quest card's button). */
+  openStash(id: NpcId): void {
+    this.show(id);
+    this.enterStash(id);
+  }
+
   /** Opens this window on the blacksmith's menu `mode` straight away (the quest card's button). */
   openForge(id: NpcId, mode = 'enhance'): void {
     this.show(id);
@@ -203,6 +225,8 @@ export class NpcDialog {
     this.g.hud.openShopInTalk();
     this.pane = 'shop';
     this.shopPane.open(tab, ...this.medalFace(id));
+    for (const k of HOST_KINDS) this.hosts[k].root.classList.remove('on');
+    this.shopPane.root.classList.add('on');
     this.win.classList.add('shop');
     this.shopPane.line(tab === 'bb' ? 'openBuyback' : 'open');
   }
@@ -210,13 +234,30 @@ export class NpcDialog {
   /** A blacksmith menu: the window grows into the blacksmith's window, on that menu (owner 2026-11-27). */
   private enterForge(id: NpcId, mode: string): void {
     this.g.hud.openForgeInTalk();
-    this.pane = 'forge';
-    this.win.classList.add('shop', 'forge');
-    this.forgePane.open(mode, ...this.medalFace(id));
-    this.forgePane.line('open', this.g.hud.forgeWin.modeLabel());
+    this.enterHost('forge', id, mode);
+    this.hosts.forge.line('open', this.g.hud.forgeWin.modeLabel());
   }
 
-  /** Back from the shop or the blacksmith: `talk` = to the talk window (◀), else the window is closing. */
+  /** "เปิดคลังเก็บของ": the window grows into the stash (owner 2026-11-27). Guests can't use it (the server refuses too). */
+  private enterStash(id: NpcId): void {
+    if (this.g.backend.guest) {
+      this.say(currentBalance().npcTalk.stash.guest[0] ?? 'Guest ใช้คลังเก็บของไม่ได้');
+      return;
+    }
+    this.g.hud.openStashInTalk();
+    this.enterHost('stash', id, '');
+    this.hosts.stash.line('open');
+  }
+
+  private enterHost(kind: HostKind, id: NpcId, arg: string): void {
+    this.pane = kind;
+    this.win.classList.add('shop');
+    for (const k of HOST_KINDS) this.hosts[k].root.classList.toggle('on', k === kind);
+    this.shopPane.root.classList.remove('on');
+    this.hosts[kind].open(arg, ...this.medalFace(id));
+  }
+
+  /** Back from the shop, the blacksmith or the stash: `talk` = to the talk window (◀), else the window is closing. */
   private leavePane(talk: boolean): void {
     const was = this.pane;
     if (!was) return;
@@ -225,10 +266,10 @@ export class NpcDialog {
       this.shopPane.close();
       if (this.g.hud.shopOpen) this.g.hud.closeShop();
     } else {
-      if (this.g.hud.forgeWin.isOpen) this.g.hud.forgeWin.closeForge();
-      this.forgePane.close();
+      HOST_CLOSE[was](this.g);
+      this.hosts[was].close();
     }
-    this.win.classList.remove('shop', 'forge');
+    this.win.classList.remove('shop');
     this.drawn = '';
     if (talk) {
       this.say(this.nextGreet());
@@ -318,7 +359,8 @@ export class NpcDialog {
         if (!out.length) out.push({ icon: 'enhance', label: 'ตีบวกอุปกรณ์', run: () => this.openThen(id) });
         break;
       case 'keeper':
-        out.push({ icon: 'stash', label: 'เปิดคลังเก็บของ', run: () => this.openThen(id) });
+        // /admin "คลังในหน้าต่างคุย" off = the old stash window.
+        out.push({ icon: 'stash', label: 'เปิดคลังเก็บของ', run: () => (currentBalance().npcTalk.stashPane ? this.enterStash(id) : this.openThen(id)) });
         break;
       case 'broker': {
         const box = g.backend.marketBox;
