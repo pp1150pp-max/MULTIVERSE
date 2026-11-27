@@ -1,4 +1,5 @@
 import { Unit } from './Unit';
+import type { AutoTally } from './autoTally';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import { suctionStep } from './kraken';
@@ -507,6 +508,8 @@ export class Player extends Unit {
   buffs: Buffs;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
+  /** What the running Auto Play has earned (the server's AutoPlay keeps it; the browser's copy comes from the snapshot). Never saved. */
+  autoTally: AutoTally | null = null;
   /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */
   vip = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
@@ -594,6 +597,13 @@ export class Player extends Unit {
   /** Damage dealt × this until `dmgUntil`. */
   dmgMult = 1;
   dmgUntil = 0;
+  /** Sim time the dash button last started a dash (Perfect Dodge, dodgeTuning.ts). */
+  dodgeDashAt = -Infinity;
+  /** Sim time the next Perfect Dodge can happen. */
+  dodgeReadyAt = 0;
+  /** Perfect Dodge's damage buff: × `perfectMult` until `perfectUntil` (its own, never mixed with skill buffs). */
+  perfectMult = 1;
+  perfectUntil = 0;
   /** Skill cooldowns (not the dash) run (1 + haste)× as fast until `hasteUntil`. */
   haste = 0;
   hasteUntil = 0;
@@ -1315,7 +1325,7 @@ export class Player extends Unit {
   clearSkillBuffs(): void {
     this.gun = emptyGunBuffs();
     this.shield = 0;
-    this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = 0;
+    this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = this.perfectUntil = 0;
     this.skillBuffs = {};
     // Shrine buffs end with death too (owner 2026-11-27).
     const shrine = Object.keys(this.shrineBuffs).length > 0;
@@ -1358,6 +1368,7 @@ export class Player extends Unit {
       return sim.text(this.x, this.topY, this.z, `ไม่มียา ${kind.toUpperCase()}`, 'info', undefined, this.id);
     }
     sim.inventoryChanged(this);
+    if (this.autoOn && this.autoTally) this.autoTally.potUsed++;
     sim.sfx('drink', this.x, this.z, this.id);
     // The cards' "ยาฟื้นเพิ่ม %" on top of the class's potion bonus (card plan 5.1).
     const amount = Math.round(potionHeal(kind, size, this.cls.id) * (1 + this.cardFx.potion / 100));
@@ -1514,6 +1525,7 @@ export class Player extends Unit {
     const warp = this.warpOn();
     if (it.dash && !snared && (warp ? this.skillReady(dashSkill) : (this.cd.dash ?? 0) <= 0)) {
       const [dx, dz] = mx || mz ? [mx, mz] : [this.aimX, this.aimZ];
+      this.dodgeDashAt = sim.time;
       if (warp) {
         this.warpDash(dx, dz);
         this.useCharge(dashSkill);

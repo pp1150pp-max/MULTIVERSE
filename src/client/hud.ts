@@ -48,6 +48,7 @@ import { ForgeWindow } from './ui/forge';
 import { ShopWindow } from './ui/shop';
 import { StashWindow } from './ui/stash';
 import { AutoSettingsWindow } from './ui/autoSettings';
+import { AutoSummaryWindow } from './ui/autoSummary';
 import { MapWindow } from './ui/mapWindow';
 import { ItemDetail } from './ui/itemDetail';
 import { appendLinked, linkedWords, LinkDraft, LinkPopup } from './chatLinks';
@@ -139,6 +140,8 @@ export class Hud {
   private readonly shop: ShopWindow;
   private readonly stash: StashWindow;
   private readonly autoSet: AutoSettingsWindow;
+  /** The "while you were away" Auto summary. */
+  readonly autoSummary: AutoSummaryWindow;
   private readonly map: MapWindow;
   private readonly detail: ItemDetail;
   /** The window a clicked item link in chat opens. */
@@ -168,6 +171,7 @@ export class Hud {
     this.stash = new StashWindow(g, this);
     this.forge = new ForgeWindow(g, this);
     this.autoSet = new AutoSettingsWindow(g);
+    this.autoSummary = new AutoSummaryWindow(g);
     this.map = new MapWindow(g);
     this.detail = new ItemDetail(g, this, { forge: this.forge, shop: this.shop, stash: this.stash, market: this.market });
     this.linkPop = new LinkPopup(this);
