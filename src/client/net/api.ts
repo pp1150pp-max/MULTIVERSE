@@ -4,7 +4,7 @@
 // The browser remembers up to two tokens: the logged-in account's, and a guest's. A guest is a
 // temporary account on the server with one character; the token is all this browser keeps of it.
 import type {
-  ApiError, AuthResponse, CharacterSummary, GoogleConfigResponse, GoogleFinishResponse, GoogleStartRequest, GoogleStartResponse, GuestResponse, MeResponse,
+  AccountInfoResponse, ApiError, AuthResponse, CharacterSummary, GoogleConfigResponse, GoogleFinishResponse, GoogleStartRequest, GoogleStartResponse, GuestResponse, MeResponse,
 } from '../../shared/api';
 import type { ClassId } from '../../shared/types';
 
@@ -106,7 +106,7 @@ export async function googleStart(mode: GoogleStartRequest['mode']): Promise<nev
 
 /** Reads the ticket Google's round trip came back with; with `username`, makes the new account. A login is remembered. */
 export async function googleFinish(ticket: string, username?: string, movedGuest = false): Promise<GoogleFinishResponse> {
-  const r = await call<GoogleFinishResponse>('POST', '/auth/google/finish', { ticket, username });
+  const r = await call<GoogleFinishResponse>('POST', '/auth/google/finish', { ticket, username, ...(username !== undefined ? { useGuest: movedGuest } : {}) });
   if (r.kind === 'session') {
     store(TOKEN_KEY, r.token);
     if (movedGuest) store(GUEST_KEY, null);
@@ -115,6 +115,22 @@ export async function googleFinish(ticket: string, username?: string, movedGuest
 }
 
 export const unlinkGoogle = () => call<object>('POST', '/auth/google/unlink', {});
+
+// ------------------------------------------------------------ account tools (server/account-api.ts)
+
+export const account = () => call<AccountInfoResponse>('GET', '/account');
+/** Sets or changes the password (the old one needed unless the account has none yet or this is a fresh Google login). */
+export const setPassword = (password: string, oldPassword?: string) =>
+  call<AccountInfoResponse>('POST', '/account/password', { password, ...(oldPassword ? { oldPassword } : {}) });
+export const renameAccount = (username: string) => call<AccountInfoResponse>('POST', '/account/username', { username });
+
+/** The guest on this browser picks a username + password: it is that account now (same character), logged in. */
+export async function guestUpgrade(username: string, password: string): Promise<AuthResponse> {
+  const r = await call<AuthResponse>('POST', '/account/guest-upgrade', { username, password }, 'guest');
+  store(TOKEN_KEY, r.token);
+  store(GUEST_KEY, null);
+  return r;
+}
 
 // ------------------------------------------------------------ guest
 

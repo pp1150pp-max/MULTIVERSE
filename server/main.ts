@@ -21,7 +21,9 @@ import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
 import { mapsPublicApi } from './admin-maps';
 import { applyMaps } from './maps-live';
-import { googleApi } from './google-api';
+import { googleApi, googleLoginOn } from './google-api';
+import { loadGoogleConfig } from './google';
+import { accountApi } from './account-api';
 import { LANG_CONFIG_PATH, type LangConfigResponse } from '../src/shared/i18n/translator';
 import { directPort } from './direct';
 import { Backups } from './backup';
@@ -91,9 +93,11 @@ function cleanupGuests(): void {
   db.deleteExpiredSessions();
 }
 
-function startSession(accountId: number, username: string): AuthResponse {
+/** `google`: the login came from Google (for a while it may set a new password without the old one). */
+function startSession(accountId: number, username: string, google = false): AuthResponse {
   const token = newToken();
-  db.createSession(token, accountId, Date.now() + SESSION_MS);
+  const now = Date.now();
+  db.createSession(token, accountId, now + SESSION_MS, google ? now : null);
   return { token, username };
 }
 
@@ -126,6 +130,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   if (mapsPublicApi(res, path, method, new URL(req.url ?? '/', 'http://localhost'), db)) return;
 
   if (await googleApi(req, res, path, { db, world, startSession })) return;
+  if (await accountApi(req, res, path, { db, world, startSession, googleOn: () => googleLoginOn(db) && !!loadGoogleConfig(ROOT) })) return;
 
   // Where the game connection may go past Cloudflare (src/client/net/route.ts), asked before every (re)connect.
   if (method === 'GET' && path === `/api${NET_ROUTE_PATH}`) return send(res, 200, { direct: world.directUrl() } satisfies NetRouteResponse);
