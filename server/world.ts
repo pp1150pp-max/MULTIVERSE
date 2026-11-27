@@ -1231,7 +1231,7 @@ export class GameWorld {
     // Accept the move only if the character could have walked that far since the last one.
     const from = s.pendingPos ?? p;
     // The kraken's whirlpool pulls the browser's character too (sim/kraken.ts): that much further is fine.
-    const maxStep = (p.moveSpeed * 1.4 + suctionSpeed(s.sim.hazards, s.sim.time)) * Math.min((now - s.lastPosAt) / 1000, 0.5) + 0.3;
+    const maxStep = (p.moveSpeed * 1.4 + suctionSpeed(s.sim.hazards, s.sim.time, p.id)) * Math.min((now - s.lastPosAt) / 1000, 0.5) + 0.3;
     if (Math.hypot(pos.x - from.x, pos.z - from.z) <= maxStep && !s.sim.terrain.isBlocked(pos.x, pos.z, 0)) {
       s.pendingPos = pos;
       s.lastPosAt = now;

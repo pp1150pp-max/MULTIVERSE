@@ -450,7 +450,7 @@ export class Terrain {
         // A whirlpool with an island: on it is dry ground; in the water, back to whichever shore is nearer.
         const shore = w.island - u.radius;
         if (d <= shore) continue;
-        if (shore > 0 && d - shore < min - d) {
+        if (shore > 0 && (w.keepIn || d - shore < min - d)) {
           const k = d > 1e-4 ? shore / d : 0;
           u.x = w.x + dx * k;
           u.z = w.z + dz * k;
@@ -1000,6 +1000,8 @@ export class Terrain {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + Math.PI / n;
       if (gap(a) || boats.some((g) => near(a, g))) continue;
+      // The kraken's room: nothing stands in its whirlpool.
+      if (whirlpoolAt(this.zone, b.x + Math.cos(a) * (ring + 1.6), b.z + Math.sin(a) * (ring + 1.6), 0.3)) continue;
       const [name, h, solid] = RING[i % RING.length];
       this.addProp(kit(name), b.x + Math.cos(a) * (ring + 1.6), b.z + Math.sin(a) * (ring + 1.6), h, solid);
     }
@@ -1014,6 +1016,7 @@ export class Terrain {
       if (gap(a) || Math.abs(x) > B - 1 || Math.abs(z) > B - 1) continue;
       if (this.distToPath(x, z) < 3 || this.zone.portals.some((p) => Math.hypot(p.x - x, p.z - z) < 4)) continue;
       if (this.colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 2.4)) continue;
+      if (whirlpoolAt(this.zone, x, z, 1)) continue;
       const [name, h, solid] = OUTER[placed % OUTER.length];
       this.addProp(kit(name), x, z, h, solid);
       placed++;
