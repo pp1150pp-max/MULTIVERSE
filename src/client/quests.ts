@@ -11,6 +11,7 @@ import { bossShortName } from '../shared/bossRoom';
 import { stoneIcon } from './icons';
 import { GEAR_PART_NAME, gearKills, gearRarity, gearRewardText, gearRows, type GearRow } from '../shared/gearQuests';
 import { RARITY_COLOR, RARITY_LABEL } from '../shared/types';
+import type { SeekerLineKey } from '../shared/npcTalk';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -26,6 +27,8 @@ export class QuestUI {
   private readonly body: HTMLElement;
   private drawn = '';
   private readonly title: HTMLElement;
+  /** The talk window's Seeker says something about what was just pressed (npcTalk.seeker lines). */
+  onTalk: ((key: SeekerLineKey, ...args: (string | number)[]) => void) | null = null;
 
   constructor(private readonly g: Game, private readonly story: () => void) {
     this.win = el('div', 'panel hidden');
@@ -88,7 +91,11 @@ export class QuestUI {
       row.append(text);
       if (r.state === 'offer' || r.state === 'ready') {
         const btn = el('button', r.state === 'offer' ? 'quest-accept' : 'quest-turnin', r.state === 'offer' ? '! รับภารกิจ' : '? รับกุญแจ');
-        btn.onclick = () => (r.state === 'offer' ? this.g.backend.questAccept(r.boss) : this.g.backend.questTurnIn(r.boss));
+        btn.onclick = () => {
+          if (r.state === 'offer') this.g.backend.questAccept(r.boss);
+          else this.g.backend.questTurnIn(r.boss);
+          this.onTalk?.(r.state === 'offer' ? 'accept' : 'turnIn', STONE_NAME[r.key]);
+        };
         row.append(btn);
       } else if (r.state === 'going') {
         const btn = el('button', 'quest-progress', `${r.kills}/${QUEST_KILLS}`);
@@ -98,7 +105,7 @@ export class QuestUI {
       this.body.append(row);
     }
     this.gearSection(gear);
-    const story = el('button', '', 'ฟังเรื่องราว');
+    const story = el('button', 'quest-story', 'ฟังเรื่องราว');
     story.onclick = () => {
       this.toggle(false);
       this.story();
@@ -129,7 +136,11 @@ export class QuestUI {
       row.append(text);
       if (r.state === 'offer' || r.state === 'ready') {
         const btn = el('button', r.state === 'offer' ? 'quest-accept' : 'quest-turnin', r.state === 'offer' ? '! รับภารกิจ' : '? รับอุปกรณ์');
-        btn.onclick = () => (r.state === 'offer' ? this.g.backend.gearAccept(r.id) : this.g.backend.gearTurnIn(r.id));
+        btn.onclick = () => {
+          if (r.state === 'offer') this.g.backend.gearAccept(r.id);
+          else this.g.backend.gearTurnIn(r.id);
+          this.onTalk?.(r.state === 'offer' ? 'accept' : 'turnIn', gearRewardText(r.part));
+        };
         row.append(btn);
       } else if (r.state === 'going') {
         const btn = el('button', 'quest-progress', `${r.kills}/${gearKills(r.map)}`);

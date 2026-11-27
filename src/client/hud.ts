@@ -1310,11 +1310,22 @@ export class Hud {
   // ------------------------------------------------------------ NPC windows (ui/shop.ts, ui/stash.ts, ui/forge.ts)
 
   /** Market broker: the window lives in market.ts. Guests may look but not trade (the server refuses it too). */
-  private openMarket(): void {
+  private openMarket(inTalk = false): void {
     this.shop.closeShop();
     this.forge.closeForge();
     this.stash.closeStash();
-    this.market.open();
+    this.market.open(inTalk);
+  }
+
+  /** The market inside the NPC talk window (npcMarketPane.ts): no bag window beside it. */
+  openMarketInTalk(): void {
+    this.toggleBag(false);
+    this.openMarket(true);
+  }
+
+  /** The market window (the talk window's broker pane drives it). */
+  get marketWin(): MarketWindow {
+    return this.market;
   }
 
   /** Something of yours sold or expired at the market: a banner, a chat line and the trade sound. */
@@ -1346,11 +1357,22 @@ export class Hud {
     this.shop.closeShop();
   }
 
-  private openStash(): void {
+  private openStash(inTalk = false): void {
     this.shop.closeShop();
     this.forge.closeForge();
     this.market.close();
-    this.stash.openStash();
+    this.stash.openStash(inTalk);
+  }
+
+  /** The stash inside the NPC talk window (npcStashPane.ts): no bag window beside it. */
+  openStashInTalk(): void {
+    this.toggleBag(false);
+    this.openStash(true);
+  }
+
+  /** The stash window (the talk window's keeper pane drives it). */
+  get stashWin(): StashWindow {
+    return this.stash;
   }
 
   private openForge(inTalk = false): void {
