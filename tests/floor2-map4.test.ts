@@ -3,7 +3,7 @@
 // monster moves (dive, bubble, wave, tentacle), the Kraken's moves (arms then head, ink, suction) and their /admin numbers.
 // On real Sims, no server.
 import { finish, ok } from './check';
-import { BOSS_ROOMS, MAELSTROM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
+import { BOSS_ROOMS, MAELSTROM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, inWhirlpoolCircle, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
 import { HARBOR_ID } from '../src/shared/data/harbor';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_DESC, STONE_NAME } from '../src/shared/data/stones';
@@ -94,6 +94,8 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   ok(['storm_rock_0', 'wreck_0', 'coral_0', 'kraken_flag', 'storm_lamp'].every((k) => sim.terrain.props.some((p) => p.key === k)), 'storm rocks, wrecks, coral, kraken flags and lamps');
   ok(!sim.terrain.props.some((p) => p.key.startsWith('rim_')), 'no foam waves round the whirlpool (owner 2026-11-26)');
   ok(sim.terrain.props.every((p) => Math.hypot(p.x, p.z) > w!.r + 1 || (p.key === 'summoner_kraken' && p.x === 0 && p.z === 0)), 'nothing stands in the whirlpool but the summoner on its island');
+  // The browser's scattered ground details (world.ts addDecor) skip the whole circle, island included (owner 2026-11-27).
+  ok(inWhirlpoolCircle(SEA, 0, 0) && inWhirlpoolCircle(SEA, w!.r - 0.5, 0) && inWhirlpoolCircle(SEA, w!.r + 0.5, 0, 1) && !inWhirlpoolCircle(SEA, w!.r + 1.5, 0, 1), 'no ground details on the whirlpool, its island or its rim');
   const masts = sim.terrain.props.filter((p) => p.key === 'broken_mast').length;
   ok(masts > 0 && masts < 70, `far fewer broken masts (${masts}, was 224)`);
   const rs = new Sim(ROOM);

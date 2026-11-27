@@ -3,7 +3,7 @@ import { WhirlpoolViews } from './whirlpool';
 import { WarpPadViews } from './warpPads';
 import { TreasureViews } from './treasureViews';
 import { currentBalance } from '../shared/balance';
-import { clearingRadius as arenaClearing, floorOf, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
+import { clearingRadius as arenaClearing, floorOf, inWhirlpoolCircle, islandAt, lairOf, themeAt, zoneById, ZONES, type ZoneDef } from '../shared/data/zones';
 
 /**
  * The bare ground round a map's boss clearing: the arena's, or on a whirlpool's island (the Kraken Maelstrom's summoner,
@@ -1164,6 +1164,7 @@ export class World {
 
     const right = new THREE.Vector3(S, 0, -S);
     const up = new THREE.Vector3().crossVectors(right, ISO_DIR.clone().negate()).normalize();
+    let decorSeq = 0;
     const place = (set: (typeof DECOR)[ZoneTheme], cell: number, x: number, z: number) => {
       const { positions, uvs } = groups.get(set.key);
       const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.15);
@@ -1185,7 +1186,17 @@ export class World {
         const ux = up.x * size;
         const uy = up.y * size;
         const uz = up.z * size;
-        positions.push(x - rx, 0, z - rz, x + rx, 0, z + rz, x + rx + ux, uy, z + rz + uz, x - rx + ux, uy, z - rz + uz);
+        // Standing details face the camera like the prop sprites, so two that overlap on screen at the same depth (or one
+        // and a prop) swapped frame by frame (owner 2026-11-27, the maelstrom's shells, starfish and buoy). Each gets its
+        // own tiny step toward the camera like addProp's, on the half steps so it never ties with a prop.
+        const step = ((decorSeq++ % PROP_DEPTH_STEPS) + 0.5) * PROP_DEPTH_STEP;
+        const dx = ISO_DIR.x * step;
+        const dy = ISO_DIR.y * step;
+        const dz = ISO_DIR.z * step;
+        positions.push(
+          x - rx + dx, dy, z - rz + dz, x + rx + dx, dy, z + rz + dz,
+          x + rx + ux + dx, uy + dy, z + rz + uz + dz, x - rx + ux + dx, uy + dy, z - rz + uz + dz,
+        );
       }
       const [ul, ur] = flip ? [u1, u0] : [u0, u1];
       uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
@@ -1199,6 +1210,8 @@ export class World {
         const px = x + rand(r, -spread, spread);
         const pz = z + rand(r, -spread, spread);
         if (Math.abs(px) > B || Math.abs(pz) > B) continue;
+        // Nothing on a whirlpool or its island (the Kraken Maelstrom, owner 2026-11-27), nor right on its rim.
+        if (inWhirlpoolCircle(this.zone, px, pz, 1)) continue;
         if (spot === 'water' ? !inPool(px, pz, -0.3) : inPool(px, pz, 0.5)) continue;
         if (spot !== 'road' && this.distToPath(px, pz) < trail + 0.2) continue;
         if (near(px, pz, start, campRadius * 0.8) || portals.some((g) => near(px, pz, g, 2.5))) continue;
