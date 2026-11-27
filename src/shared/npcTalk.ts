@@ -35,7 +35,36 @@ export interface NpcTalkConfig {
   marketPane: boolean;
   /** What the broker says there; {0} = the values MARKET_LINES names. */
   market: Record<MarketLineKey, string[]>;
+  /** The cash shop opens inside the talk window with the crystal merchant, from the NPC and the top icon (owner 2026-11-28). Off = the old window. */
+  cashPane: boolean;
+  /** What the crystal merchant says there; {0} = the values CASH_LINES names. */
+  cash: Record<CashLineKey, string[]>;
+  /** The Seeker's quests open inside the talk window (owner 2026-11-28). Off = the old quest window. */
+  seekerPane: boolean;
+  /** What The Seeker says there. */
+  seeker: Record<SeekerLineKey, string[]>;
 }
+
+/** The Seeker's lines in the talk window (npcSeekerPane.ts), with what {0} stands for. */
+export const SEEKER_LINES = {
+  open: { name: 'เปิดหน้าเควส', args: '' },
+  accept: { name: 'รับภารกิจ', args: '{0} = ชื่อรางวัล' },
+  turnIn: { name: 'ส่งภารกิจ', args: '{0} = ชื่อรางวัล' },
+} as const;
+export type SeekerLineKey = keyof typeof SEEKER_LINES;
+export const SEEKER_LINE_KEYS = Object.keys(SEEKER_LINES) as SeekerLineKey[];
+
+/** The crystal merchant's lines in the talk window (npcCashPane.ts), with what {0} stands for. */
+export const CASH_LINES = {
+  open: { name: 'เปิดแคชช็อป', args: '' },
+  notOpen: { name: 'ร้านยังไม่เปิดขาย', args: '' },
+  bought: { name: 'ซื้อแล้ว', args: '{0} = ชื่อสินค้า' },
+  vip: { name: 'ซื้อ VIP แล้ว', args: '{0} = จำนวนวัน' },
+  topup: { name: 'เปิดหน้าเติมคริสตัล', args: '' },
+  tryOn: { name: 'ลองสวม', args: '{0} = ชื่อของแต่งตัว' },
+} as const;
+export type CashLineKey = keyof typeof CASH_LINES;
+export const CASH_LINE_KEYS = Object.keys(CASH_LINES) as CashLineKey[];
 
 /** The market broker's lines in the talk window (npcMarketPane.ts), with what {0} stands for. */
 export const MARKET_LINES = {
@@ -108,8 +137,10 @@ export const PANE_LINES = {
   forge: { label: 'ช่างตีเหล็ก', lines: FORGE_LINES },
   stash: { label: 'ผู้ดูแลคลัง', lines: STASH_LINES },
   market: { label: 'นายหน้าตลาด', lines: MARKET_LINES },
+  cash: { label: 'พ่อค้าคริสตัล', lines: CASH_LINES },
+  seeker: { label: 'The Seeker', lines: SEEKER_LINES },
 } as const;
-export const PANE_PARTS = ['shop', 'forge', 'stash', 'market'] as const;
+export const PANE_PARTS = ['shop', 'forge', 'stash', 'market', 'cash', 'seeker'] as const;
 export type PanePart = (typeof PANE_PARTS)[number];
 
 export interface NpcTalkTuning {
@@ -128,6 +159,10 @@ export interface NpcTalkTuning {
   stash?: Partial<Record<StashLineKey, string[]>>;
   marketPane?: boolean;
   market?: Partial<Record<MarketLineKey, string[]>>;
+  cashPane?: boolean;
+  cash?: Partial<Record<CashLineKey, string[]>>;
+  seekerPane?: boolean;
+  seeker?: Partial<Record<SeekerLineKey, string[]>>;
 }
 
 /** Every NPC whose lines /admin can edit, in the order it lists them. */
@@ -246,6 +281,21 @@ export function codeNpcTalk(): NpcTalkConfig {
       notSellable: ['อันนี้ลงขายในตลาดไม่ได้ ลองขายให้พ่อค้าดู'],
       guest: ['Guest ดูตลาดได้ แต่ซื้อขายไม่ได้นะ สมัครสมาชิกก่อน'],
     },
+    cashPane: true,
+    cash: {
+      open: ['ของหายากจากต่างมิติ ส่องประกายรอเจ้าอยู่… เลือกดูได้เลย'],
+      notOpen: ['ร้านยังไม่เปิดขายนะ ตอนนี้ดูได้อย่างเดียว'],
+      bought: ['{0} เป็นของเจ้าแล้ว! ขอให้ส่องประกายนะ'],
+      vip: ['ยินดีต้อนรับสู่ VIP! เพิ่มอีก {0} วัน'],
+      topup: ['อยากเติมคริสตัลหรือ? เลือกแพ็กที่ถูกใจเลย'],
+      tryOn: ['{0} เข้ากับเจ้าดีนะ ลองดูตัวเองสิ'],
+    },
+    seekerPane: true,
+    seeker: {
+      open: ['ประตูทุกบานมีผู้เฝ้า… เลือกภารกิจที่เจ้าพร้อมจะรับไป'],
+      accept: ['ข้าฝากด้วย ล่าให้ครบแล้วกลับมารับ{0}'],
+      turnIn: ['เจ้าทำได้ดี นี่คือ{0} รับไปเถิด'],
+    },
   };
 }
 const CODE = codeNpcTalk();
@@ -268,6 +318,10 @@ export function mergeNpcTalk(t: NpcTalkTuning | undefined): NpcTalkConfig {
   for (const k of STASH_LINE_KEYS) if (t.stash?.[k]) c.stash[k] = [...t.stash[k]!];
   if (t.marketPane !== undefined) c.marketPane = t.marketPane;
   for (const k of MARKET_LINE_KEYS) if (t.market?.[k]) c.market[k] = [...t.market[k]!];
+  if (t.cashPane !== undefined) c.cashPane = t.cashPane;
+  for (const k of CASH_LINE_KEYS) if (t.cash?.[k]) c.cash[k] = [...t.cash[k]!];
+  if (t.seekerPane !== undefined) c.seekerPane = t.seekerPane;
+  for (const k of SEEKER_LINE_KEYS) if (t.seeker?.[k]) c.seeker[k] = [...t.seeker[k]!];
   return c;
 }
 
@@ -293,7 +347,7 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
   if (!isObj(x)) return strict ? { error: 'ค่าหน้าต่างคุย NPC ไม่ถูกต้อง' } : { tuning: undefined };
   const out: NpcTalkTuning = {};
   const fail = (msg: string): { error: string } | null => (strict ? { error: `หน้าต่างคุย NPC: ${msg}` } : null);
-  for (const k of ['on', 'shopPane', 'forgePane', 'stashPane', 'marketPane', 'bubbles'] as const) {
+  for (const k of ['on', 'shopPane', 'forgePane', 'stashPane', 'marketPane', 'cashPane', 'seekerPane', 'bubbles'] as const) {
     if (x[k] === undefined) continue;
     if (typeof x[k] !== 'boolean') { const f = fail('สวิตช์ไม่ถูกต้อง'); if (f) return f; continue; }
     if (x[k] !== CODE[k]) out[k] = x[k] as boolean;
@@ -350,6 +404,8 @@ export function npcTalkChanges(a: NpcTalkConfig, b: NpcTalkConfig): string[] {
     if (!sameLines(a.greet[id], b.greet[id])) out.push(`บทพูดทักทาย ${id}: ${b.greet[id].length} บรรทัด (แก้ข้อความ)`);
     if (!sameLines(a.chat[id], b.chat[id])) out.push(`คำพูดเหนือหัว ${id}: ${b.chat[id].length} บรรทัด (แก้ข้อความ)`);
   }
+  if (a.seekerPane !== b.seekerPane) out.push(`เควส The Seeker ในหน้าต่างคุย ${onOff(a.seekerPane)} → ${onOff(b.seekerPane)}`);
+  if (a.cashPane !== b.cashPane) out.push(`แคชช็อปในหน้าต่างคุย ${onOff(a.cashPane)} → ${onOff(b.cashPane)}`);
   if (a.marketPane !== b.marketPane) out.push(`ตลาดในหน้าต่างคุย ${onOff(a.marketPane)} → ${onOff(b.marketPane)}`);
   if (a.stashPane !== b.stashPane) out.push(`คลังในหน้าต่างคุย ${onOff(a.stashPane)} → ${onOff(b.stashPane)}`);
   if (a.forgePane !== b.forgePane) out.push(`ช่างตีเหล็กในหน้าต่างคุย ${onOff(a.forgePane)} → ${onOff(b.forgePane)}`);

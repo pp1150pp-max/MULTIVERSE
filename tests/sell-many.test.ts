@@ -7,7 +7,7 @@ import { sellValue } from '../src/shared/data/enhance';
 import { makeItem } from '../src/shared/data/items';
 import { anyStackValue } from '../src/shared/data/potions';
 import type { BagEntry, Item } from '../src/shared/types';
-import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS, STASH_LINE_KEYS, MARKET_LINE_KEYS } from '../src/shared/npcTalk';
+import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, SHOP_LINE_KEYS, FORGE_LINE_KEYS, STASH_LINE_KEYS, MARKET_LINE_KEYS, CASH_LINE_KEYS, SEEKER_LINE_KEYS } from '../src/shared/npcTalk';
 import { finish, ok } from './check';
 
 const sim = new Sim(Object.values(ZONES)[0]);
@@ -128,5 +128,27 @@ const mm = mergeNpcTalk({ marketPane: false, market: { bought: ['ได้แล
 ok(!mm.marketPane && mm.market.bought[0] === 'ได้แล้ว' && mm.market.open[0] === codeNpcTalk().market.open[0], 'market merge');
 const mc = npcTalkChanges(codeNpcTalk(), mm);
 ok(mc.some((l) => l.includes('ตลาดในหน้าต่างคุย')) && mc.some((l) => l.includes('บทพูดนายหน้าตลาด')), 'market audit lines');
+
+// The cash shop inside the talk window (npcTalk.cashPane + npcTalk.cash lines, owner 2026-11-28).
+ok(codeNpcTalk().cashPane === true, 'cash pane: on in the code');
+ok(CASH_LINE_KEYS.every((k) => codeNpcTalk().cash[k].length > 0), 'every cash line has a code default');
+const c1 = checkNpcTalkTuning({ cashPane: false, cash: { bought: ['ได้ {0}'] } }, true);
+ok('tuning' in c1 && c1.tuning?.cashPane === false && c1.tuning?.cash?.bought?.[0] === 'ได้ {0}', 'cash switch and lines saved');
+ok('error' in checkNpcTalkTuning({ cash: { nope: ['x'] } }, true), 'unknown cash line refused');
+const cm = mergeNpcTalk({ cashPane: false, cash: { open: ['เชิญ'] } });
+ok(!cm.cashPane && cm.cash.open[0] === 'เชิญ' && cm.cash.vip[0] === codeNpcTalk().cash.vip[0], 'cash merge');
+const cc = npcTalkChanges(codeNpcTalk(), cm);
+ok(cc.some((l) => l.includes('แคชช็อปในหน้าต่างคุย')) && cc.some((l) => l.includes('บทพูดพ่อค้าคริสตัล')), 'cash audit lines');
+
+// The Seeker's quests inside the talk window (npcTalk.seekerPane + npcTalk.seeker lines, owner 2026-11-28).
+ok(codeNpcTalk().seekerPane === true, 'seeker pane: on in the code');
+ok(SEEKER_LINE_KEYS.every((k) => codeNpcTalk().seeker[k].length > 0), 'every seeker line has a code default');
+const k1 = checkNpcTalkTuning({ seekerPane: false, seeker: { accept: ['รับ {0}'] } }, true);
+ok('tuning' in k1 && k1.tuning?.seekerPane === false && k1.tuning?.seeker?.accept?.[0] === 'รับ {0}', 'seeker switch and lines saved');
+ok('error' in checkNpcTalkTuning({ seeker: { nope: ['x'] } }, true), 'unknown seeker line refused');
+const km = mergeNpcTalk({ seekerPane: false, seeker: { open: ['มา'] } });
+ok(!km.seekerPane && km.seeker.open[0] === 'มา' && km.seeker.turnIn[0] === codeNpcTalk().seeker.turnIn[0], 'seeker merge');
+const kc = npcTalkChanges(codeNpcTalk(), km);
+ok(kc.some((l) => l.includes('เควส The Seeker ในหน้าต่างคุย')) && kc.some((l) => l.includes('บทพูดThe Seeker')), 'seeker audit lines');
 
 finish('sell-many');
