@@ -8,6 +8,7 @@ import { CIRCLE_FALLBACKS, FX_LAYER_NAME, FX_LAYER_RANGE, QUARKS_SKILLS, quarksK
 import { circleDesign, drawInner, drawOuter } from '../client/circleDesigns';
 import { skillExtras } from '../client/skillExtras';
 import { ATTACK_ROOT_RANGE, NO_ATTACK_ROOT } from '../shared/attackRootTuning';
+import { DODGE_NAME, DODGE_RANGE } from '../shared/dodgeTuning';
 import { AUDIO_GAIN_RANGE, BOSS_SONG_NAME, BOSS_SONGS, ROOM_BOSS_NAME, ROOM_BOSSES, SFX_GROUP_NAME, SFX_GROUPS, type RoomSong } from '../shared/audioTuning';
 import { FORGE_RANGE, PLUS_CAP, PLUS_NEVER } from '../shared/forgeTuning';
 import { RIG_ARMOR_ITEMS, RIG_ARMOR_NAME, RIG_ARMORS, RIG_WEAPON_ITEMS, RIG_WEAPON_NAME, RIG_WEAPONS } from '../shared/rigLookTuning';
@@ -19,7 +20,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
-  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
+  AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_SUMMARY_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
 import { FARM_IDS, NO_BOOST, ZONES, type MonsterBoost } from '../shared/data/zones';
@@ -38,6 +39,8 @@ import { POTION_SIZES, potionName } from '../shared/data/potions';
 import { STONE_NAME } from '../shared/data/stones';
 import { CODE_SET_STEPS, SET_BONUS_MAX, SET_IDS, SET_MAX_PIECES, SET_NAME, setPieceKinds } from '../shared/data/sets';
 import { MOVE_GROUPS } from '../shared/moveTuning';
+import { PET_LOOT_FLAG_NAME, PET_LOOT_NUM_NAME, PET_LOOT_RANGE, petIds } from '../shared/petLootTuning';
+import { COSMETICS } from '../shared/data/cosmetics';
 import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
 type Kids = (Node | string | null | undefined | false)[];
@@ -1214,6 +1217,12 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         num('aoeMargin', 0.1),
       ),
       h('div', { class: 'muted' }, 'ทุกอาชีพ: Auto กดสกิลเมื่อสกิลนั้นถึงจริงเท่านั้น (ระยะสกิลตามที่ปรับ + ขนาดตัวมอน − ระยะเผื่อพลาด: มอนต้องเข้ามาลึกกว่าขอบสกิลเท่านี้ กันวืด ยิ่งมากยิ่งกดช้า) · วงรอบตัว = มีมอนในวง · ยิง/พุ่ง/ฟันด้านหน้า = เป้าอยู่ในระยะสกิล (ยิงระเบิดบวกวงระเบิด) · ตกที่จุด = ระยะร่าย + วงตก · บัฟ/สกิลวงที่ไม่มีดาเมจ กดตามเดิม · ไม่ถึง = ข้ามไปสกิลถัดไปในลำดับ ไม่มีสกิลไหนถึง = ตีธรรมดาต่อ (ไม่เดินเข้าไปเพิ่ม) · ปิดสวิตช์ = แบบเดิม กดทันทีที่ตีธรรมดาถึง'),
+      h('h3', {}, 'หน้าสรุปผล Auto'),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.summary, onchange: (e: Event) => { a.summary = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_SUMMARY_NAME}`),
+        num('summaryMin', 1),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: เปิด Auto แล้วไม่แตะเกม (ไม่กดคีย์ ไม่คลิก ไม่แตะจอ ไม่หมุนล้อ) ครบเวลานี้ = ขึ้นหน้าสรุป EXP เลเวล ทอง มอนที่ล่า ไอเทมแยกความหายาก หิน ยา ตาย ตั้งแต่แตะเกมครั้งล่าสุด · ตัวเลขนับต่อเรื่อย ๆ ไม่หยุด จนผู้เล่นกด ✕ หรือดับเบิลคลิก · ใช้ได้ทั้งตอนสลับแท็บและตอนหลุดแล้ว Auto ฟาร์มต่อ · ปิดสวิตช์ = ไม่ขึ้น (server ไม่ส่งตัวเลข)'),
       h('h3', {}, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto)'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
@@ -1221,6 +1230,35 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ' เดินต่อเมื่อสลับแท็บ'),
       ),
       h('div', { class: 'muted' }, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto): คลิกเดินไปจุดไกลแล้วสลับไปแท็บอื่น/พับจอ server พาเดินต่อจนถึงจุดที่คลิก (เดินตรงไป ไถลอ้อมของกลมชิ้นเดียวได้ ไม่หาทางอ้อมกำแพง ติดแทบไม่ขยับ 0.8 วิ = หยุด) · กลับมาที่แท็บ ตัวเลื่อนไปที่จริงแล้วเดินต่อเอง · ตาย/เปลี่ยนแมพ/วาร์ป/เทรด/หลุด = หยุด · ปิด = แบบเดิม สลับแท็บแล้วตัวหยุด'),
+    );
+  };
+
+  // ---------------------------------------------------------- pets pick up loot (src/shared/petLootTuning.ts, docs/systems/pet-loot.md)
+  const petCard = h('div', { class: 'card' });
+  const drawPet = (): void => {
+    const pl = draft.petLoot;
+    const cp = code.petLoot;
+    const flag = (k: keyof typeof PET_LOOT_FLAG_NAME) =>
+      h('label', { title: `ค่าในโค้ด: ${cp[k] ? 'เปิด' : 'ปิด'}` },
+        h('input', { type: 'checkbox', checked: pl[k], onchange: (e: Event) => { pl[k] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+        ` ${PET_LOOT_FLAG_NAME[k]}`);
+    const num = (k: keyof typeof PET_LOOT_RANGE, step: number) =>
+      h('label', {}, `${PET_LOOT_NUM_NAME[k]} `, numBox(() => pl[k], (n) => { pl[k] = n; }, cp[k], PET_LOOT_RANGE[k][0], PET_LOOT_RANGE[k][1], step, () => updateSummary()),
+        h('span', { class: 'muted' }, ` ค่าในโค้ด ${cp[k]}`));
+    const pet = (id: string) =>
+      h('label', { title: 'ค่าในโค้ด: เก็บ' },
+        h('input', { type: 'checkbox', checked: pl.pets[id] !== false, onchange: (e: Event) => { pl.pets[id] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+        ` ${COSMETICS.find((c) => c.id === id)?.name ?? id}`);
+    petCard.replaceChildren(
+      h('h2', {}, 'สัตว์เลี้ยงช่วยเก็บของ'),
+      h('div', { class: 'muted' },
+        'สวมสัตว์เลี้ยง (ของแต่งตัว) ที่ติ๊กไว้ = สัตว์เลี้ยงเก็บของให้ทีละชิ้นตามเวลาที่ตั้ง (server ตัดสิน ของบินเข้าตัวผู้เล่น) · ' +
+        'เปิด Auto = เก็บได้ทั้งวง Auto ตามกติกาเดียวกับที่ Auto เก็บ (สิทธิ์ 10 วิ ตัวกรองกระเป๋า ตัวเลือกเก็บของคนอื่น ผู้เล่นปิดเก็บของใน Auto = ไม่เก็บ กระเป๋าเต็ม = ข้าม ไม่เก็บในลาวา/ลานบอส) · ' +
+        'เล่นเอง = เก็บเฉพาะของจากมอนที่เราได้สิทธิ์เก็บ (ทำดาเมจมากสุด ไม่รวมของเพื่อนในปาร์ตี้) ในระยะรอบตัว ตามตัวกรองกระเป๋า · ของที่ผู้เล่นวางลงพื้นไม่เก็บ · มีผลทันที'),
+      h('div', { class: 'row bal-line' }, flag('on'), flag('auto'), flag('hand')),
+      h('div', { class: 'row bal-line' }, num('handRadius', 0.5), num('interval', 0.1)),
+      h('h3', {}, 'สัตว์เลี้ยงที่เก็บของ'),
+      h('div', { class: 'row bal-line' }, ...petIds().map(pet)),
     );
   };
 
@@ -1471,6 +1509,26 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- Perfect Dodge (src/shared/dodgeTuning.ts)
+  const dodgeCard = h('div', { class: 'card' });
+  const drawDodge = (): void => {
+    const d = draft.dodge;
+    const cd = code.dodge;
+    const refresh = (): void => { updateSummary(); };
+    const sw = (k: 'on' | 'boss') => h('label', { class: d[k] !== cd[k] ? 'bal-changed' : '', title: 'ค่าในโค้ด: เปิด' },
+      h('input', { type: 'checkbox', checked: d[k], onchange: (e: Event) => { d[k] = (e.target as HTMLInputElement).checked; refresh(); drawDodge(); } }), ` ${DODGE_NAME[k]}`);
+    const num = (k: keyof typeof DODGE_RANGE, step: number) =>
+      h('label', {}, `${DODGE_NAME[k]} `, numBox(() => d[k], (n) => { d[k] = n; }, cd[k], DODGE_RANGE[k][0], DODGE_RANGE[k][1], step, refresh));
+    dodgeCard.replaceChildren(
+      h('h2', {}, 'Perfect Dodge'),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: กดแดชแล้วท่าของมอน/กระสุน/ท่าบอสลงตอนกำลังอมตะจากแดช (ปกติขึ้น MISS) และกดแดชมาไม่เกินเวลาข้างล่าง = Perfect Dodge ได้อมตะเพิ่ม + ดาเมจเพิ่มชั่วคราว ขึ้นป้าย "PERFECT DODGE!" และวงเวทบัฟโจมตี · ดาเมจเพิ่มแยกจากบัฟสกิล (คูณต่อกัน) · ตายแล้วหาย · แดชพ้นระยะไปเลย (ท่าไม่โดนตัว) ไม่นับ · มีผลกับทุกคนทันทีหลังบันทึก'),
+      h('div', { class: 'row bal-line' }, sw('on'), sw('boss')),
+      h('div', { class: 'row bal-line' }, num('window', 0.05), num('invuln', 0.1), num('cooldown', 0.5)),
+      h('div', { class: 'row bal-line' }, num('dmgPct', 5), num('dmgSec', 0.5)),
+      h('div', { class: 'muted' }, `ค่าในโค้ด: กดแดชก่อนโดนตีไม่เกิน ${cd.window} วิ (แดชอมตะ 0.23 วิ) · อมตะเพิ่ม ${cd.invuln} วิ · ดาเมจ +${cd.dmgPct}% นาน ${cd.dmgSec} วิ · เกิดซ้ำได้ทุก ${cd.cooldown} วิ · ดาเมจ 0% หรือ 0 วิ = ไม่มีบัฟดาเมจ`),
+    );
+  };
+
   // ---------------------------------------------------------- sound effect groups (src/shared/audioTuning.ts)
   const audioCard = h('div', { class: 'card' });
   const drawAudio = (): void => {
@@ -1699,11 +1757,13 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawMoves();
     drawLang();
     drawAuto();
+    drawPet();
     drawTut();
     drawTalk();
     drawFx();
     drawCircles();
     drawRoot();
+    drawDodge();
     drawAudio();
     drawBossMusic();
     drawRig();
@@ -1751,17 +1811,17 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         void save({ tuning: c.tuning, part: 'rest' }, `ใช้ค่าใหม่กับทั้งเซิร์ฟทันทีไหม?\n\n${changes.slice(0, 1200)}`);
       } }, '💾 บันทึกทั้งเซิร์ฟ'),
       h('button', { onclick: () => { draft = mergeBalance(saved); redraw(); fold.clearDirty(); msg.textContent = ''; } }, 'ยกเลิกที่ยังไม่บันทึก'),
-      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (ทุกการ์ดทุกหมวด: อาชีพ tier ตัวคูณมอน ห้องบอส เมืองกลาง ตัวคูณ EXP VIP ยา กระเป๋า ตีบวก เซ็ตไอเทม Auto Play รางวัลเควสสอนระบบ หน้าตา UI เอฟเฟกต์สกิล เสียง และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
+      h('button', { onclick: () => void save({ reset: true, part: 'rest' }, 'คืนทุกค่าในแท็บนี้ (ทุกการ์ดทุกหมวด: อาชีพ tier ตัวคูณมอน ห้องบอส เมืองกลาง ตัวคูณ EXP VIP ยา กระเป๋า ตีบวก เซ็ตไอเทม Auto Play สัตว์เลี้ยงเก็บของ รางวัลเควสสอนระบบ หน้าตา UI เอฟเฟกต์สกิล เสียง และหยุดตอนโจมตี) เป็นค่าในโค้ดทั้งเซิร์ฟเลยไหม?\n(ค่าในแท็บระบบสกิลไม่เปลี่ยน มีปุ่มคืนค่าของตัวเอง)') }, '↺ คืนค่าในโค้ด'),
     ),
     msg,
   );
 
   // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
   const CATS: { name: string; cards: HTMLElement[] }[] = [
-    { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard] },
+    { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard, dodgeCard] },
     { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
-    { name: 'Auto Play', cards: [autoCard] },
+    { name: 'Auto Play', cards: [autoCard, petCard] },
     { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, shaderCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },
     { name: 'ระบบ-รางวัล', cards: [expCard, vipCard, floorCard, gearCard, tutCard, talkCard, langCard] },
   ];

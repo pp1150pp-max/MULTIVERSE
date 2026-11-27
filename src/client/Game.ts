@@ -129,6 +129,8 @@ export class Game {
   /** The Seeker's intro is shown only when you talk to him. */
   metSeeker = true;
   autoPlay = false;
+  /** The "พักหน้าจอ" rest screen is up (src/client/ui/autoSummary.ts): the loop skips drawing. */
+  restScreen = false;
   private readonly hazardViews: HazardViews;
   /** Waypoints left from a click on the full map (empty = not walking anywhere). */
   mapRoute: Vec2[] = [];
@@ -279,7 +281,8 @@ export class Game {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     this.update(dt);
-    this.renderer.render(this.scene, this.camera);
+    // The rest screen covers everything in black: the world keeps up with the server, but nothing is drawn (battery).
+    if (!this.restScreen || this.frames < 3) this.renderer.render(this.scene, this.camera);
     if (this.frames < 3) {
       this.frames++;
       // Behind the first entry's loading screen: send every texture to the GPU and build the shaders
@@ -535,6 +538,7 @@ export class Game {
       case 'autoOff':
         this.autoPlay = false;
         this.hud.log(ev.msg, '#ff8a6a');
+        this.hud.autoSummary.autoStopped(ev.msg);
         break;
       case 'banner':
         this.hud.banner(ev.text, ev.sub, ev.color);

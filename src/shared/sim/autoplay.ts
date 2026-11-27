@@ -1,4 +1,5 @@
 import type { Intent } from './types';
+import { newTally, type AutoTally } from './autoTally';
 import type { Monster } from './Monster';
 import { AUTO_PX_PER_UNIT, type AutoSkill, type Player } from './Player';
 import { isPriorityLoot, type Loot } from './Loot';
@@ -45,6 +46,23 @@ function basicReachScale(p: Player): number {
   const r = (x: typeof now) => (x && x.kind !== 'self' ? x.range : 0);
   return r(now) > 0 && r(code) > 0 ? r(now) / r(code) : 1;
 }
+/** The Auto farming circle's radius in world units (the player's Auto range setting). */
+export function autoRadius(p: Player): number {
+  return p.autoSettings.range / AUTO_PX_PER_UNIT;
+}
+
+/**
+ * Whether Auto may take drop `l` for player `p` (Auto's own looting and the pet's while Auto is on, sim/petLoot.ts):
+ * inside the circle of radius `R` around `anchor`, not in a boss arena or lava, not thrown away, the 10 s priority
+ * (canTake), the loot filter, room in the bag (a full bag just keeps fighting), and with `othersLoot` false only this
+ * player's or the party's drops and those nobody owns.
+ */
+export function autoMayTake(p: Player, l: Loot, time: number, zone: ZoneDef, anchor: { x: number; z: number }, R: number, othersLoot: boolean): boolean {
+  if (Math.hypot(l.x - anchor.x, l.z - anchor.z) > R + 0.5 || inBossArena(zone, l.x, l.z) || lavaAt(zone, l.x, l.z)) return false;
+  if (l.dead || l.dropped || !l.canTake(p, time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) return false;
+  return othersLoot || l.owner === null || l.owner === p.id || (p.partyId !== null && l.ownerParty === p.partyId);
+}
+
 /** A drop counts as "got closer" (resetting the give-up timer) only when Auto is this much nearer than before. */
 const LOOT_PROGRESS = 0.25;
 /** Monsters farther than this are never targeted (nor hold up "fight first" looting). */
@@ -93,9 +111,12 @@ export class AutoPlay {
   private gaveUp = new Set<number>();
   /** Auto wants to be switched off (out of supplies, or reading the return scroll): the message why. */
   private stopMsg: string | null = null;
+  /** What this Auto run has earned (src/shared/sim/autoTally.ts): kept across a dropped connection, new on each start. */
+  tally: AutoTally = newTally();
 
   /** Auto was just switched on here. */
   start(x: number, z: number): void {
+    this.tally = newTally();
     this.anchor = { x, z };
     this.idleSince = null;
     this.hintAt = -Infinity;
@@ -236,11 +257,7 @@ export class AutoPlay {
       let bd = maxD;
       for (const l of g.loots) {
         if (priority && !isPriorityLoot(l.kind)) continue;
-        if (this.gaveUp.has(l.id) || this.fromAnchor(l) > R + 0.5 || inBossArena(g.zone, l.x, l.z) || lavaAt(g.zone, l.x, l.z)) continue;
-        // Loot that doesn't fit in the bag (or the loot filter skips) is ignored, so a full bag just keeps fighting.
-        if (l.dead || l.dropped || !l.canTake(p, g.time) || !p.wantsLoot(l.kind, false) || !p.canFit(l.kind)) continue;
-        // Own drops only: this player's or the party's, and those nobody owns.
-        if (!othersLoot && l.owner !== null && l.owner !== p.id && !(p.partyId !== null && l.ownerParty === p.partyId)) continue;
+        if (this.gaveUp.has(l.id) || !autoMayTake(p, l, g.time, g.zone, this.anchor ?? p, R, othersLoot)) continue;
         const d = dist(l);
         if (d < bd) {
           bd = d;
@@ -267,7 +284,12 @@ export class AutoPlay {
 
   /** The farming circle's radius in world units. */
   private radius(p: Player): number {
-    return p.autoSettings.range / AUTO_PX_PER_UNIT;
+    return autoRadius(p);
+  }
+
+  /** Centre of the farming circle (where Auto was switched on), or null before the first frame. Pets read it (sim/petLoot.ts). */
+  get anchorPoint(): { x: number; z: number } | null {
+    return this.anchor;
   }
 
   private fromAnchor(a: { x: number; z: number }): number {

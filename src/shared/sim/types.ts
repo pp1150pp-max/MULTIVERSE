@@ -107,6 +107,8 @@ export interface FxApi {
    * The client draws a vanishing ring and an appearing ring in the colours of the worn dash cosmetic.
    */
   warp(x1: number, z1: number, x2: number, z2: number, by: number): void;
+  /** Player `by`'s pet picked up the drop that lay at (x, z) (sim/petLoot.ts): the client flies it to the player. */
+  petLoot(x: number, z: number, by: number, kind: 'gold' | 'item' | 'potion' | 'stone'): void;
 }
 
 export type SkillEffect = 'slash' | 'whirlwind' | 'charge' | 'quake' | 'explosion' | 'frost' | 'crater' | 'muzzle' | 'impact'

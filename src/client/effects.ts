@@ -889,6 +889,34 @@ export class Effects implements FxApi {
   }
 
   /**
+   * Player `by`'s pet picked up the drop at (x, z) (owner 2026-11-27, src/shared/sim/petLoot.ts): a small glow in the
+   * drop's colour hops in an arc to the player. Within the graphics menu ("ปิด" or others hidden = nothing for others).
+   */
+  petLoot(x: number, z: number, by: number, kind: 'gold' | 'item' | 'potion' | 'stone'): void {
+    const mine = !this.layerHooks || by === this.layerHooks.me();
+    if (!mine && (gfxOthers() <= 0 || gfxQuality() <= 0)) return;
+    const color = kind === 'gold' ? '#ffd34a' : kind === 'potion' ? '#ff6a8a' : kind === 'stone' ? '#b98aff' : '#8fe8ff';
+    const s = this.glowSprite(color, 0.45, 1);
+    s.position.set(x, 0.3, z);
+    const mat = s.material;
+    let trail = 0;
+    this.add(s, 0.5, (k, dt) => {
+      const to = this.posOf?.(by) ?? { x, z };
+      const e = k * k * (3 - 2 * k);
+      s.position.x = x + (to.x - x) * e;
+      s.position.z = z + (to.z - z) * e;
+      s.position.y = 0.3 + 0.7 * e + Math.sin(Math.PI * k) * 1.2;
+      s.scale.setScalar(0.45 * (1 - 0.4 * k));
+      mat.opacity = k < 0.85 ? 1 : (1 - k) / 0.15;
+      trail += dt;
+      if (trail > 0.06 && gfxQuality() > 0) {
+        trail = 0;
+        this.puff(s.position.x, s.position.y, s.position.z, color, 0.25, 0.25);
+      }
+    });
+  }
+
+  /**
    * A dash cosmetic played as if player `p` had just dashed to where it stands, along its facing (the shop's
    * try-on and the "play again" button: only on this screen, the character doesn't move).
    */

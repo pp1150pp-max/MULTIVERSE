@@ -269,4 +269,6 @@ export const EN_SERVER: Record<string, string> = {
   'วันนี้เทรดครบ {0} ครั้งแล้ว — รีเซ็ตตอนเที่ยงคืน (เวลาไทย) · VIP เทรดได้ไม่จำกัด': 'You have used all {0} trades for today — resets at midnight (Thai time) · VIP trades without limit',
   '{0} เทรดครบ {1} ครั้งของวันนี้แล้ว': '{0} has used all {1} trades for today',
   'เทรดวันนี้เหลืออีก {0}/{1} ครั้ง': 'Trades left today: {0}/{1}',
+  // Perfect Dodge (Sim.perfectDodge).
+  'ดาเมจ +{0}% {1} วิ': 'Damage +{0}% for {1} s',
 };

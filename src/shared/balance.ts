@@ -4,6 +4,7 @@
 // data/classes.ts and data/items.ts, and changes are saved in the server's settings table as overrides
 // only (like cos_tuning), so an untouched server runs exactly the code. The server applies them at start
 // and on every save, and sends them to every browser so tooltips and the blacksmith's odds match.
+import { checkDodgeTuning, codeDodge, dodgeChanges, mergeDodge, type DodgeConfig, type DodgeTuning } from './dodgeTuning';
 import { CLASSES, CLASS_IDS, MP_COST_PER_LEVEL } from './data/classes';
 import {
   CODE_BOSS_TIER_BOOST, CODE_RANGE_FLOOR, setAffixWeights, CODE_TIER_WEIGHT, CODE_TIER_WIDTH, setItemStatMult, setMoveGrowth, CODE_MOVE_GROWTH, setTierTables, TIER_BAND_NAME, TIER_BANDS, tierBandOf, type TierBand, type TierTableDef,
@@ -26,6 +27,7 @@ import { bagExpandChanges, checkBagExpand, codeBagExpand, mergeBagExpand, type B
 import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, type NpcTalkConfig, type NpcTalkTuning } from './npcTalk';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
+import { checkPetLootTuning, codePetLoot, mergePetLoot, petLootChanges, type PetLootConfig, type PetLootTuning } from './petLootTuning';
 import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
 import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
 import { checkSkillTuning, codeSkills, mergeSkills, skillChanges, type SkillConfig, type SkillTuning } from './skillTuning';
@@ -306,6 +308,8 @@ export interface Balance {
   rigLook: RigLookConfig;
   /** Stopping for a moment on each attack, per class (attackRootTuning.ts). */
   attackRoot: AttackRootConfig;
+  /** Perfect Dodge: dash through a hit at the last moment (dodgeTuning.ts). */
+  dodge: DodgeConfig;
   /** Sound effect groups: server-wide switch and loudness (audioTuning.ts). */
   audio: AudioConfig;
   /** Which buttons the menu window and the top-right icon row show, in what order (menuLayout.ts). */
@@ -322,6 +326,8 @@ export interface Balance {
   skills: SkillConfig;
   /** Floor 2's new monster and boss moves (moveTuning.ts). */
   moves: MoveConfig;
+  /** Pets pick up loot (petLootTuning.ts, owner 2026-11-27). */
+  petLoot: PetLootConfig;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -437,6 +443,8 @@ export interface BalanceTuning {
   rigLook?: RigLookTuning;
   /** Attack stop settings that differ from the code. */
   attackRoot?: AttackRootTuning;
+  /** Perfect Dodge settings that differ from the code. */
+  dodge?: DodgeTuning;
   audio?: AudioTuning;
   /** Menu / icon row lists that differ from the code. */
   menuLayout?: MenuLayoutTuning;
@@ -452,6 +460,8 @@ export interface BalanceTuning {
   skills?: SkillTuning;
   /** Floor 2 move numbers that differ from the code. */
   moves?: MoveTuning;
+  /** Pet loot settings that differ from the code. */
+  petLoot?: PetLootTuning;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -576,6 +586,7 @@ export function codeBalance(): Balance {
     fxLayer: codeFxLayer(),
     rigLook: codeRigLook(),
     attackRoot: codeAttackRoot(),
+    dodge: codeDodge(),
     audio: codeAudio(),
     menuLayout: codeMenuLayout(),
     hudLayout: codeHudLayout(),
@@ -584,6 +595,7 @@ export function codeBalance(): Balance {
     sets: codeSets(),
     skills: codeSkills(),
     moves: codeMoves(),
+    petLoot: codePetLoot(),
   };
 }
 
@@ -668,6 +680,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.fxLayer = mergeFxLayer(t.fxLayer);
   b.rigLook = mergeRigLook(t.rigLook);
   b.attackRoot = mergeAttackRoot(t.attackRoot);
+  b.dodge = mergeDodge(t.dodge);
   b.audio = mergeAudio(t.audio);
   b.menuLayout = mergeMenuLayout(t.menuLayout);
   b.hudLayout = mergeHudLayout(t.hudLayout);
@@ -676,6 +689,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
   b.moves = mergeMoves(t.moves);
+  b.petLoot = mergePetLoot(t.petLoot);
   return b;
 }
 
@@ -818,7 +832,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1422,6 +1436,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.attackRoot = c.tuning;
     return null;
   };
+  const dodge = (): string | null => {
+    const c = checkDodgeTuning(o.dodge, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.dodge = c.tuning;
+    return null;
+  };
   const sets = (): string | null => {
     const c = checkSetTuning(o.sets, strict);
     if ('error' in c) return c.error;
@@ -1432,6 +1452,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     const c = checkMoveTuning(o.moves, strict);
     if ('error' in c) return c.error;
     if (c.tuning) out.moves = c.tuning;
+    return null;
+  };
+  const petLoot = (): string | null => {
+    const c = checkPetLootTuning(o.petLoot, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.petLoot = c.tuning;
     return null;
   };
   const npcTalk = (): string | null => {
@@ -1531,11 +1557,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     fxLayer() ??
     rigLook() ??
     attackRoot() ??
+    dodge() ??
     audio() ??
     menuLayout() ??
     hudLayout() ??
     sets() ??
-    moves();
+    moves() ??
+    petLoot();
   if (err) return { error: err };
   // Fixed key order.
   const ordered: BalanceTuning = {};
@@ -1692,10 +1720,12 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   out.push(...rigLookChanges(a.rigLook, b.rigLook));
   out.push(...attackRootChanges(a.attackRoot, b.attackRoot));
+  out.push(...dodgeChanges(a.dodge, b.dodge));
   out.push(...audioChanges(a.audio, b.audio));
   out.push(...menuLayoutChanges(a.menuLayout, b.menuLayout));
   out.push(...setChanges(a.sets, b.sets));
   out.push(...moveChanges(a.moves, b.moves));
+  out.push(...petLootChanges(a.petLoot, b.petLoot));
   out.push(...hudLayoutChanges(a.hudLayout, b.hudLayout));
   return out.join(', ');
 }

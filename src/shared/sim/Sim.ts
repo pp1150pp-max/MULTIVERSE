@@ -2,6 +2,7 @@
 // to show effects, damage numbers and messages.
 import { hitElement, markDamageMult, runReaction } from './elements';
 import type { ReactionId } from '../elementTuning';
+import { addItem, type AutoTally } from './autoTally';
 import { floorOf, hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
@@ -13,6 +14,7 @@ import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
 import { splitOnDeath, tickCurses } from './graveMoves';
+import { tickPetLoot } from './petLoot';
 import {
   announceFrom, bannerFrom, dropsOnFail, forgeCd, enhanceCost, itemName, maxPlus, plusOf, rollEnhance, stonesNeeded, type EnhanceResult,
 } from '../data/enhance';
@@ -537,6 +539,7 @@ export class Sim {
     this.hitCount++;
     let raw = p.stats.atk * mult * (0.9 + Math.random() * 0.2) * passiveDealMult(p, m, opts.skill);
     if (this.time < p.dmgUntil) raw *= p.dmgMult;
+    if (this.time < p.perfectUntil) raw *= p.perfectMult;
     // Card "ดาเมจโจมตีปกติ %" (normalAtkPct): the class's basic attack only, never a skill (card plan 12.3 no. 7).
     const fx = p.cardFx;
     if (fx.normalAtkPct > 0) {
@@ -629,7 +632,7 @@ export class Sim {
   hitPlayer(m: Monster, p: Player, mult: number, opts: HitOpts): void {
     if (!p.alive || this.inSafe(p)) return;
     if (p.invulnT > 0 || p.guardT > 0) {
-      this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
+      if (!this.perfectDodge(m, p)) this.text(p.x, p.topY, p.z, 'MISS', 'info', 0.6);
       return;
     }
     const weak = this.time < m.weakUntil ? 1 - m.weak : 1;
@@ -663,6 +666,28 @@ export class Sim {
       this.hitMonster(p, m, back, { maxMult: back, reflected: true });
     }
     if (p.hp <= 0) this.killPlayer(p);
+  }
+
+  /**
+   * Perfect Dodge (owner 2026-11-27, dodgeTuning.ts): this hit missed because of the dash, and the dash button was
+   * pressed at most `window` seconds ago. Gives extra invulnerability and a damage buff; true when it happened.
+   */
+  private perfectDodge(m: Monster, p: Player): boolean {
+    const cfg = currentBalance().dodge;
+    if (!cfg.on || (m.isBoss && !cfg.boss) || p.invulnT <= 0) return false;
+    if (this.time - p.dodgeDashAt > cfg.window || this.time < p.dodgeReadyAt) return false;
+    p.dodgeReadyAt = this.time + cfg.cooldown;
+    p.invulnT = Math.max(p.invulnT, cfg.invuln);
+    if (cfg.dmgPct > 0 && cfg.dmgSec > 0) {
+      p.perfectMult = 1 + cfg.dmgPct / 100;
+      p.perfectUntil = this.time + cfg.dmgSec;
+    }
+    this.text(p.x, p.topY + 0.3, p.z, 'PERFECT DODGE!', 'lvl', 1.1);
+    if (cfg.dmgPct > 0 && cfg.dmgSec > 0) this.text(p.x, p.topY - 0.1, p.z, `ดาเมจ +${cfg.dmgPct}% ${cfg.dmgSec} วิ`, 'info', 1.1, p.id);
+    this.fx('ring', p.x, p.z, 1.6, '#9fe8ff', 0.35);
+    this.fx('burst', p.x, 1, p.z, '#bff2ff', 14, 4);
+    this.sfx('pickup_item', p.x, p.z, p.id);
+    return true;
   }
 
   /**
@@ -884,6 +909,8 @@ export class Sim {
     for (const [id, dealt] of m.damageBy) {
       const p = this.players.find((x) => x.id === id);
       if (!p || dealt <= 0) continue;
+      const tally = this.autoTally(p);
+      if (tally) tally.kills++;
       const mult = expGapMult(p.level, m.level);
       // A boss room gives the EXP of one kill per key put in.
       const exp = Math.max(1, Math.round(m.expReward * (m.isBoss ? this.keys : 1) * (dealt / total) * mult));
@@ -922,11 +949,15 @@ export class Sim {
     // Levels go up after every share is worked out, so a level-up mid-kill can't change who is eligible.
     for (const [p, exp] of gained) {
       if (!m.damageBy.has(p.id) && exp > 0) this.text(p.x, p.topY + 0.4, p.z, `+${exp} EXP (ปาร์ตี้)`, 'exp', 1.1, p.id);
+      const tally = this.autoTally(p);
+      if (tally && p.level < MAX_LEVEL) tally.exp += exp;
       this.addExp(p, exp);
     }
   }
 
   private killPlayer(p: Player): void {
+    const tally = this.autoTally(p);
+    if (tally) tally.deaths++;
     p.alive = false;
     p.hp = 0;
     p.moving = false;
@@ -1271,6 +1302,8 @@ export class Sim {
       }
       p.exp -= expToNext(p.level);
       p.level++;
+      const tally = this.autoTally(p);
+      if (tally) tally.lv++;
       p.recompute();
       p.hp = p.maxHp;
       p.mp = p.stats.maxMp;
@@ -1681,25 +1714,35 @@ export class Sim {
   }
 
   /** Called by Loot when a player touches it. Returns false if it can't be picked up. */
+  /** The Auto run's tally to add to, while Auto Play is on for this player (src/shared/sim/autoTally.ts). */
+  private autoTally(p: Player): AutoTally | null {
+    return p.autoOn ? p.autoTally : null;
+  }
+
   pickup(p: Player, l: Loot): boolean {
     const k = l.kind;
+    const tally = this.autoTally(p);
     if (k.type === 'gold') {
       p.gold += k.amount;
+      if (tally) tally.gold += k.amount;
       this.text(p.x, p.topY, p.z, `+${k.amount} G`, 'gold', 0.7, p.id);
       this.sfx('pickup_gold', p.x, p.z, p.id);
     } else if (k.type === 'potion') {
       if (!p.addPotions(k.pot, k.size, k.count)) return false;
+      if (tally) tally.potGot += k.count;
       this.text(p.x, p.topY, p.z, `+${potionName(k.pot, k.size)}${k.count > 1 ? ` ×${k.count}` : ''}`, k.pot === 'hp' ? 'heal' : 'mana', 0.7, p.id);
       this.sfx('pickup_potion', p.x, p.z, p.id);
       this.inventoryChanged(p);
     } else if (k.type === 'stone') {
       if (!p.addStones(k.stone, k.count)) return false;
+      if (tally) tally.stones += k.count;
       this.text(p.x, p.topY, p.z, `+${STONE_NAME[k.stone]}${k.count > 1 ? ` ×${k.count}` : ''}`, 'lvl', 0.9, p.id);
       this.log(`ได้รับ ${STONE_NAME[k.stone]}${k.count > 1 ? ` ×${k.count}` : ''}`, STONE_COLOR[k.stone], p.id);
       this.sfx('pickup_item', p.x, p.z, p.id);
       this.afterChange(p);
     } else {
       if (!p.addToBag(k.item)) return false;
+      if (tally) addItem(tally, k.item.rarity);
       this.events.push({ t: 'item', to: p.id, item: k.item });
       this.sfx('pickup_item', p.x, p.z, p.id);
     }
@@ -2437,6 +2480,8 @@ export class Sim {
 
     for (const pr of this.projectiles) pr.update(dt);
     this.projectiles = this.projectiles.filter((pr) => !pr.dead);
+    // Worn pets fetch drops for their owner (owner 2026-11-27, sim/petLoot.ts).
+    tickPetLoot(this, dt);
     for (const l of this.loots) l.update(dt, this);
     this.loots = this.loots.filter((l) => !l.dead);
 
