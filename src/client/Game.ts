@@ -535,6 +535,7 @@ export class Game {
       case 'autoOff':
         this.autoPlay = false;
         this.hud.log(ev.msg, '#ff8a6a');
+        this.hud.autoSummary.autoStopped(ev.msg);
         break;
       case 'banner':
         this.hud.banner(ev.text, ev.sub, ev.color);

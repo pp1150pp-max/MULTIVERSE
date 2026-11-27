@@ -79,6 +79,12 @@ export interface AutoConfig {
   priorityDist: number;
   /** Default seconds Auto waits after casting one skill before it casts the next (owner 2026-11-22; 0 = no wait). Players can set their own. */
   skillGap: number;
+  /**
+   * The "while you were away" summary (owner 2026-11-27, src/client/autoSummary.ts): with Auto on and the game not
+   * touched for `summaryMin` minutes, a window counts what Auto earned until the player closes it.
+   */
+  summary: boolean;
+  summaryMin: number;
 }
 
 /** What is saved: only what differs from the code. */
@@ -96,6 +102,8 @@ export interface AutoTuning {
   skillGap?: number;
   priorityLoot?: boolean;
   priorityDist?: number;
+  summary?: boolean;
+  summaryMin?: number;
 }
 
 export const AUTO_RANGE = {
@@ -106,6 +114,7 @@ export const AUTO_RANGE = {
   aoeMargin: [0, 3],
   skillGap: [0, 2],
   priorityDist: [0, 60],
+  summaryMin: [1, 60],
 } as const satisfies Record<string, readonly [number, number]>;
 export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   giveUpSec: 'Auto ข้ามของที่เก็บไม่ได้หลัง (วิ)',
@@ -115,7 +124,10 @@ export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   aoeMargin: 'Auto ระยะสกิล: หักระยะเผื่อพลาด (ม.)',
   skillGap: 'Auto เว้นระหว่างสกิล ค่าเริ่มต้น (วิ)',
   priorityDist: 'Auto เก็บก่อน: ระยะสูงสุด (0 = ทั้งวง Auto)',
+  summaryMin: 'หน้าสรุป Auto ขึ้นเมื่อไม่แตะเกม (นาที)',
 };
+/** Name of the "while you were away" summary switch. */
+export const AUTO_SUMMARY_NAME = 'หน้าสรุปผล Auto ตอนไม่แตะเกม';
 /** Name of the "keep farming after a dropped connection" switch. */
 /** Name of the "only cast a skill that reaches" switch (key `aoeGuard`, kept from the mage-only version). */
 export const AUTO_AOE_GUARD_NAME = 'Auto กดสกิลเมื่อสกิลถึงเป้าเท่านั้น (ทุกอาชีพ)';
@@ -142,6 +154,8 @@ export function codeAuto(): AutoConfig {
     skillGap: 0.3,
     priorityLoot: true,
     priorityDist: 0,
+    summary: true,
+    summaryMin: 3,
   };
 }
 const CODE = codeAuto();
@@ -156,6 +170,7 @@ export function mergeAuto(t: AutoTuning | undefined): AutoConfig {
   if (t.homeWait !== undefined) c.homeWait = t.homeWait;
   if (t.aoeGuard !== undefined) c.aoeGuard = t.aoeGuard;
   if (t.priorityLoot !== undefined) c.priorityLoot = t.priorityLoot;
+  if (t.summary !== undefined) c.summary = t.summary;
   return c;
 }
 
@@ -194,7 +209,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่า Auto ไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'homeWait', 'aoeGuard', 'priorityLoot'];
+  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'homeWait', 'aoeGuard', 'priorityLoot', 'summary'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `Auto: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -275,6 +290,11 @@ export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuni
       if (strict) return { error: `${AUTO_PRIORITY_LOOT_NAME} ต้องเป็นเปิด/ปิด` };
     } else if (x.priorityLoot !== CODE.priorityLoot) out.priorityLoot = x.priorityLoot;
   }
+  if (x.summary !== undefined) {
+    if (typeof x.summary !== 'boolean') {
+      if (strict) return { error: `${AUTO_SUMMARY_NAME} ต้องเป็นเปิด/ปิด` };
+    } else if (x.summary !== CODE.summary) out.summary = x.summary;
+  }
   return { tuning: Object.keys(out).length ? out : undefined };
 }
 
@@ -292,5 +312,6 @@ export function autoChanges(a: AutoConfig, b: AutoConfig): string[] {
   if (a.homeWait !== b.homeWait) out.push(`${AUTO_HOME_WAIT_NAME} ${a.homeWait ? 'เปิด' : 'ปิด'} → ${b.homeWait ? 'เปิด' : 'ปิด'}`);
   if (a.priorityLoot !== b.priorityLoot) out.push(`${AUTO_PRIORITY_LOOT_NAME} ${a.priorityLoot ? 'เปิด' : 'ปิด'} → ${b.priorityLoot ? 'เปิด' : 'ปิด'}`);
   if (a.aoeGuard !== b.aoeGuard) out.push(`${AUTO_AOE_GUARD_NAME} ${a.aoeGuard ? 'เปิด' : 'ปิด'} → ${b.aoeGuard ? 'เปิด' : 'ปิด'}`);
+  if (a.summary !== b.summary) out.push(`${AUTO_SUMMARY_NAME} ${a.summary ? 'เปิด' : 'ปิด'} → ${b.summary ? 'เปิด' : 'ปิด'}`);
   return out;
 }

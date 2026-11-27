@@ -1,4 +1,5 @@
 import { Unit } from './Unit';
+import type { AutoTally } from './autoTally';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import { suctionStep } from './kraken';
@@ -493,6 +494,8 @@ export class Player extends Unit {
   buffs: Buffs;
   /** True while Auto Play runs for this player (set by the server each tick); Sim halves their EXP. Never saved. */
   autoOn = false;
+  /** What the running Auto Play has earned (the server's AutoPlay keeps it; the browser's copy comes from the snapshot). Never saved. */
+  autoTally: AutoTally | null = null;
   /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */
   vip = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
@@ -1319,6 +1322,7 @@ export class Player extends Unit {
       return sim.text(this.x, this.topY, this.z, `ไม่มียา ${kind.toUpperCase()}`, 'info', undefined, this.id);
     }
     sim.inventoryChanged(this);
+    if (this.autoOn && this.autoTally) this.autoTally.potUsed++;
     sim.sfx('drink', this.x, this.z, this.id);
     // The cards' "ยาฟื้นเพิ่ม %" on top of the class's potion bonus (card plan 5.1).
     const amount = Math.round(potionHeal(kind, size, this.cls.id) * (1 + this.cardFx.potion / 100));

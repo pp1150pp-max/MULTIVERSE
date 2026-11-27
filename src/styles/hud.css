@@ -236,3 +236,15 @@
 #expbar .fill { height: 100%; background: linear-gradient(#d6b468, #8f7228); }
 #expbar span { position: absolute; left: 0; right: 0; top: 20%; height: 54.5%; display: grid; place-items: center; font-size: 10px; line-height: 1; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
 
+
+/* The "while you were away" Auto summary (src/client/ui/autoSummary.ts): over everything, closed by ✕ or a double click. */
+.auto-sum-back { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); user-select: none; }
+.auto-sum-back.hidden { display: none; }
+.auto-sum { position: relative; width: min(340px, calc(100vw - 32px)); font-size: 14px; }
+.auto-sum-since { color: var(--ink-dim); margin-top: 6px; }
+.auto-sum-status { margin: 6px 0 8px; color: #9fd8ff; }
+.auto-sum-status.off { color: #ff8a6a; }
+.auto-sum-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid rgba(143, 114, 56, 0.25); }
+.auto-sum-row b { color: var(--gold-hi); font-weight: normal; }
+.auto-sum-rarity { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; font-size: 13px; }
+.auto-sum-hint { margin-top: 10px; text-align: center; }
