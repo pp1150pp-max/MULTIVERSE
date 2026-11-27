@@ -37,7 +37,7 @@ export type BuffKind = keyof typeof BUFF_BIT;
 
 export function buffMask(p: Player, now: number): number {
   let n = 0;
-  if ((now < p.dmgUntil && p.dmgMult > 1) || now < p.lifestealUntil) n |= BUFF_BIT.attack;
+  if ((now < p.dmgUntil && p.dmgMult > 1) || now < p.lifestealUntil || now < p.perfectUntil) n |= BUFF_BIT.attack;
   if ((now < p.shieldUntil && p.shield > 0) || (now < p.takenUntil && p.takenMult < 1) || now < p.reflectUntil || now < p.steadyUntil) n |= BUFF_BIT.guard;
   if (now < p.hasteUntil && p.haste > 0) n |= BUFF_BIT.speed;
   for (const b of p.statBuffs) {

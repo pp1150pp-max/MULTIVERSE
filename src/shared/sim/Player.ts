@@ -580,6 +580,13 @@ export class Player extends Unit {
   /** Damage dealt × this until `dmgUntil`. */
   dmgMult = 1;
   dmgUntil = 0;
+  /** Sim time the dash button last started a dash (Perfect Dodge, dodgeTuning.ts). */
+  dodgeDashAt = -Infinity;
+  /** Sim time the next Perfect Dodge can happen. */
+  dodgeReadyAt = 0;
+  /** Perfect Dodge's damage buff: × `perfectMult` until `perfectUntil` (its own, never mixed with skill buffs). */
+  perfectMult = 1;
+  perfectUntil = 0;
   /** Skill cooldowns (not the dash) run (1 + haste)× as fast until `hasteUntil`. */
   haste = 0;
   hasteUntil = 0;
@@ -1279,7 +1286,7 @@ export class Player extends Unit {
   clearSkillBuffs(): void {
     this.gun = emptyGunBuffs();
     this.shield = 0;
-    this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = 0;
+    this.shieldUntil = this.takenUntil = this.dmgUntil = this.hasteUntil = this.reflectUntil = this.steadyUntil = this.perfectUntil = 0;
     this.skillBuffs = {};
     if (this.statBuffs.length) {
       this.statBuffs = [];
@@ -1475,6 +1482,7 @@ export class Player extends Unit {
     const warp = this.warpOn();
     if (it.dash && !snared && (warp ? this.skillReady(dashSkill) : (this.cd.dash ?? 0) <= 0)) {
       const [dx, dz] = mx || mz ? [mx, mz] : [this.aimX, this.aimZ];
+      this.dodgeDashAt = sim.time;
       if (warp) {
         this.warpDash(dx, dz);
         this.useCharge(dashSkill);
