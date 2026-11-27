@@ -773,13 +773,13 @@ export class Terrain {
     for (const deg of [0, 90, 180, 270]) polar(deg % 180 ? 'hb_bench_a' : 'hb_bench_b', deg, HARBOR_PLAZA_RADIUS - 2.4, 1.3, 0.7);
     for (const deg of [65, 115, 245, 295]) polar('hb_banner_pole', deg, HARBOR_PLAZA_RADIUS + 2.2, 4, 0.3);
 
-    // ---- the shops: each a building against its edge of the main platform with its keeper in front, toward the
-    // plaza (like nexus_city: stores on the two top edges, the market on the two bottom ones). The picture stands on
-    // the point below the middle of its square footprint on screen, as in placeTown.
+    // ---- the shops: each a building against its edge of the main platform (like nexus_city: stores on the two top
+    // edges, the market on the two bottom ones). The picture stands on the point below the middle of its square
+    // footprint on screen, as in placeTown.
     const D = HUB_BUILDING_SIZE;
     const q = D / 2;
     const E = HARBOR_MAIN;
-    const shop = (key: string, h: number, alongX: boolean, side: number, t: number): Vec2 => {
+    const shop = (key: string, h: number, alongX: boolean, side: number, t: number): void => {
       // On the two bottom edges (toward the camera) the picture stands out past its footprint's near corner, so those
       // buildings stand further in (owner 2026-11-20: they hung out over the water).
       const back = side > 0 ? E - D / 2 - 2.6 : E - D / 2 - 0.4;
@@ -788,19 +788,26 @@ export class Terrain {
       for (const [ox, oz] of [[0, 0], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2]]) {
         this.colliders.push({ x: s.x + cx + ox, z: s.z + cz + oz, r: D / 2 - 0.6 });
       }
-      const front = back - D / 2 - 1.3;
-      return alongX ? { x: s.x + t * 0.75, z: s.z + side * front } : { x: s.x + side * front, z: s.z + t * 0.75 };
     };
     // Top-left edge (x = −E): the warehouse (stash) and the smuggler's stall; top-right (z = −E): the forge.
-    this.npcPos.keeper = shop('hb_warehouse', HUB_BUILDING_HEIGHT, false, -1, -5);
-    this.npcPos.crystal = shop('hb_smuggler', HUB_BUILDING_HEIGHT * 0.95, false, -1, 5.5);
-    this.npcPos.blacksmith = shop('hb_forge', HUB_BUILDING_HEIGHT, true, -1, 5);
+    shop('hb_warehouse', HUB_BUILDING_HEIGHT, false, -1, -5);
+    shop('hb_smuggler', HUB_BUILDING_HEIGHT * 0.95, false, -1, 5.5);
+    shop('hb_forge', HUB_BUILDING_HEIGHT, true, -1, 5);
     // The navigator (The Seeker's role here) by the brass globe on the top-right edge, toward the lighthouse.
     at('hb_brass_globe', -6.2, -E + 2.2, 2.6, 0.9);
     this.npcPos.seeker = { x: s.x - 4.2, z: s.z - E + 4.6 };
     // Bottom-left edge (z = +E): the ship's supply shop; bottom-right (x = +E): the broker's office.
-    this.npcPos.merchant = shop('hb_supply', HUB_BUILDING_HEIGHT, true, 1, -4.5);
-    this.npcPos.broker = shop('hb_broker', HUB_BUILDING_HEIGHT, false, 1, 4.5);
+    shop('hb_supply', HUB_BUILDING_HEIGHT, true, 1, -4.5);
+    shop('hb_broker', HUB_BUILDING_HEIGHT, false, 1, 4.5);
+    // The keepers, each at their own shop's door or counter, on the camera's side of its picture (owner 2026-11-27:
+    // standing toward the plaza, the pictures covered them). Pictures are drawn in order of x + z, so a keeper needs a
+    // larger one than their shop's. The bottom two stand between their shop and the water; a click walks round to them.
+    const keeper = (x: number, z: number): Vec2 => ({ x: s.x + x, z: s.z + z });
+    this.npcPos.keeper = keeper(-9.75, -3);
+    this.npcPos.crystal = keeper(-12.5, 9.75);
+    this.npcPos.blacksmith = keeper(9, -11.75);
+    this.npcPos.merchant = keeper(-2.75, 16);
+    this.npcPos.broker = keeper(16, 5.75);
     // Goods about the shops.
     at('hb_barrels', -E + 2, -E + 7.5, 1.5, 0.8);
     at('hb_crates', -E + 2.2, 12.2, 1.6, 0.8);

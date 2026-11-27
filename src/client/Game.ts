@@ -35,6 +35,7 @@ import { SpriteActor } from './SpriteActor';
 import { sheets, uploadAllTextures } from './assets';
 import { GameAudio } from './audio/gameAudio';
 import { findPath } from './pathfind';
+import { NpcWalk } from './walkTo';
 import { PartyUI } from './party';
 import { TradeUI } from './trade';
 import { FriendsUI } from './friends';
@@ -157,6 +158,7 @@ export class Game {
   talkReady = false;
   /** Where a left click sent the player: walk there, then pick up / talk / rest on arrival. */
   private goal: ClickGoal | null = null;
+  private readonly npcWalk = new NpcWalk();
   mouseWorld: Vec2 = { x: 0, z: 0 };
   /** Touch: the monster tapped to lock on to (its id), or null = aim at the nearest one. */
   private lockId: number | null = null;
@@ -623,7 +625,10 @@ export class Game {
     let moveTo: Vec2 | null = null;
     // Walking by hand or right-clicking forgets a clicked goal; otherwise keep walking to it.
     if (move || i.rmb) this.goal = null;
-    if (this.goal) moveTo = { x: this.goal.x, z: this.goal.z };
+    if (this.goal) {
+      const to = this.goal.kind === 'npc' ? this.npcWalk.aim(this.backend.terrain, this.player, this.goal) : this.goal;
+      moveTo = { x: to.x, z: to.z };
+    }
     if (i.rmb) {
       moveTo = { ...this.mouseWorld };
       if (i.rmbPressed) this.fx.marker(moveTo.x, moveTo.z);
