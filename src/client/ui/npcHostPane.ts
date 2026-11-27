@@ -1,7 +1,7 @@
 // An NPC's own window shown inside the grown NPC talk window (owner 2026-11-27, the merchant's layout "A"): the
 // portrait shrinks to a medallion with a speech bubble, the NPC's existing window (moved in as it is, zoomed to fit)
-// on the left and the player's gear/bag on the right. The blacksmith (npcForgePane.ts) and the warehouse keeper
-// (npcStashPane.ts) are specs of this. Browser only.
+// on the left and the player's gear/bag on the right (or the whole width). The blacksmith, the warehouse keeper,
+// the market broker and the crystal merchant (npc*Pane.ts) are specs of this. Browser only.
 import type { Game } from '../Game';
 import { currentBalance } from '../../shared/balance';
 import type { PanePart } from '../../shared/npcTalk';
@@ -29,6 +29,7 @@ export interface HostPaneSpec {
   hostId: string;
   title: string;
   bagTitle: string;
+  /** The tabs on the right; none = no right side, the NPC window takes the whole width (the cash shop). */
   views: readonly (readonly [BagView, string])[];
   /** The line under the bag (mouse / touch wording). */
   hint: (touch: boolean) => string;
@@ -68,8 +69,8 @@ export class NpcHostPane {
   private home: { parent: HTMLElement; next: Node | null } | null = null;
 
   constructor(private readonly g: Game, private readonly say: (text: string) => void, readonly spec: HostPaneSpec) {
-    this.view = spec.views[0][0];
-    this.root = el('div', `ns nh nh-${spec.kind}`);
+    this.view = spec.views[0]?.[0] ?? 'gear';
+    this.root = el('div', `ns nh nh-${spec.kind}${spec.views.length ? '' : ' nh-wide'}`);
     this.medal = el('div', 'ns-medal');
     this.medalImg = el('img');
     this.medalImg.alt = '';
@@ -94,7 +95,8 @@ export class NpcHostPane {
     this.foot = el('div', 'ns-foot');
     bag.append(this.bagTabs, this.bagBody, el('div', 'ns-hint', spec.hint(isTouchMode())), this.foot);
 
-    this.root.append(this.medal, this.bubble, left, bag);
+    this.root.append(this.medal, this.bubble, left);
+    if (spec.views.length) this.root.append(bag);
     this.root.addEventListener('mouseleave', () => this.g.hud.hideTip());
   }
 
@@ -106,7 +108,7 @@ export class NpcHostPane {
     this.medalImg.src = face;
     this.medal.classList.toggle('small', small);
     this.medal.classList.toggle('hidden', !face);
-    this.view = this.spec.onOpen?.(arg) ?? this.spec.views[0][0];
+    this.view = this.spec.onOpen?.(arg) ?? this.spec.views[0]?.[0] ?? 'gear';
     this.drawn = '';
     this.update();
   }
@@ -150,7 +152,7 @@ export class NpcHostPane {
     const p = this.g.player;
     const key = (e: BagEntry | null | undefined) => (!e ? '' : isItem(e) ? `${e.uid}+${e.plus ?? 0}` : `${sellPickKey(e)}x${e.count}`);
     const sig = [this.view, this.spec.sig(), p.gold, p.bag.map(key).join(','), EQUIP_SLOTS.map((s) => key(p.equipment[s])).join(',')].join('|');
-    if (sig === this.drawn) return;
+    if (sig === this.drawn || !this.spec.views.length) return;
     this.drawn = sig;
     for (const b of this.bagTabs.querySelectorAll<HTMLElement>('.ns-tab')) b.classList.toggle('on', b.dataset.v === this.view);
     this.foot.innerHTML = `<span class="g">${COIN_ICON} ${p.gold.toLocaleString()} G</span><span class="pots">${potionTotals(p)}</span>`;

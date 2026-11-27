@@ -285,6 +285,14 @@
 #npc-talk .nh-box > .panel::before, #npc-talk .nh-box > .panel::after { display: none; }
 #npc-talk .nh-box > .panel > .panel-head, #npc-talk .nh-box > #stash > .npc-line { display: none; }
 #npc-talk .nh-grid { grid-template-columns: repeat(5, 1fr); }
+/* No right side (the cash shop, owner 2026-11-28): the NPC window takes the whole width. */
+#npc-talk .nh-wide .nh-host { width: 60.6em; }
+#npc-talk .nh-box > #cash-win { border: 0; border-image: none; filter: none; padding: 0.4em 0.2em 0; font-size: 13px; }
+/* Its head keeps the crystals, VIP badge and the top-up "+"; the title and ✕ are the talk window's. */
+#npc-talk .nh-box > #cash-win > .panel-head { display: flex; justify-content: flex-end; }
+#npc-talk .nh-box > #cash-win > .panel-head > span:first-child, #npc-talk .nh-box > #cash-win > .panel-head > button:last-child { display: none; }
+/* Trying a cosmetic on hides the cash shop to show the character: the whole talk window steps aside with it. */
+#npc-talk:has(#cash-win.peek) { display: none; }
 #npc-talk .cell.nh-on { outline: 2px solid #ffd86a; outline-offset: 1px; }
 
 /* While shopping in the talk window, tooltips and the HUD's own prompts go above it. */

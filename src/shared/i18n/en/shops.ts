@@ -327,5 +327,11 @@ export const EN_SHOPS: Record<string, string> = {
   'รับไปแล้ว ค้าขายรุ่งเรืองนะ': "Collected. May your trade prosper",
   'อันนี้ลงขายในตลาดไม่ได้ ลองขายให้พ่อค้าดู': "That can't go on the market — try the merchant",
   'Guest ดูตลาดได้ แต่ซื้อขายไม่ได้นะ สมัครสมาชิกก่อน': "Guests can look but not trade. Sign up first",
+  'ของหายากจากต่างมิติ ส่องประกายรอเจ้าอยู่… เลือกดูได้เลย': "Rare wares from other dimensions, glittering for you… take a look",
+  'ร้านยังไม่เปิดขายนะ ตอนนี้ดูได้อย่างเดียว': "The shop isn't selling yet — you can only look for now",
+  '{0} เป็นของเจ้าแล้ว! ขอให้ส่องประกายนะ': "{0} is yours now! May it shine",
+  'ยินดีต้อนรับสู่ VIP! เพิ่มอีก {0} วัน': "Welcome to VIP! {0} more days",
+  'อยากเติมคริสตัลหรือ? เลือกแพ็กที่ถูกใจเลย': "Topping up crystals? Pick the pack you like",
+  '{0} เข้ากับเจ้าดีนะ ลองดูตัวเองสิ': "{0} suits you — have a look at yourself",
   'ขาย {0} ชิ้น ได้ {1} G': 'Sold {0} items for {1} G',
 };
