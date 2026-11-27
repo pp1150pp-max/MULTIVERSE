@@ -1,10 +1,32 @@
 import type { Player } from '../shared/sim/Player';
 import type { Terrain } from '../shared/sim/terrain';
 import type { Vec2 } from '../shared/types';
+import { findPath } from './pathfind';
 
 /** A walk-to point is given up when the character has moved less than this in WALK_GIVE_UP seconds (pressed into a corner). */
 const WALK_MIN_MOVE = 0.1;
 const WALK_GIVE_UP = 0.8;
+/** How near a waypoint on the way to a clicked NPC counts as reached. */
+const WAYPOINT_REACH = 0.6;
+
+/**
+ * The way to a clicked NPC round whatever stands in between: the harbour's two bottom shops are between the plaza and
+ * their keepers (owner 2026-11-27), and a straight walk pressed into the building.
+ */
+export class NpcWalk {
+  private to: Vec2 | null = null;
+  private route: Vec2[] = [];
+
+  /** Where to head now for `to` (a new object = a new click): `to` itself once only the last leg is left. */
+  aim(terrain: Terrain, from: Vec2, to: Vec2): Vec2 {
+    if (this.to !== to) {
+      this.to = to;
+      this.route = findPath(terrain, from, to) ?? [];
+    }
+    while (this.route.length > 1 && Math.hypot(this.route[0].x - from.x, this.route[0].z - from.z) <= WAYPOINT_REACH) this.route.shift();
+    return this.route.length > 1 ? this.route[0] : to;
+  }
+}
 
 /**
  * Our character's click-to-walk point: never inside an NPC, the forge or a tree (walks up beside

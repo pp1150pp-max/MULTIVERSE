@@ -127,7 +127,7 @@
     {"key":"hb_ship_red","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[402,384],"h":8,"hRange":[8,8],"solid":{"r":0}},
     {"key":"hb_ship_white","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[412,384],"h":8,"hRange":[8,8],"solid":{"r":0}},
     {"key":"hb_shipyard","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[577,448],"h":5.5,"hRange":[5.5,5.5],"solid":{"r":0}},
-    {"key":"hb_smuggler","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[587,448],"h":7.03,"hRange":[7.03,7.03],"solid":{"r":0}},
+    {"key":"hb_smuggler","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[594,448],"h":7.03,"hRange":[7.03,7.03],"solid":{"r":0}},
     {"key":"hb_supply","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[435,384],"h":7.4,"hRange":[7.4,7.4],"solid":{"r":0}},
     {"key":"hb_warehouse","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[448,384],"h":7.4,"hRange":[7.4,7.4],"solid":{"r":0}},
     {"key":"hb_wave","category":"อื่นๆ","inSheetSpecs":true,"paper":true,"size":[345,256],"h":null,"hRange":null,"solid":null},
