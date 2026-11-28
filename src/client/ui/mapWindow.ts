@@ -1,6 +1,7 @@
 import type { Game } from '../Game';
 import { FullMap } from '../fullmap';
 import { $ } from './hudShared';
+import { keyHint } from '../keybinds';
 
 /** The full map window (M): click to walk there, right click for the player's own pin. The minimap stays in hud.ts. */
 export class MapWindow {
@@ -62,8 +63,8 @@ export class MapWindow {
     const z = this.g.backend.zone;
     $('fullmap-title').textContent = `แผนที่ — ${z.nameTh} (Lv.${z.levels[0]}-${z.levels[1]})`;
     $('fullmap-hint').textContent = this.g.backend.online
-      ? 'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว'
-      : 'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด';
+      ? `คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด ${keyHint('map')} หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว`
+      : `คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด ${keyHint('map')} หรือ Esc เพื่อปิด`;
     this.syncPinUi();
     this.fullMap.draw(this.g, this.myPin());
   }

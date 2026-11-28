@@ -67,6 +67,7 @@ import { TouchGestures } from './touch/gestures';
 import { gfxOwnNumsOnly, gfxShakeOn, setSoftwareRender, setTouchProbe } from './gfxPrefs';
 import { updateHudLayout } from './hudLayout';
 import { PostFx } from './postFx';
+import { keyHint } from './keybinds';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -1000,7 +1001,7 @@ export class Game {
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
     // Touch: no T key — tap the NPC, rest spot or altar itself; near an NPC a "พูดคุย" button shows too.
-    const key = isTouchMode() ? 'แตะ' : 'กด T ';
+    const key = isTouchMode() ? 'แตะ' : `กด ${keyHint('talk')} `;
     const prompt = this.hud.dialogOpen || this.npcDialog.open ? null
       : near ? `${near.name} — ${key}เพื่อ${near.action}`
       : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key}เพื่อใส่กุญแจ`
