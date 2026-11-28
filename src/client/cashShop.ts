@@ -26,8 +26,8 @@ const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ขอ�
 const USE_GROUPS: [string, string, string[]][] = [['scroll', 'ใบคูณ', ['exp_scroll', 'drop_scroll']], ['mega', 'โทรโข่ง', ['megaphone']]];
 const BOUND_KINDS = new Set(['exp_scroll', 'drop_scroll', 'megaphone']);
 
-/** The crystal mark (art_templates/cashshop/raw/crystal.png, cut by tools/cut_cashshop.cjs). */
-export const CRYSTAL_ICON = `<img class="cry-ico" src="${imgUrl('assets/sprites/ui/crystal.png')}" alt="" draggable="false">`;
+/** The crystal mark (paper UI, tools/cut_paper_ui.cjs). Built while this module loads, before usePaperUi, so it names the paper file itself. */
+export const CRYSTAL_ICON = `<img class="cry-ico" src="${imgUrl('assets/sprites/paper/ui/crystal.png')}" alt="" draggable="false">`;
 /** Package pictures, small heap to treasure chest (ui/cash_pack_1..4). */
 const packPic = (tier: number) => `<img class="cash-pack-pic" src="${imgUrl(`assets/sprites/ui/cash_pack_${tier}.png`)}" alt="" draggable="false">`;
 

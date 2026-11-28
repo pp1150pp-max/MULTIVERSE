@@ -11,8 +11,8 @@ import { STONE_COLOR } from '../shared/data/stones';
 import { orbItemLook } from '../shared/orbItems';
 import { ORB_PALETTES } from './orbs';
 
-export const iconImg = (name: string): string =>
-  `<img class="gi" src="${imgUrl(`assets/sprites/icons/${name}.png`)}" alt="" draggable="false">`;
+const giImg = (path: string): string => `<img class="gi" src="${imgUrl(path)}" alt="" draggable="false">`;
+export const iconImg = (name: string): string => giImg(`assets/sprites/icons/${name}.png`);
 
 /**
  * Skill icon. A skill with no painted icon yet (new skills wait for the owner's GPT icons, art_templates/skills/PROMPTS.md)
@@ -22,7 +22,8 @@ export const skillIcon = (skillId: string): string =>
   `<img class="gi" src="${imgUrl(`assets/sprites/icons/skill_${skillId}.png`)}" alt="" draggable="false" onerror="this.onerror=null;this.src='${imgUrl('assets/sprites/ui/ico_blank.png')}'">`;
 /** Potion icon: with a size, that bottle shape (small vial, medium flask, large ornate flask). */
 export const potionIcon = (kind: PotionKind, size?: PotionSize): string => iconImg(size ? `potion_${kind}_${size}` : `potion_${kind}`);
-export const COIN_ICON = iconImg('coin');
+// A constant built while this module loads runs before usePaperUi, so it names the paper file itself.
+export const COIN_ICON = giImg('assets/sprites/paper/icons/coin.png');
 
 const missingStone = new Set<string>();
 (window as unknown as { __stoneMissing: (k: string) => void }).__stoneMissing = (k) => void missingStone.add(k);
@@ -76,7 +77,7 @@ function orbStoneIcon(kind: OrbStoneKind): string {
 }
 const orbIcons = new Map<string, { key: string; url: string }>();
 
-export const FORGE_ICON = iconImg('npc_forge');
+export const FORGE_ICON = giImg('assets/sprites/paper/icons/npc_forge.png'); // paper path: see COIN_ICON
 
 let itemFallback: string | undefined;
 /** Item icon. Falls back to the placeholder bag while a new item has no painted file yet. */
