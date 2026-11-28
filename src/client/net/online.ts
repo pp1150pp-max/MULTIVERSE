@@ -268,7 +268,7 @@ export class OnlineBackend implements Backend {
   private roomSnap: RoomSnap | null = null;
   private roomAt = 0;
   private waveSnap: WaveSnap | null = null;
-  chestsGone: ReadonlySet<string> = new Set();
+  chests: readonly { id: string; x: number; z: number }[] = [];
 
   get waves(): WaveSnap | null {
     const w = this.waveSnap;
@@ -888,6 +888,7 @@ export class OnlineBackend implements Backend {
     this.monsterMap.clear();
     this.projMap.clear();
     this.lootMap.clear();
+    this.chests = []; // the new map's come with its first snapshot
     this.targets.clear();
     this.players = [];
     this.monsters = [];
@@ -933,7 +934,7 @@ export class OnlineBackend implements Backend {
     this.hazards = s.hazards ?? [];
     this.roomSnap = s.room ?? null;
     this.waveSnap = s.waves ?? null;
-    this.chestsGone = new Set(s.chestsGone ?? []);
+    if (s.chests) this.chests = s.chests;
     this.roomAt = performance.now();
     this.party = s.party ?? null;
     this.me.partyId = this.party?.id ?? null;

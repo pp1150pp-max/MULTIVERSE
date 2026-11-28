@@ -4,7 +4,7 @@
 // tools/bake_maps.ts). Server and browser import the same files, so both build the same Terrain. No DB, no network:
 // PR 5 adds `set()` callers (published layouts from the DB, a draft preview) and the /admin switch below decides
 // whether those are used at all.
-import { TREASURE_MAP_IDS, type MapData } from './mapSchema';
+import { CHEST_MAP_IDS, type MapData } from './mapSchema';
 import nexus_city from './data/maps/nexus_city.json';
 import emerald_forest from './data/maps/emerald_forest.json';
 import misty_marsh from './data/maps/misty_marsh.json';
@@ -34,7 +34,7 @@ const BUNDLED: Record<string, MapData> = Object.fromEntries(
  */
 export function withBundledTreasure(map: MapData): MapData {
   const b = BUNDLED[map.id];
-  if (!b || !TREASURE_MAP_IDS.includes(map.id) || (map.chests !== undefined && map.shrines !== undefined)) return map;
+  if (!b || !CHEST_MAP_IDS.includes(map.id) || (map.chests !== undefined && map.shrines !== undefined)) return map;
   return {
     ...map,
     ...(map.chests === undefined && b.chests ? { chests: b.chests.map((c) => ({ ...c })) } : {}),

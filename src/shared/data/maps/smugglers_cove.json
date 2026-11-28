@@ -998,5 +998,11 @@
   {"monster":"keg_prisoner","x":23,"z":-38,"radius":2.5,"count":1,"respawn":[14,20]},
   {"monster":"keg_prisoner","x":2,"z":-36,"radius":2.5,"count":1,"respawn":[14,20]}
  ],
+ "chests": [
+  {"id":"c1","x":30,"z":14},
+  {"id":"c2","x":-12,"z":-26},
+  {"id":"c3","x":8,"z":35},
+  {"id":"c4","x":-24,"z":21}
+ ],
  "lair": {"boss":"pegleg_captain","x":42,"z":-42}
 }

@@ -73,6 +73,8 @@ export class Channels {
    * again does not refill every chest (docs/systems/chests-shrines.md).
    */
   private readonly chestStore = new Map<string, Map<string, number>>();
+  /** Where those chests stand (Sim.chestSpots), kept the same way: an empty channel opened again has them where they were. */
+  private readonly chestSpotStore = new Map<string, Sim['chestSpots']>();
 
   constructor(
     private readonly zones: ZoneDef[],
@@ -298,6 +300,9 @@ export class Channels {
     let gone = this.chestStore.get(key);
     if (!gone) this.chestStore.set(key, (gone = new Map()));
     c.sim.chestGone = gone;
+    let spots = this.chestSpotStore.get(key);
+    if (!spots) this.chestSpotStore.set(key, (spots = new Map()));
+    c.sim.chestSpots = spots;
     c.sim.chestClock = () => this.now() / 1000;
     list.push(c);
     list.sort((a, b) => a.ch - b.ch);

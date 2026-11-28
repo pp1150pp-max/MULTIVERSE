@@ -1,7 +1,8 @@
 // Treasure chests and shrines on the farm maps (docs/systems/chests-shrines.md). The owner's pictures (art_templates/chests_shrines/,
 // cut by tools/cut_chests_shrines.cjs into sprites/paper/treasure/) stand up facing the camera; a picture that failed to load falls
 // back to the shapes drawn in code: a little wooden box with a gold band, a stone pillar with a floating orb in its buff's colour.
-// A chest is hidden while it is opened (Backend.chestsGone) and shows open while we are opening it; a shrine cooling down for us is dimmed.
+// A chest is drawn where the server says it stands (Backend.chests, hidden when not listed) and shows open while we are opening it;
+// a shrine cooling down for us is dimmed.
 import * as THREE from 'three';
 import type { MapChest, MapShrine, ShrineKind } from '../shared/mapSchema';
 import { treasureTex } from './assets';
@@ -167,17 +168,24 @@ export class TreasureViews {
   }
 
   /**
-   * Hides opened chests, opens the lid of the one we are opening (`opening`, '' = none) and dims shrines cooling down for us
-   * (`cooling(id)`). `on` = the /admin switches.
+   * Stands each chest of `here` at its spot and hides the rest, opens the lid of the one we are opening (`opening`, '' = none) and
+   * dims shrines cooling down for us (`cooling(id)`). `on` = the /admin switches.
    */
-  update(t: number, gone: ReadonlySet<string>, cooling: (id: string) => boolean, on: { chests: boolean; shrines: boolean; aura?: boolean }, opening = ''): void {
+  update(t: number, here: readonly MapChest[], cooling: (id: string) => boolean, on: { chests: boolean; shrines: boolean; aura?: boolean }, opening = ''): void {
     const auraOn = on.aura !== false;
+    const shown = new Set<string>();
+    for (const c of here) {
+      shown.add(c.id);
+      this.chestAuras.get(c.id)?.group.position.set(c.x, 0, c.z);
+      this.chestSprites.get(c.id)?.sprite.position.set(c.x, 0, c.z);
+      this.chests.get(c.id)?.position.set(c.x, 0, c.z);
+    }
     let i = 0;
-    for (const [id, a] of this.chestAuras) this.tickAura(a, t, i++, auraOn && on.chests && !gone.has(id), id === opening ? 1.8 : 1);
+    for (const [id, a] of this.chestAuras) this.tickAura(a, t, i++, auraOn && on.chests && shown.has(id), id === opening ? 1.8 : 1);
     for (const [id, a] of this.shrineAuras) this.tickAura(a, t, i++, auraOn && on.shrines, cooling(id) ? 0.2 : 1);
-    for (const [id, g] of this.chests) g.visible = on.chests && !gone.has(id);
+    for (const [id, g] of this.chests) g.visible = on.chests && shown.has(id);
     for (const [id, c] of this.chestSprites) {
-      c.sprite.visible = on.chests && !gone.has(id);
+      c.sprite.visible = on.chests && shown.has(id);
       const mat = id === opening && c.open ? c.open : c.closed;
       if (c.sprite.material !== mat) {
         // The open picture is another shape: keep the height, take its width.

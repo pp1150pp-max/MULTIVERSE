@@ -1,5 +1,6 @@
-// Treasure chests and shrines on floor 1's farm maps (owner 2026-11-27, rules: docs/systems/chests-shrines.md).
-// Where they stand is map data (MapData.chests / MapData.shrines, placed in the /admin map editor); every number here is a code
+// Treasure chests (the farm maps of floors 1 and 2) and shrines (floor 1's) (owner 2026-11-27, rules: docs/systems/chests-shrines.md).
+// Which a map has is map data (MapData.chests / MapData.shrines, placed in the /admin map editor); a chest comes up at a random spot
+// every time (src/shared/chestSpots.ts, owner 2026-11-28) unless that is switched off. Every number here is a code
 // default the owner can change in /admin (BalanceTuning.treasure, stored as what differs from the code). Pure rules, no DOM:
 // the server's Sim rolls and decides, the browser and /admin only show.
 import type { Rng } from './rng';
@@ -60,7 +61,14 @@ export interface TreasureConfig {
   shrines: boolean;
   /** The glow round chests and shrines (owner 2026-11-27 "ให้มีออร่าด้วย"): a light on the ground, a turning ring, rising sparks. */
   aura: boolean;
-  /** Seconds before an opened chest is back at its spot. */
+  /** A chest comes up at a new random spot every time (off: where the map editor put it). */
+  randomSpots: boolean;
+  /** World units a random spot keeps from other chests (and its last spot), the camp, doors and warp circles, the boss summoner. */
+  spotGap: number;
+  campGap: number;
+  doorGap: number;
+  bossGap: number;
+  /** Seconds before an opened chest is back. */
   chestRespawn: number;
   /** Seconds a player stands at the chest to open it (moving, attacking or being hit stops it; 0 = at once). */
   openSec: number;
@@ -82,7 +90,11 @@ export interface TreasureConfig {
   rows: ChestRow[];
 }
 
-type NumKey = Exclude<keyof TreasureConfig, 'chests' | 'shrines' | 'aura' | 'rows'>;
+type FlagKey = 'chests' | 'shrines' | 'aura' | 'randomSpots';
+const FLAG_KEYS: readonly FlagKey[] = ['chests', 'shrines', 'aura', 'randomSpots'];
+/** Each switch's name in /admin errors and the audit log. */
+const FLAG_NAME: Record<FlagKey, string> = { chests: 'หีบสมบัติ', shrines: 'ศาลเจ้า', aura: 'ออร่าหีบ/ศาล', randomSpots: 'หีบสุ่มจุดเกิด' };
+type NumKey = Exclude<keyof TreasureConfig, FlagKey | 'rows'>;
 /** Each number's name in /admin, its range and the step of its field. */
 export const TREASURE_NUMS: Record<NumKey, { name: string; range: [number, number]; step: number }> = {
   chestRespawn: { name: 'หีบเกิดใหม่หลังถูกเปิด (วิ)', range: [10, 86400], step: 1 },
@@ -97,6 +109,10 @@ export const TREASURE_NUMS: Record<NumKey, { name: string; range: [number, numbe
   atkPct: { name: 'บัฟพลังโจมตี (%)', range: [0, 200], step: 1 },
   speedPct: { name: 'บัฟความเร็วเคลื่อนที่ (%)', range: [0, 200], step: 1 },
   expPct: { name: 'บัฟ EXP (%)', range: [0, 500], step: 1 },
+  spotGap: { name: 'สุ่มจุดหีบ: ห่างหีบอื่น/จุดเดิม (หน่วย)', range: [0, 100], step: 1 },
+  campGap: { name: 'สุ่มจุดหีบ: ห่างจุดเริ่ม/จุดพัก (หน่วย)', range: [0, 100], step: 1 },
+  doorGap: { name: 'สุ่มจุดหีบ: ห่างประตู/วงวาร์ป (หน่วย)', range: [0, 100], step: 1 },
+  bossGap: { name: 'สุ่มจุดหีบ: ห่างจุดเรียกบอส (หน่วย)', range: [0, 100], step: 1 },
 };
 const NUM_KEYS = Object.keys(TREASURE_NUMS) as NumKey[];
 
@@ -112,7 +128,7 @@ export type TreasureTuning = Partial<Omit<TreasureConfig, 'rows'>> & { rows?: Re
 /** The values in code (owner 2026-11-27). */
 export function codeTreasure(): TreasureConfig {
   return {
-    chests: true, shrines: true, aura: true,
+    chests: true, shrines: true, aura: true, randomSpots: true, spotGap: 30, campGap: 25, doorGap: 12, bossGap: 16,
     chestRespawn: 600, openSec: 1.5, range: 2.5, goldPerLevel: 50, goldSpread: 30, pieces: 10, epicSure: 1,
     buffSec: 180, shrineCd: 600, atkPct: 15, speedPct: 20, expPct: 30,
     rows: CHEST_ROWS.map((r) => ({ ...r, prize: { ...r.prize }, on: true })),
@@ -133,15 +149,15 @@ export function checkTreasureTuning(x: unknown, strict: boolean): { tuning: Trea
   if (!x || typeof x !== 'object' || Array.isArray(x)) return strict ? { error: 'ค่าหีบสมบัติ/ศาลเจ้าไม่ถูกต้อง' } : { tuning: undefined };
   const o = x as Record<string, unknown>;
   if (strict) {
-    const extra = Object.keys(o).find((k) => k !== 'chests' && k !== 'shrines' && k !== 'aura' && k !== 'rows' && !(NUM_KEYS as string[]).includes(k));
+    const extra = Object.keys(o).find((k) => k !== 'rows' && !(FLAG_KEYS as readonly string[]).includes(k) && !(NUM_KEYS as string[]).includes(k));
     if (extra) return { error: `หีบสมบัติ/ศาลเจ้า: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
   }
   const code = codeTreasure();
   const out: TreasureTuning = {};
-  for (const k of ['chests', 'shrines', 'aura'] as const) {
+  for (const k of FLAG_KEYS) {
     const v = o[k];
     if (v === undefined) continue;
-    if (typeof v !== 'boolean') { if (strict) return { error: `สวิตช์${k === 'chests' ? 'หีบสมบัติ' : k === 'shrines' ? 'ศาลเจ้า' : 'ออร่าหีบ/ศาล'}ต้องเป็นเปิด/ปิด` }; } else if (v !== code[k]) out[k] = v;
+    if (typeof v !== 'boolean') { if (strict) return { error: `สวิตช์${FLAG_NAME[k]}ต้องเป็นเปิด/ปิด` }; } else if (v !== code[k]) out[k] = v;
   }
   for (const k of NUM_KEYS) {
     const v = o[k];
@@ -197,9 +213,7 @@ export function checkTreasureTuning(x: unknown, strict: boolean): { tuning: Trea
 export function treasureChanges(a: TreasureConfig, b: TreasureConfig): string[] {
   const out: string[] = [];
   const onOff = (v: boolean) => (v ? 'เปิด' : 'ปิด');
-  if (a.chests !== b.chests) out.push(`หีบสมบัติ ${onOff(a.chests)} → ${onOff(b.chests)}`);
-  if (a.shrines !== b.shrines) out.push(`ศาลเจ้า ${onOff(a.shrines)} → ${onOff(b.shrines)}`);
-  if (a.aura !== b.aura) out.push(`ออร่าหีบ/ศาล ${onOff(a.aura)} → ${onOff(b.aura)}`);
+  for (const k of FLAG_KEYS) if (a[k] !== b[k]) out.push(`${FLAG_NAME[k]} ${onOff(a[k])} → ${onOff(b[k])}`);
   for (const k of NUM_KEYS) if (a[k] !== b[k]) out.push(`หีบ/ศาล: ${TREASURE_NUMS[k].name} ${a[k]} → ${b[k]}`);
   const pct = (x: number | null) => (x === null ? 'แบ่งส่วนที่เหลือ' : `${x}%`);
   b.rows.forEach((r, i) => {

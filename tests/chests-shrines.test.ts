@@ -1,26 +1,26 @@
 // Treasure chests and shrines on the farm maps (owner 2026-11-27, docs/systems/chests-shrines.md): on a real Sim, no server, plus the
 // channel store that keeps opened chests shut when an empty channel closes and opens again, the map checks and the /admin tuning.
+// Where a chest comes up (a random spot every time, floor 2 too) is tests/chest-spots.test.ts.
 import { ok, finish } from './check';
 import { ZONES } from '../src/shared/data/zones';
 import { Sim } from '../src/shared/sim/Sim';
 import { IDLE_INTENT, type Intent } from '../src/shared/sim/types';
 import { applyBalance, balanceChanges, checkBalance, currentBalance } from '../src/shared/balance';
 import { chestOdds, checkTreasureTuning, codeTreasure, mergeTreasure } from '../src/shared/treasure';
-import { validateMap, TREASURE_MAP_IDS, type MapData } from '../src/shared/mapSchema';
+import { validateMap, SHRINE_MAP_IDS, type MapData } from '../src/shared/mapSchema';
 import { MapRegistry, withBundledTreasure } from '../src/shared/mapRegistry';
 import { Channels } from '../server/channels';
 
 const zone = ZONES.emerald_forest;
-const chest = zone.chests![0];
 const shrine = zone.shrines!.find((s) => s.buff === 'atk')!;
 const cfg = codeTreasure();
 
 // ---- the maps
-for (const id of TREASURE_MAP_IDS) {
+for (const id of SHRINE_MAP_IDS) {
   const z = ZONES[id];
   ok((z.chests?.length ?? 0) === 4 && (z.shrines?.length ?? 0) === 2, `${id}: 4 chests and 2 shrines to start with`);
 }
-ok(!ZONES.nexus_city.chests && !ZONES.shipwreck_beach.chests, 'none in the hub or on floor 2');
+ok(!ZONES.nexus_city.chests && ZONES.shipwreck_beach.chests?.length === 4 && !ZONES.shipwreck_beach.shrines, 'none in the hub; floor 2 has chests, no shrines');
 {
   const forest = MapRegistry.bundled('emerald_forest')!;
   const base = { propKeys: forest.props.map((p) => p.key), baseline: forest };
@@ -29,9 +29,9 @@ ok(!ZONES.nexus_city.chests && !ZONES.shipwreck_beach.chests, 'none in the hub o
   ok(errs({ ...forest, chests: [...forest.chests!, { id: 'c1', x: 0, z: 0 }] }).some((i) => i.code === 'dup_id'), 'a duplicate chest id is an error');
   ok(errs({ ...forest, shrines: [{ id: 's9', x: 0, z: 0, buff: 'nope' as never }] }).length > 0, 'a shrine with an unknown buff is an error');
   ok(errs({ ...forest, chests: [{ id: 'c9', x: 999, z: 0 }] }).some((i) => i.code === 'out_of_bounds'), 'a chest outside the frame is an error');
-  const beach = MapRegistry.bundled('shipwreck_beach')!;
-  ok(validateMap({ ...beach, chests: [{ id: 'c1', x: beach.zone.start.x, z: beach.zone.start.z }] }, { propKeys: beach.props.map((p) => p.key) })
-    .some((i) => i.kind === 'chest' && i.code === 'locked'), 'a chest on a floor-2 map is refused');
+  const harbour = MapRegistry.bundled('harbor_town')!;
+  ok(validateMap({ ...harbour, chests: [{ id: 'c1', x: harbour.zone.start.x, z: harbour.zone.start.z }] }, { propKeys: harbour.props.map((p) => p.key) })
+    .some((i) => i.kind === 'chest' && i.code === 'locked'), 'a chest in a town is refused');
   // A layout published before chests existed (no field at all) gets the bundled ones; an empty list stays empty.
   const { chests: _c, shrines: _s, ...old } = forest;
   ok(withBundledTreasure(old as MapData).chests?.length === 4, 'an old published layout gets the bundled chests');
@@ -40,6 +40,8 @@ ok(!ZONES.nexus_city.chests && !ZONES.shipwreck_beach.chests, 'none in the hub o
 
 // ---- a Sim with the player standing at the chest, nothing around to hit them
 const sim = new Sim(zone);
+// Where the first chest stands this time.
+const chest = sim.chests[0];
 const quiet = () => { sim.monsters = []; };
 const p = sim.addPlayer({ name: 'A', classId: 'sword', level: 5, exp: 0, gold: 0, equipment: {}, bag: [] });
 const run = (sec: number, it: Intent = IDLE_INTENT) => {
@@ -89,7 +91,8 @@ run(cfg.chestRespawn - 5);
 ok(!sim.chestHere(chest.id), 'still gone just before the respawn time');
 run(10);
 ok(sim.chestHere(chest.id), `back after ${cfg.chestRespawn} s`);
-g.x = chest.x; g.z = chest.z + 1;
+const back = sim.chests[0];
+g.x = back.x; g.z = back.z + 1;
 ok(sim.startChest(g, chest.id), 'the guest can open the chest once it is back');
 run(cfg.openSec + 0.3);
 ok(!sim.chestHere(chest.id) && g.gold > 0, 'the guest got the gold');
@@ -97,6 +100,7 @@ ok(!sim.chestHere(chest.id) && g.gold > 0, 'the guest got the gold');
 // The table's odds: purple 15%, orange 5%, rolled again for every piece (many chests: about that share of the rolled pieces).
 {
   const s2 = new Sim(zone);
+  const chest = s2.chests[0];
   const q = s2.addPlayer({ name: 'Many', classId: 'mage', level: 5, exp: 0, gold: 0, equipment: {}, bag: [] });
   q.x = chest.x; q.z = chest.z + 1;
   let rolled = 0, purple = 0, orange = 0;
@@ -155,6 +159,7 @@ ok(sim.useShrine(p, shrine.id), 'usable again after the cooldown');
   let now = 1_000_000;
   const ch = new Channels([zone], () => now);
   const c1 = ch.ensure(zone.id, 1)!;
+  const chest = c1.sim.chests[0];
   const q = c1.sim.addPlayer({ name: 'C', classId: 'sword', level: 5, exp: 0, gold: 0, equipment: {}, bag: [] });
   q.x = chest.x; q.z = chest.z + 1;
   c1.sim.monsters = [];

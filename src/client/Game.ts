@@ -831,7 +831,7 @@ export class Game {
     // Treasure chests and shrines: only when playing by hand (Auto never uses them, owner 2026-11-27).
     if (!this.autoPlay) {
       const t = currentBalance().treasure;
-      if (t.chests) for (const c of zone.chests ?? []) if (!this.backend.chestsGone.has(c.id)) consider({ kind: 'chest', id: c.id, x: c.x, z: c.z }, 0.5, Math.max(22, 0.9 * pxPerUnit));
+      if (t.chests) for (const c of this.backend.chests) consider({ kind: 'chest', id: c.id, x: c.x, z: c.z }, 0.5, Math.max(22, 0.9 * pxPerUnit));
       if (t.shrines) for (const c of zone.shrines ?? []) consider({ kind: 'shrine', id: c.id, x: c.x, z: c.z }, 1.2, Math.max(22, 1 * pxPerUnit));
     }
     return best;
@@ -844,9 +844,9 @@ export class Game {
     const p = this.player;
     let best: { kind: 'chest' | 'shrine'; id: string; x: number; z: number; buff?: ShrineKind } | null = null;
     let bd = t.range;
-    if (t.chests) for (const c of zone.chests ?? []) {
+    if (t.chests) for (const c of this.backend.chests) {
       const d = Math.hypot(p.x - c.x, p.z - c.z);
-      if (d <= bd && !this.backend.chestsGone.has(c.id)) { bd = d; best = { kind: 'chest', ...c }; }
+      if (d <= bd) { bd = d; best = { kind: 'chest', ...c }; }
     }
     if (t.shrines) for (const c of zone.shrines ?? []) {
       const d = Math.hypot(p.x - c.x, p.z - c.z);
@@ -1048,7 +1048,7 @@ export class Game {
     this.hazardViews.update(this.backend.hazards, this.backend.time, p);
     this.world.update(dt, p.x, p.z);
     const tz = this.backend.terrain.zone.id;
-    this.world.treasure?.update(performance.now() / 1000, this.backend.chestsGone, (id) => (p.shrineCd[`${tz}:${id}`] ?? 0) > 0, currentBalance().treasure, this.openingChest());
+    this.world.treasure?.update(performance.now() / 1000, this.backend.chests, (id) => (p.shrineCd[`${tz}:${id}`] ?? 0) > 0, currentBalance().treasure, this.openingChest());
     this.updateCamera(dt);
     this.cosmetics.update();
     this.cashShop.update();

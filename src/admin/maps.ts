@@ -39,8 +39,8 @@ export async function renderMaps(view: HTMLElement, h: H, api: Api, onSaved: (tu
 }
 
 /**
- * The card "หีบสมบัติ + ศาลเจ้า" (owner 2026-11-27, docs/systems/chests-shrines.md): the two switches, every number and the chest
- * table, server-wide. Where chests and shrines stand is edited in the map editor above (📍 tool). Stored with the balance settings
+ * The card "หีบสมบัติ + ศาลเจ้า" (owner 2026-11-27, docs/systems/chests-shrines.md): the switches, every number and the chest
+ * table, server-wide. Which chests and shrines a map has is edited in the map editor above (📍 tool). Stored with the balance settings
  * (BalanceTuning.treasure, only what differs from the code), so it uses the balance permission and its audit.
  */
 async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tuning: BalanceTuning) => void): Promise<void> {
@@ -56,6 +56,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
   const cur = mergeBalance(saved).treasure;
   const msg = h('div', { class: 'msg' });
   const chestsOn = h('input', { type: 'checkbox', checked: cur.chests });
+  const randomOn = h('input', { type: 'checkbox', checked: cur.randomSpots });
   const shrinesOn = h('input', { type: 'checkbox', checked: cur.shrines });
   const auraOn = h('input', { type: 'checkbox', checked: cur.aura });
   const keys = Object.keys(TREASURE_NUMS) as (keyof typeof TREASURE_NUMS)[];
@@ -110,6 +111,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
   const save = h('button', { class: 'primary', onclick: () => {
     const t: TreasureTuning = {};
     if (chestsOn.checked !== code.chests) t.chests = chestsOn.checked;
+    if (randomOn.checked !== code.randomSpots) t.randomSpots = randomOn.checked;
     if (shrinesOn.checked !== code.shrines) t.shrines = shrinesOn.checked;
     if (auraOn.checked !== code.aura) t.aura = auraOn.checked;
     for (const k of keys) {
@@ -135,9 +137,10 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
   };
   view.replaceChildren(
     h('h3', {}, 'หีบสมบัติ + ศาลเจ้า'),
-    h('div', { class: 'muted me-hint' }, 'วางจุดหีบ/ศาลในตัวแก้แมพด้านบน (เครื่องมือ 📍 NPC / ประตู → "＋ เพิ่มหีบสมบัติ" / "＋ เพิ่มศาลเจ้า" เฉพาะแมพฟาร์มชั้น 1) · หีบ: คนแรกที่เปิดได้ทอง + ของตามจำนวน "ของต่อหีบ" ตกรอบหีบ (ม่วงแน่นอนตามที่ตั้ง ที่เหลือสุ่มจากตาราง ออกซ้ำได้) แล้วหีบหายไปจนเกิดใหม่ · ศาล: แตะแล้วได้บัฟ 1 อย่าง (ตามที่ตั้งในศาล หรือสุ่ม) ใช้ศาลเดิมซ้ำได้ตามคูลดาวน์ต่อคน · Auto Play ไม่เปิดหีบ/ไม่ใช้ศาล · Guest ใช้ได้ · ค่าในวงเล็บ = ค่าในโค้ด'),
+    h('div', { class: 'muted me-hint' }, 'เพิ่ม/ลบหีบและศาลในตัวแก้แมพด้านบน (เครื่องมือ 📍 NPC / ประตู → "＋ เพิ่มหีบสมบัติ" แมพฟาร์มชั้น 1–2 / "＋ เพิ่มศาลเจ้า" เฉพาะชั้น 1) · สุ่มจุด: ไม่เกิดในน้ำ น้ำวน ลาวา ของกีดขวาง เขตปลอดภัย หรือที่เดินไปไม่ถึง ระยะห่างตั้งได้ด้านล่าง (แมพแคบไป = ลดระยะเอง) · หีบ: คนแรกที่เปิดได้ทอง + ของตามจำนวน "ของต่อหีบ" ตกรอบหีบ (ม่วงแน่นอนตามที่ตั้ง ที่เหลือสุ่มจากตาราง ออกซ้ำได้) แล้วหีบหายไปจนเกิดใหม่ · ศาล: แตะแล้วได้บัฟ 1 อย่าง (ตามที่ตั้งในศาล หรือสุ่ม) ใช้ศาลเดิมซ้ำได้ตามคูลดาวน์ต่อคน · Auto Play ไม่เปิดหีบ/ไม่ใช้ศาล · Guest ใช้ได้ · ค่าในวงเล็บ = ค่าในโค้ด'),
     h('div', { class: 'row bal-line' },
       h('label', { title: `ค่าในโค้ด: ${code.chests ? 'เปิด' : 'ปิด'}` }, chestsOn, ' เปิดหีบสมบัติ (ปิด = หีบไม่แสดง เปิดไม่ได้)'),
+      h('label', { title: `ค่าในโค้ด: ${code.randomSpots ? 'เปิด' : 'ปิด'}` }, randomOn, ' หีบเกิดจุดสุ่มใหม่ทุกครั้ง ทั่วแมพ (ปิด = อยู่ที่หมุดในตัวแก้แมพ)'),
       h('label', { title: `ค่าในโค้ด: ${code.shrines ? 'เปิด' : 'ปิด'}` }, shrinesOn, ' เปิดศาลเจ้า (ปิด = ใช้ไม่ได้ บัฟที่ได้ไปแล้วอยู่จนหมดเวลา)'),
       h('label', { title: `ค่าในโค้ด: ${code.aura ? 'เปิด' : 'ปิด'}` }, auraOn, ' ออร่ารอบหีบ/ศาล (แสงบนพื้น วงหมุน ประกายลอยขึ้น สีตามบัฟ หีบสีทอง)')),
     h('div', { class: 'me-grid2' }, ...keys.map((k) => h('label', { title: `${TREASURE_NUMS[k].range[0]}–${TREASURE_NUMS[k].range[1]}` }, `${TREASURE_NUMS[k].name} (${code[k]}) `, inputs[k]))),
