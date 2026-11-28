@@ -17,6 +17,8 @@ const PAPER_UI = new Set([
   'skillbar', 'expbar', 'bar_frame', 'orb_cradle', 'corner', 'close',
   'bar_hp', 'bar_mp', 'orb_hp_liquid', 'orb_hp_wave', 'orb_mp_liquid', 'orb_mp_wave',
   'ico_auto', 'ico_autoset', 'ico_bag', 'ico_blank', 'ico_cashshop', 'ico_daily', 'ico_friends', 'ico_help', 'ico_map', 'ico_menu', 'ico_settings',
+  // Paper only (tools/cut_codex17.cjs): no picture of the same name under sprites/ui/.
+  'ico_album', 'ico_audio', 'ico_cosmetics', 'ico_fullscreen', 'ico_graphics', 'ico_mail', 'ico_news', 'ico_party', 'ico_report', 'ico_skills', 'ico_trade',
   'crystal', 'cash_pack_1', 'cash_pack_2', 'cash_pack_3', 'cash_pack_4',
   'cash_frame', 'cash_dialog', 'cash_card', 'cash_card_hi', 'cash_well', 'cash_check', 'cash_plus', 'cash_btn', 'cash_btn_main',
   'cash_balance', 'cash_price', 'cash_tab', 'cash_tab_on', 'cash_side', 'cash_side_on', 'cash_divider',

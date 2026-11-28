@@ -42,7 +42,10 @@ export type TalkIcon = 'enhance' | 'reroll' | 'restat' | 'card' | 'buy' | 'sell'
   | 'quest' | 'turnin' | 'talk' | 'key' | 'story' | 'leave';
 export const talkIconUrl = (icon: TalkIcon): string => imgUrl(`/assets/sprites/paper/ui/npc_dialog/icon_${icon}.png`);
 
-/** Floor 1's NPCs with their own painted scene and portrait. Others borrow a scene and use their small portrait. */
+/**
+ * Floor 1's NPCs with a painted scene and portrait under their id; others borrow a scene. A look with its own
+ * `portrait` (the harbour's six, the navigator) has its pictures under that name instead.
+ */
 const PAINTED: readonly NpcId[] = ['seeker', 'merchant', 'blacksmith', 'keeper', 'broker', 'crystal'];
 const SCENE: Partial<Record<NpcId, NpcId>> = { navigator: 'seeker', stylist: 'crystal' };
 /** The scene's colours while its picture loads (or when there is none). */
@@ -126,15 +129,14 @@ export class NpcDialog {
     this.story = null;
     this.drawn = '';
     const look = npcLook(id, this.g.backend.zone.town);
-    const sceneId = PAINTED.includes(id) ? id : SCENE[id];
+    const painted = PAINTED.includes(id) ? id : undefined;
+    // The harbour's NPCs share floor 1's ids. In nexus_city the navigator keeps The Seeker's scene (owner 2026-11-28).
+    const sceneId = (this.g.backend.zone.town === 'harbor' ? look.portrait : undefined) ?? painted ?? SCENE[id];
+    const faceId = look.portrait ?? painted;
     this.scene.style.backgroundColor = TINT[id];
     this.scene.style.backgroundImage = sceneId ? `url("${imgUrl(`/assets/sprites/paper/ui/npc_dialog/bg_${sceneId}.png`)}")` : '';
-    // Harbour NPCs and the navigator have their own (small, square) paper portrait; floor 1's have the big painted one.
-    const small = !!look.portrait;
-    this.face.classList.toggle('small', small);
-    this.face.src = small ? imgUrl(`/assets/sprites/paper/ui/npc/${look.portrait}.png`)
-      : PAINTED.includes(id) ? imgUrl(`/assets/sprites/paper/ui/npc_dialog/portrait_${id}.png`) : '';
-    this.face.classList.toggle('hidden', !this.face.src);
+    this.face.src = faceId ? imgUrl(`/assets/sprites/paper/ui/npc_dialog/portrait_${faceId}.png`) : '';
+    this.face.classList.toggle('hidden', !faceId);
     this.name.textContent = look.name;
     this.lineIdx = -1;
     this.say(this.nextGreet());
@@ -274,17 +276,16 @@ export class NpcDialog {
     this.enterForge(id, mode);
   }
 
-  /** The face shown in the medallion, and whether it is a square harbour portrait. */
-  private medalFace(id: NpcId): [string, boolean] {
-    const look = npcLook(id, this.g.backend.zone.town);
-    return [this.face.classList.contains('hidden') ? '' : this.face.src, !!look.portrait];
+  /** The face shown in the medallion. */
+  private medalFace(): string {
+    return this.face.classList.contains('hidden') ? '' : this.face.src;
   }
 
   /** "ซื้อ/ขายของ": the window grows into the merchant's shop (owner 2026-11-27, layout A). */
   private enterShop(id: NpcId, tab: 'buy' | 'bb'): void {
     this.g.hud.openShopInTalk();
     this.pane = 'shop';
-    this.shopPane.open(tab, ...this.medalFace(id));
+    this.shopPane.open(tab, this.medalFace());
     for (const k of HOST_KINDS) this.hosts[k].root.classList.remove('on');
     this.shopPane.root.classList.add('on');
     this.win.classList.add('shop');
@@ -322,7 +323,7 @@ export class NpcDialog {
     this.win.classList.add('shop');
     for (const k of HOST_KINDS) this.hosts[k].root.classList.toggle('on', k === kind);
     this.shopPane.root.classList.remove('on');
-    this.hosts[kind].open(arg, ...this.medalFace(id));
+    this.hosts[kind].open(arg, this.medalFace());
   }
 
   /** Back from the shop, the blacksmith or the stash: `talk` = to the talk window (◀), else the window is closing. */

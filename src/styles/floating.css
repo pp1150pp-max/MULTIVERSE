@@ -46,7 +46,7 @@
 /* A player's name never wraps: floating.ts setPlateName cuts it with … past fxLayer.plateMaxW. */
 .plate.ally .pname { white-space: nowrap; }
 .plate .pdebuffs { display: flex; justify-content: center; gap: 2px; margin-bottom: 2px; min-height: 0; }
-.plate .pdebuffs img { width: 16px; height: 16px; image-rendering: pixelated; }
+.plate .pdebuffs img { width: 16px; height: 16px; }
 .plate.hostile .pname { color: #ff9a8a; }
 .plate .pbar { width: 54px; height: 5px; margin: 0 auto; background: #200; border: 1px solid #000; }
 .plate .pfill { height: 100%; background: #e04040; }
@@ -126,4 +126,4 @@ body.touch-ui #bar-buffs { bottom: auto; top: 100%; margin: 4px 0 0; }
 
 
 /* Element mark over a monster's HP bar (sim/elements.ts), before the debuff icons. */
-.plate .pdebuffs img.pelem { width: 16px; height: 16px; image-rendering: auto; filter: drop-shadow(0 0 1px #000); }
+.plate .pdebuffs img.pelem { width: 16px; height: 16px; filter: drop-shadow(0 0 1px #000); }

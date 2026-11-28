@@ -1,7 +1,7 @@
 // What a monster's debuffs look like (owner 2026-11-15): a row of small icons over its HP bar, and an effect on its
 // body for each: stars circling the head (stun), frost at the feet (slow), grey shards falling off (armor break), a dark
-// red glow (attack down), embers rising (burning / poison) and a red reticle over the head (your mark). The icons are
-// drawn here in pixels until the owner's art exists (art_templates/ui/DEBUFF_ICONS.md); switch both off on /admin.
+// red glow (attack down), embers rising (burning / poison) and a red reticle over the head (your mark). Switch both
+// off on /admin.
 import { ELEMENTS, MARK_NAME } from '../shared/elementTuning';
 import { elementIconUrl } from './elementBadge';
 import * as THREE from 'three';
@@ -10,100 +10,10 @@ import type { Monster } from '../shared/sim/Monster';
 import { currentBalance } from '../shared/balance';
 import type { Effects } from './effects';
 import { fxTex } from './assets';
+import { imgUrl } from './img';
 
-/** 9×9 pixel pictures: '.' empty, letters = colours below. */
-const PIXELS: Record<Debuff, string[]> = {
-  stun: [
-    '....y....',
-    '...yyy...',
-    'yyyyYyyyy',
-    '.yyYYYyy.',
-    '..yYYYy..',
-    '..yyyyy..',
-    '.yyy.yyy.',
-    '.yy...yy.',
-    '.........',
-  ],
-  slow: [
-    '....b....',
-    '.b..b..b.',
-    '..b.b.b..',
-    '...bBb...',
-    'bbbBBBbbb',
-    '...bBb...',
-    '..b.b.b..',
-    '.b..b..b.',
-    '....b....',
-  ],
-  armor: [
-    '.ggggggg.',
-    '.gGGkGGg.',
-    '.gGGkGGg.',
-    '.gGkGGGg.',
-    '.gGGkGGg.',
-    '..gGkGg..',
-    '..gGGGg..',
-    '...gGg...',
-    '....g....',
-  ],
-  weak: [
-    '....w....',
-    '....w....',
-    '....w....',
-    '...www...',
-    '....w....',
-    '.r..w..r.',
-    '..r.w.r..',
-    '...rrr...',
-    '....r....',
-  ],
-  dot: [
-    '....o....',
-    '...oo....',
-    '...oOo...',
-    '..oOOo.o.',
-    '.oOYOOoo.',
-    '.oOYYOOo.',
-    '.oOYYYOo.',
-    '..oOOOo..',
-    '...ooo...',
-  ],
-  mark: [
-    '...rrr...',
-    '.r..r..r.',
-    'r...r...r',
-    'r.......r',
-    'rrr.R.rrr',
-    'r.......r',
-    'r...r...r',
-    '.r..r..r.',
-    '...rrr...',
-  ],
-};
-const COLOR: Record<string, string> = {
-  y: '#ffd34a', Y: '#fff6b0', b: '#7fd0ff', B: '#e6f8ff', g: '#5a5a66', G: '#a8a8b8', k: '#2a2a30',
-  w: '#d8d8e0', r: '#ff4a4a', R: '#ffd0d0', o: '#ff7a2a', O: '#ffb040',
-};
-
-const iconUrls = new Map<Debuff, string>();
-/** The icon of a debuff as an image URL (drawn once, 2 px per pixel, with a dark backing). */
-export function debuffIcon(d: Debuff): string {
-  let url = iconUrls.get(d);
-  if (url) return url;
-  const c = document.createElement('canvas');
-  c.width = c.height = 22;
-  const g = c.getContext('2d')!;
-  g.fillStyle = 'rgba(10,8,16,0.75)';
-  g.fillRect(0, 0, 22, 22);
-  PIXELS[d].forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === '.') return;
-    g.fillStyle = COLOR[ch];
-    g.fillRect(2 + x * 2, 2 + y * 2, 2, 2);
-  }));
-  url = c.toDataURL();
-  iconUrls.set(d, url);
-  return url;
-}
+/** The icon of a debuff as an image URL (the owner's papercraft badges, tools/cut_codex17.cjs). */
+export const debuffIcon = (d: Debuff): string => imgUrl(`/assets/sprites/ui/debuff_${d}.png`);
 
 /** The icons row of a nameplate, redrawn only when the mask changes. */
 export function debuffIconsHtml(mask: number, elem = 0): string {

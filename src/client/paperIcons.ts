@@ -211,6 +211,7 @@ export const PAPER_ICONS: ReadonlySet<string> = new Set([
   'skill_sw_unleash',
   'skill_sw_warcry',
   'skill_whirlwind',
+  'stone_drill',
   'stone_drop_scroll',
   'stone_enhance',
   'stone_exp_scroll',

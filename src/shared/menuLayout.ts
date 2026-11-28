@@ -54,24 +54,29 @@ export const menuEntry = (id: string): MenuEntryDef | undefined => DEF.get(id);
 export const MENU_PLACE_NAME: Record<MenuPlace, string> = { menu: 'หน้าต่างเมนู', top: 'แถวไอคอนมุมขวาบน' };
 
 /** The painted badges in public/assets/sprites/ui/ico_<name>.png an admin may pick ('blank' = the empty one, for a glyph). */
-export const ICON_IMAGES = ['blank', 'bag', 'map', 'friends', 'daily', 'cashshop', 'autoset', 'help', 'settings', 'auto', 'menu'] as const;
+export const ICON_IMAGES = [
+  'blank', 'bag', 'skills', 'party', 'friends', 'trade', 'daily', 'map', 'cosmetics', 'cashshop', 'autoset', 'audio', 'graphics', 'help', 'news',
+  'album', 'mail', 'report', 'fullscreen', 'settings', 'auto', 'menu',
+] as const;
 export type IconImage = (typeof ICON_IMAGES)[number];
 export const ICON_IMAGE_NAME: Record<IconImage, string> = {
   blank: 'พื้นเปล่า (ใส่อีโมจิ)', bag: 'กระเป๋า', map: 'แผนที่', friends: 'เพื่อน', daily: 'ปฏิทิน', cashshop: 'แคชช็อป', autoset: 'ตั้งค่า Auto',
   help: 'วิธีเล่น', settings: 'ฟันเฟือง', auto: 'AUTO', menu: 'เมนู',
+  skills: 'สกิล', party: 'ปาร์ตี้', trade: 'เทรด', cosmetics: 'แต่งตัว', audio: 'เสียง', graphics: 'กราฟิก', news: 'ข่าว', album: 'อัลบั้มการ์ด',
+  mail: 'จดหมาย', report: 'แจ้งปัญหา', fullscreen: 'เต็มจอ',
 };
 /** A button's picture: a painted badge, with an optional emoji / short glyph drawn on top. */
 export interface MenuIcon {
   img: IconImage;
   glyph?: string;
 }
-/** Each code button's own picture (systems with no painted badge yet use the blank one with a glyph). */
+/** Each code button's own picture: its painted badge. */
 export const CODE_ICON: Readonly<Record<string, MenuIcon>> = {
-  bag: { img: 'bag' }, skills: { img: 'blank', glyph: '⚔' }, party: { img: 'blank', glyph: '👥' }, friends: { img: 'friends' },
-  trade: { img: 'blank', glyph: '🤝' }, daily: { img: 'daily' }, map: { img: 'map' }, cosmetics: { img: 'blank', glyph: '👑' },
-  cashshop: { img: 'cashshop' }, autoset: { img: 'autoset' }, audio: { img: 'blank', glyph: '🔊' }, graphics: { img: 'blank', glyph: '🎨' },
-  help: { img: 'help' }, news: { img: 'blank', glyph: '📰' }, album: { img: 'blank', glyph: '🃏' }, mail: { img: 'blank', glyph: '✉' }, report: { img: 'blank', glyph: '🐞' },
-  fullscreen: { img: 'blank', glyph: '⛶' }, settings: { img: 'settings' }, auto: { img: 'auto' }, menu: { img: 'menu' },
+  bag: { img: 'bag' }, skills: { img: 'skills' }, party: { img: 'party' }, friends: { img: 'friends' },
+  trade: { img: 'trade' }, daily: { img: 'daily' }, map: { img: 'map' }, cosmetics: { img: 'cosmetics' },
+  cashshop: { img: 'cashshop' }, autoset: { img: 'autoset' }, audio: { img: 'audio' }, graphics: { img: 'graphics' },
+  help: { img: 'help' }, news: { img: 'news' }, album: { img: 'album' }, mail: { img: 'mail' }, report: { img: 'report' },
+  fullscreen: { img: 'fullscreen' }, settings: { img: 'settings' }, auto: { img: 'auto' }, menu: { img: 'menu' },
 };
 /** The top row's own short name where it differs from the menu's (an admin's rename wins over it). */
 export const TOP_LABEL: Readonly<Record<string, string>> = { daily: 'รายวัน', album: 'อัลบั้ม' };

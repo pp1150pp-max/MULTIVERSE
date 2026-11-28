@@ -105,13 +105,12 @@ export class NpcShopPane {
     this.root.addEventListener('mouseleave', () => this.g.hud.hideTip());
   }
 
-  /** Shows the shop on tab `tab`; `face` = the portrait picture, `small` = a square harbour portrait. */
-  open(tab: MerTab, face: string, small: boolean): void {
+  /** Shows the shop on tab `tab`; `face` = the portrait picture. */
+  open(tab: MerTab, face: string): void {
     this.tab = tab;
     this.basket.clear();
     this.closeModal();
     this.medalImg.src = face;
-    this.medal.classList.toggle('small', small);
     this.medal.classList.toggle('hidden', !face);
     this.drawn = '';
     this.redraw();

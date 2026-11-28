@@ -1,15 +1,23 @@
 // Cuts the raw ChatGPT pictures for the NPC talk window (art_templates/npc_dialog/raw, prompts in PROMPTS.md)
 // into public/assets/sprites/paper/ui/npc_dialog/: the scene behind each NPC, its waist-up portrait and the answer icons.
-// Usage: node tools/cut_npc_dialog.cjs
+// Usage: node tools/cut_npc_dialog.cjs [--art <art_templates folder>] [npc ...]
+//   with names: only those NPCs (the answer icons are left alone); without: every NPC and the icons.
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const { keyBg } = require('./paper_key.cjs');
 
 const ROOT = path.join(__dirname, '..');
-const RAW = path.join(ROOT, 'art_templates/npc_dialog/raw');
+const args = process.argv.slice(2);
+const artAt = args.indexOf('--art');
+const ART = artAt < 0 ? path.join(ROOT, 'art_templates') : path.resolve(args.splice(artAt, 2)[1]);
+const RAW = path.join(ART, 'npc_dialog/raw');
 const OUT = path.join(ROOT, 'public/assets/sprites/paper/ui/npc_dialog');
-const NPCS = ['seeker', 'merchant', 'blacksmith', 'keeper', 'broker', 'crystal'];
+/** Floor 1's six by NPC id, then the harbour's six by their look.portrait name (src/shared/data/npcs.ts). */
+const NPCS = [
+  'seeker', 'merchant', 'blacksmith', 'keeper', 'broker', 'crystal',
+  'supply_merchant', 'dock_keeper', 'shipwright', 'harbor_broker', 'smuggler', 'navigator',
+];
 /** The icon sheet's 4 x 4 cells, row by row (see PROMPTS.md section 3). */
 const ICONS = [
   'enhance', 'reroll', 'restat', 'card',
@@ -28,13 +36,16 @@ const toSharp = (img) => sharp(img.d, { raw: { width: img.w, height: img.h, chan
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
-  for (const id of NPCS) {
+  const unknown = args.filter((a) => !NPCS.includes(a));
+  if (unknown.length) throw new Error(`unknown NPC: ${unknown.join(' ')}`);
+  for (const id of args.length ? args : NPCS) {
     await sharp(path.join(RAW, `bg_${id}.png`)).resize(1280, 720, { fit: 'cover', kernel: 'lanczos3' }).png().toFile(path.join(OUT, `bg_${id}.png`));
     const img = await readKeyed(path.join(RAW, `portrait_${id}.png`));
     const trimmed = await toSharp(img).png().toBuffer().then((b) => sharp(b).trim({ threshold: 1 }).png().toBuffer());
     await sharp(trimmed).resize({ height: 640, kernel: 'lanczos3' }).png().toFile(path.join(OUT, `portrait_${id}.png`));
     console.log(id);
   }
+  if (args.length) return;
   const sheet = await readKeyed(path.join(RAW, 'answer_icons.png'));
   const cw = sheet.w / 4, ch = sheet.h / 4;
   for (let i = 0; i < ICONS.length; i++) {
