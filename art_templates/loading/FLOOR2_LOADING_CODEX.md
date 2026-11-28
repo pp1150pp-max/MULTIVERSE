@@ -35,7 +35,11 @@ Style: papercraft. Everything is built from layered cut coloured paper and card,
 ## 1. `loading_floor2_1.png`
 
 Output: `OUT\loading\raw\loading_floor2_1.png`
-Shape: wide **16:9** (the game shows it at 1280×720). If the generator only offers 3:2, use landscape 3:2 and put only extra sky-sea and clouds in the strips that a 16:9 crop will cut from the top and bottom.
+Shape: wide **16:9** (the game shows it at 1280×720). If the generator only offers 3:2 (1536×1024), generate that and add this sentence to the end of the prompt:
+
+```
+This image is 1536x1024 and will be cropped to the rows between y=80 and y=944. Keep the top of the lighthouse and of every mast below y=150, keep the lowest point of the town above y=740, and put only calm sea and clouds below y=740 and sky-sea and clouds above y=150.
+```
 
 References, in this order:
 
@@ -66,7 +70,7 @@ WHERE EVERYTHING STANDS (screen directions):
 
 TOWNSPEOPLE (small, each standing in front of their own place): the supply seller at the striped stall, the warehouse keeper at the warehouse door, the shipwright at the smithy, the broker at the broker house, the smuggler at the purple tent, and the navigator behind the plaza, above and right of the fountain, beside a small globe on a stand. Each appears exactly once. No other people.
 
-THE THREE HEROES: walking together on the plaza just below the fountain, turned toward the viewer so their faces show, about one seventh of the image height each, clearly larger than the townspeople and easy to recognise. Copy their designs exactly from images 3 and 4, with the same chibi proportions, small dark oval eyes and calm faces. From left to right:
+THE THREE HEROES: walking together on the plaza just below the fountain, turned toward the viewer so their faces show. They are SMALL, as in the game: size them against the buildings, each hero about two thirds as tall as the supply stall and a little taller than the townspeople, with clear shapes and colours so each is still easy to recognise. Copy their designs exactly from images 3 and 4, with the same chibi proportions, small dark oval eyes and calm faces. From left to right:
 1) the swordsman: spiky ash-blond hair, dark charcoal-brown armour with gold trim and round gold knee plates, a dark charcoal cape with gold trim, and a straight sword with a glowing orange-gold blade;
 2) the mage: very long pale silver-lavender hair, a big purple witch hat with a gold flower, a long purple robe with gold trim, and a wooden staff topped by a gold ship's-wheel ring holding a blue orb;
 3) the gunslinger: spiky silver-white hair, brass goggles pushed up on the forehead, a flowing red scarf, a long dark brown coat with gold trim, and a big chunky brass hand cannon.
@@ -80,6 +84,7 @@ Checks:
 - Exactly 4 ships, each in its place and colour (green top, blue right, cream-with-dragon left, red bottom), plus 1 rowboat lower left.
 - Every building on its correct side: warehouse upper left, smuggler tent left, supply stall lower left, broker house lower right, smithy upper right, shipyard on the lower right platform, lighthouse on the upper right platform.
 - Exactly 3 heroes and 6 townspeople, none repeated.
+- Heroes are noticeably smaller than the buildings (about two thirds of the supply stall's height).
 - Swordsman: ash-blond, dark armour, DARK cape (not blue, not white clothes), glowing orange-gold straight sword visible.
 - Mage: silver-lavender hair (not bright purple), gold flower on the hat (not a star), staff with a blue orb.
 - Gunslinger: silver-white hair, goggles, red scarf, dark brown coat, hand cannon visible.
@@ -91,4 +96,5 @@ Checks:
 ## สำหรับ session ที่จะใส่เข้าเกม (Codex ไม่ต้องทำ)
 
 - ครอป 16:9 แล้วย่อเป็น 1280×720 webp (ไฟล์ราว 300 KB) ทับ `public/assets/sprites/paper/ui/loading/floor2_1.webp` ชื่อเดิม ไม่ต้องแก้โค้ด (`src/client/loadingScreen.ts`)
-- ภาพอ้างอิง `f2load_*.png` ประกอบจาก `src/shared/data/maps/harbor_town.json`, รูปแพใน `src/shared/data/harbor.ts` และสไปรต์กระดาษใน `public/assets/sprites/paper/` ถ้าผังเมืองเปลี่ยน ต้องประกอบใหม่ก่อนเจนอีกรอบ
+- ภาพอ้างอิง `f2load_*.png` ประกอบจาก `src/shared/data/maps/harbor_town.json`, รูปแพใน `src/shared/data/harbor.ts` และสไปรต์กระดาษใน `public/assets/sprites/paper/` ถ้าผังเมืองเปลี่ยน ต้องประกอบใหม่ก่อนเจนอีกรอบด้วย `D:\Claude\Game\codex_art_refs\make_f2load_refs.cjs` (อยู่นอก repo · อ่านจาก checkout ใน `REPO` และต้องมี `sharp` จาก `npm install`)
+- ผังอ้างอิงใช้ไฟล์แมพใน repo ถ้ามีฉบับที่เผยแพร่จากตัวแก้แมพใน /admin (`map_layouts`) เมืองบน server จะยึดฉบับนั้นแทน
