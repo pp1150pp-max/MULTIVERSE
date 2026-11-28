@@ -13,5 +13,5 @@ export function elementBadge(skillId: string): string {
   if (!cfg.on) return '';
   const e = skillElement(cfg, skillId);
   if (e === 'none') return '';
-  return `<span class="el-badge" style="color:${ELEMENT_COLOR[e]}"><img src="${elementIconUrl(e)}" alt="" draggable="false">ธาตุ${ELEMENT_NAME[e]}</span>`;
+  return `<span class="el-badge" data-elem="${e}" style="color:${ELEMENT_COLOR[e]}"><img src="${elementIconUrl(e)}" alt="" draggable="false">ธาตุ${ELEMENT_NAME[e]}</span>`;
 }
