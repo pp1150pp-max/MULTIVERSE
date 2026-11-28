@@ -195,13 +195,6 @@
 #npc-talk .ns-sort { margin-left: auto; display: flex; gap: 0.2em; align-items: flex-end; }
 #npc-talk .ns-sort.hidden { display: none; }
 #npc-talk .ns-tab { white-space: nowrap; }
-/* The narrow bag beside the smith / stash / market: tabs and sort don't fit one row, so the sort controls
-   become a small toolbar row above the tabs (rounded all round, not tab-shaped). */
-#npc-talk .nh-bag .ns-tabs { flex-wrap: wrap; }
-#npc-talk .nh-bag .ns-sort { order: -1; flex-basis: 100%; justify-content: flex-end; align-items: center; margin: 0 0 0.35em; }
-#npc-talk .nh-bag .ns-sort select, #npc-talk .nh-bag .ns-sort .ns-tab { border-bottom: 2px solid #8a6a2c; border-radius: 7px; }
-#npc-talk .nh-bag .ns-sort .ns-tab.on { border-color: #ffd86a; }
-#npc-talk .nh-bag .ns-sort select { min-width: 0; flex: 0 1 auto; }
 #npc-talk .ns-sort select {
   padding: 0.2em 0.3em; font-size: max(9px, 0.72em); border: 2px solid #8a6a2c; border-bottom: none; border-radius: 7px 7px 0 0;
   background: linear-gradient(#3a2414, #2a180c); color: #c8b48a;
@@ -295,8 +288,8 @@
    window (forge.ts) or the stash (stash.ts) moved in as it is on the left (zoomed to fit by the pane), the bag on the
    right. Only the pane that is open (.on) shows while the window is grown. ---------- */
 #npc-talk.shop .ns:not(.on) { display: none; }
-#npc-talk .nh-host { left: 0.7em; width: 39.6em; transition-delay: 0.2s; padding: 1.1em 0.5em 0.5em; }
-#npc-talk .nh-bag { left: 41.2em; width: 20.1em; transition-delay: 0.3s; }
+#npc-talk .nh-host { left: 0.7em; width: 29.9em; transition-delay: 0.2s; padding: 1.1em 0.5em 0.5em; }
+#npc-talk .nh-bag { left: 31.3em; width: 30em; transition-delay: 0.3s; }
 #npc-talk .nh-box { flex: 1; min-height: 0; overflow: auto; }
 #npc-talk .nh-box > .panel {
   position: relative; left: auto; top: auto; right: auto; transform: none; width: auto; max-width: none; max-height: none; margin: 0;
@@ -304,7 +297,10 @@
 }
 #npc-talk .nh-box > .panel::before, #npc-talk .nh-box > .panel::after { display: none; }
 #npc-talk .nh-box > .panel > .panel-head, #npc-talk .nh-box > #stash > .npc-line { display: none; }
-#npc-talk .nh-grid { grid-template-columns: repeat(5, 1fr); }
+#npc-talk .nh-grid { grid-template-columns: repeat(6, 1fr); width: 78%; margin: 0 auto; }
+/* The stash: ten slots a row (one bought row = one row), as in its own window. */
+#npc-talk .nh-box #stash-grid { grid-template-columns: repeat(10, 1fr); }
+#npc-talk .nh-box #stash-grid .cell { width: auto; height: auto; aspect-ratio: 1; }
 /* No right side (the cash shop, owner 2026-11-28): the NPC window takes the whole width. */
 #npc-talk .nh-wide .nh-host { width: 60.6em; }
 #npc-talk .nh-box > #cash-win { border: 0; border-image: none; filter: none; padding: 0.4em 0.2em 0; font-size: 13px; }
