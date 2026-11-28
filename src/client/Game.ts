@@ -308,13 +308,13 @@ export class Game {
     // The rest screen covers everything in black: the world keeps up with the server, but nothing is drawn (battery).
     if (!this.restScreen || this.frames < 3) {
       this.renderer.render(this.scene, this.camera);
-      // Where the camera looks, in screen heights along the screen's right and up (the cloud shadows stay on the ground).
+      // Where the camera looks along the screen's right and up (world units; the cloud shadows stay on the ground).
       const ax = this.screenAxis;
       this.postGround.set(
-        this.camTarget.dot(ax.set(1, 0, 0).applyQuaternion(this.camera.quaternion)) / this.viewSize,
-        this.camTarget.dot(ax.set(0, 1, 0).applyQuaternion(this.camera.quaternion)) / this.viewSize,
+        this.camTarget.dot(ax.set(1, 0, 0).applyQuaternion(this.camera.quaternion)),
+        this.camTarget.dot(ax.set(0, 1, 0).applyQuaternion(this.camera.quaternion)),
       );
-      this.postFx.draw(this.renderer, this.zone, dt, (this.camTarget.x - this.camTarget.z) * S, this.postGround);
+      this.postFx.draw(this.renderer, this.zone, dt, (this.camTarget.x - this.camTarget.z) * S, this.postGround, this.viewSize);
     }
     if (this.frames < 3) {
       this.frames++;

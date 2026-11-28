@@ -37,8 +37,12 @@ const SHIMMER_RUN = 0.04;
 const SHIMMER_FLUTTER = 0.1;
 /** The tone's slow swing: seconds per swing. */
 const TONE_PERIOD = 40;
-/** Cloud shadows: noise tiles per screen height (bigger = smaller clouds) and their drift (screen heights a second). */
+/**
+ * Cloud shadows: noise tiles per screen height at the usual zoom of CLOUD_VIEW world units (bigger = smaller clouds),
+ * and their drift (screen heights a second).
+ */
 const CLOUD_SCALE = 0.35;
+const CLOUD_VIEW = 17;
 const CLOUD_DRIFT = 0.015;
 /** The fire light's colour (#ff7a2e as screen values). */
 const FLAME = [1, 0.478, 0.18];
@@ -55,7 +59,7 @@ const FRAG = /* glsl */ `
   uniform vec3 uTint, uShaftColor;
   uniform float uTintK, uVignette, uAspect, uStreak, uRead, uSaturation, uBrightness;
   uniform vec2 uAcross, uStreakShift, uCloudAt;
-  uniform float uCloud, uFlicker;
+  uniform float uCloud, uFlicker, uCloudSpan;
   uniform vec3 uFlame;
   uniform vec3 uBands[${BANDS.length}];  // centre, half width, opacity
   uniform sampler2D uNoise, uScreen;
@@ -76,7 +80,7 @@ const FRAG = /* glsl */ `
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
     // Cloud shadows: soft patches of the noise, fixed to the ground (uCloudAt follows the camera) and blown with the wind.
     if (uCloud > 0.0) {
-      float c = texture2D(uNoise, p * ${CLOUD_SCALE.toFixed(2)} + uCloudAt).g;
+      float c = texture2D(uNoise, p * uCloudSpan + uCloudAt).g;
       over(acc, vec3(0.06, 0.08, 0.14), smoothstep(0.5, 0.75, c) * uCloud);
     }
     float across = dot(p, uAcross);
@@ -120,7 +124,7 @@ export class PostFx {
     uTintK: { value: 0 }, uVignette: { value: 0 }, uAspect: { value: 1 }, uStreak: { value: 0 },
     uRead: { value: 0 }, uSaturation: { value: 1 }, uBrightness: { value: 1 },
     uAcross: { value: new THREE.Vector2(1, 0) }, uStreakShift: { value: new THREE.Vector2() },
-    uCloudAt: { value: new THREE.Vector2() }, uCloud: { value: 0 }, uFlicker: { value: 0 },
+    uCloudAt: { value: new THREE.Vector2() }, uCloud: { value: 0 }, uFlicker: { value: 0 }, uCloudSpan: { value: CLOUD_SCALE },
     uFlame: { value: new THREE.Vector3(FLAME[0], FLAME[1], FLAME[2]) },
     uBands: { value: BANDS.map(() => new THREE.Vector3()) },
     uNoise: { value: noiseTexture() }, uScreen: { value: null as THREE.Texture | null },
@@ -160,9 +164,10 @@ export class PostFx {
   /**
    * Draws the layer over the frame just rendered. Everything is read each frame, so the player's setting and /admin
    * apply at once. `walk`: how far the camera has gone to the screen's right (world units). `ground`: where the camera
-   * looks, along the screen's right and up, in screen heights (the cloud shadows stay on the ground with it).
+   * looks, along the screen's right and up (world units), and `view`: the screen's height in world units (zoom), so the
+   * cloud shadows stay fixed to the ground at any zoom.
    */
-  draw(renderer: THREE.WebGLRenderer, zone: ZoneDef, dt: number, walk: number, ground: THREE.Vector2): void {
+  draw(renderer: THREE.WebGLRenderer, zone: ZoneDef, dt: number, walk: number, ground: THREE.Vector2, view: number): void {
     const level = gfxPost();
     const balance = currentBalance();
     const cfg = balance.fxLayer;
@@ -193,7 +198,8 @@ export class PostFx {
       const a = THREE.MathUtils.degToRad(cfg.windDir);
       this.cloudDrift.x = frac(this.cloudDrift.x + Math.cos(a) * CLOUD_DRIFT * CLOUD_SCALE * cfg.lmCloudSpeed * dt);
       this.cloudDrift.y = frac(this.cloudDrift.y - Math.sin(a) * CLOUD_DRIFT * CLOUD_SCALE * cfg.lmCloudSpeed * dt);
-      u.uCloudAt.value.set(frac(ground.x * CLOUD_SCALE - this.cloudDrift.x), frac(ground.y * CLOUD_SCALE - this.cloudDrift.y));
+      u.uCloudAt.value.set(frac((ground.x / CLOUD_VIEW) * CLOUD_SCALE - this.cloudDrift.x), frac((ground.y / CLOUD_VIEW) * CLOUD_SCALE - this.cloudDrift.y));
+      u.uCloudSpan.value = (view / CLOUD_VIEW) * CLOUD_SCALE;
     }
 
     // The shafts lean `shaftAngle` from upright (rocking a little while they sway); `uAcross` points across them.
