@@ -228,7 +228,7 @@ export class AutoSummaryWindow {
 
     const expSub = this.expReason(d) || (d.lv > 0 ? t('เลเวลอัพ +{0}', [d.lv]) : undefined);
     this.stats.replaceChildren(
-      this.stat('exp', '<span class="auto-sum-exp">EXP</span>', `+${d.exp.toLocaleString()}`, t('EXP'), expSub),
+      this.stat('exp', iconImg('exp'), `+${d.exp.toLocaleString()}`, t('EXP'), expSub),
       this.stat('gold', COIN_ICON, `+${d.gold.toLocaleString()}`, t('ทอง')),
       this.stat('kills', iconImg('map_fight'), d.kills.toLocaleString(), t('มอนที่ล่า')),
     );

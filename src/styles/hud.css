@@ -253,10 +253,6 @@
 }
 .auto-sum-ic { width: 34px; height: 34px; display: grid; place-items: center; }
 .auto-sum-ic .gi { width: 34px; height: 34px; object-fit: contain; }
-.auto-sum-exp {
-  display: grid; place-items: center; width: 34px; height: 24px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
-  color: #2a1d08; background: linear-gradient(#f0d58c, #b8913f); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 240, 200, 0.5);
-}
 .auto-sum-txt { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
 .auto-sum-txt b { color: var(--gold-hi); font-size: 19px; font-weight: 600; white-space: nowrap; }
 .auto-sum-txt span { color: var(--ink-dim); font-size: 12px; }
