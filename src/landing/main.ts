@@ -59,7 +59,7 @@ function readPref(): Lang {
 }
 
 let lang: Lang = readPref();
-let view: LandingView = { start: LANDING_DEFAULT.start, end: LANDING_DEFAULT.end, news: [] };
+let view: LandingView = { start: LANDING_DEFAULT.start, end: LANDING_DEFAULT.end, news: [], english: true };
 let newsLoaded = false;
 const thai = new Map<Element, string>();
 const $ = (id: string) => document.getElementById(id)!;
@@ -167,6 +167,14 @@ async function load(): Promise<void> {
     if (!r.ok) throw new Error(String(r.status));
     const v = (await r.json()) as LandingView;
     if (Number.isFinite(v.start) && Number.isFinite(v.end) && Array.isArray(v.news)) view = v;
+    if (v.english === false) {
+      // English is off in /admin: Thai only (the game does the same).
+      $('lang').hidden = true;
+      if (lang !== 'th') {
+        lang = 'th';
+        applyLang();
+      }
+    }
   } catch {
     // No server (or it is down): the code's window, no notes.
   }

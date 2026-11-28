@@ -339,6 +339,10 @@ const server = createServer(async (req, res) => {
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
     else if ((req.method === 'GET' || req.method === 'HEAD') && PAGES.has(path)) await serveStatic(req, res, path + '.html');
+    else if (path === '/landing/') {
+      res.writeHead(301, { Location: '/landing' });
+      res.end();
+    }
     else if (path === '/admin/') {
       // The page loads its files by relative paths (Vite base './'), which only work from /admin.
       res.writeHead(301, { Location: '/admin' });

@@ -81,6 +81,7 @@ async function run(): Promise<void> {
   let pub = await api('GET', '/landing');
   ok(pub.status === 200 && pub.data.start === LANDING_DEFAULT.start && pub.data.end === LANDING_DEFAULT.end && Array.isArray(pub.data.news) && pub.data.news.length === 0, 'no login: code window, no notes yet');
   ok(pub.headers.get('access-control-allow-origin') === '*', 'readable from another site (CORS *)');
+  ok(typeof pub.data.english === 'boolean', 'carries the English switch');
   const pre = await fetch(`${BASE}/api/landing`, { method: 'OPTIONS' });
   ok(pre.status === 204 && pre.headers.get('access-control-allow-methods') === 'GET', 'preflight answered');
   ok((await api('POST', '/landing', {})).status !== 200, 'POST on the public route does nothing');

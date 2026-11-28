@@ -4,11 +4,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from './db';
 import { HttpError, readJson, send } from './http';
 import { log, requireFeature } from './admin';
+import { currentBalance } from '../src/shared/balance';
 import { LANDING_API, LANDING_NEWS, cleanLanding, toThaiInput, type AdminLanding, type LandingView } from '../src/shared/landing';
 
 export function landingView(db: Db): LandingView {
   const c = db.landingConfig();
-  return { start: c.start, end: c.end, news: c.news ? db.newsVisible(LANDING_NEWS) : [] };
+  return { start: c.start, end: c.end, news: c.news ? db.newsVisible(LANDING_NEWS) : [], english: currentBalance().english };
 }
 
 /** GET /api/landing: no login, readable from another site (the page may live on its own domain), cached 30 s. */

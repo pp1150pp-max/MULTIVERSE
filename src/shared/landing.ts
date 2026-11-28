@@ -28,6 +28,8 @@ export interface LandingView {
   end: number;
   /** Newest first; empty when the news switch is off. */
   news: NewsNote[];
+  /** The /admin "ภาษาอังกฤษ" switch (docs/systems/i18n.md): off = the page stays Thai and hides its EN button. */
+  english: boolean;
 }
 
 /** The /admin tab's view. */
