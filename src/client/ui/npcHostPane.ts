@@ -106,13 +106,12 @@ export class NpcHostPane {
     this.root.addEventListener('mouseleave', () => this.g.hud.hideTip());
   }
 
-  /** Moves the NPC window in; `arg` = the answer's menu, `face` = the portrait, `small` = a square harbour one. */
-  open(arg: string, face: string, small: boolean): void {
+  /** Moves the NPC window in; `arg` = the answer's menu, `face` = the portrait. */
+  open(arg: string, face: string): void {
     const host = document.getElementById(this.spec.hostId)!;
     if (!this.home) this.home = { parent: host.parentElement!, next: host.nextSibling };
     this.box.append(host);
     this.medalImg.src = face;
-    this.medal.classList.toggle('small', small);
     this.medal.classList.toggle('hidden', !face);
     this.view = this.spec.onOpen?.(arg) ?? this.spec.views[0]?.[0] ?? 'gear';
     this.drawn = '';
