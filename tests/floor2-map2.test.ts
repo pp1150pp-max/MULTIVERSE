@@ -11,6 +11,7 @@ import { blockingGate } from '../src/shared/data/bossGates';
 import { itemSet } from '../src/shared/data/items';
 import { applyBalance, checkBalance, mergeBalance } from '../src/shared/balance';
 import { codeMoves, MOVE_PARAMS } from '../src/shared/moveTuning';
+import { SHOUT_LEN, SHOUT_MOVES } from '../src/shared/bossShout';
 import { Sim } from '../src/shared/sim/Sim';
 import type { Monster } from '../src/shared/sim/Monster';
 import type { Player } from '../src/shared/sim/Player';
@@ -305,6 +306,53 @@ function room(px = 5): { sim: Sim; cap: Monster; p: Player } {
     hasted = cap.hasteT > 0;
   }
   ok(hasted && cap.haste === mv('captain.shoutSpeed'), `his shout makes him faster (+${Math.round(cap.haste * 100)}%)`);
+}
+{
+  // His moves shouted in words (bossShout.ts), no sound-wave picture; the switch and the lines in /admin.
+  const fight = (): { texts: Set<string>; ring: boolean } => {
+    const { sim, cap, p } = room(6);
+    const texts = new Set<string>();
+    let ring = false;
+    const listen = (secs: number): void => {
+      for (let i = 0; i < secs * 20; i++) {
+        // Both held apart, so he is far enough to throw his anchor.
+        cap.x = ROOM.boss!.x;
+        cap.z = p.z = ROOM.boss!.z;
+        p.x = ROOM.boss!.x + 6;
+        run(sim, 0.05);
+        for (const e of sim.drainEvents()) {
+          if (e.t === 'text') texts.add(e.text);
+          if (e.t === 'fx' && JSON.stringify(e.args).includes('fx_shout_ring')) ring = true;
+        }
+      }
+    };
+    listen(25);
+    cap.hp = cap.maxHp * 0.45;
+    sim.hitMonster(p, cap, 0.01);
+    listen(1);
+    return { texts, ring };
+  };
+  const lines = SHOUT_MOVES.map((m) => m.code);
+  const on = fight();
+  const missing = lines.filter((l) => !on.texts.has(l));
+  ok(missing.length === 0 && !on.ring, `he shouts all four lines, no sound-wave picture (missing: ${missing.join(', ') || 'none'})`);
+  const b = mergeBalance({});
+  b.bossShout.on = false;
+  const off = checkBalance(b, true);
+  if ('tuning' in off && off.tuning) applyBalance(off.tuning);
+  const quiet = fight().texts;
+  ok(lines.every((l) => !quiet.has(l)), 'switched off in /admin: he says nothing');
+  b.bossShout.on = true;
+  b.bossShout.text['captain.shout'] = '  สู้เขา!  ';
+  b.bossShout.text['captain.anchor'] = '';
+  const own = checkBalance(b, true);
+  ok('tuning' in own && JSON.stringify(own.tuning?.bossShout) === JSON.stringify({ text: { 'captain.shout': 'สู้เขา!', 'captain.anchor': '' } }), 'saved: only what differs');
+  if ('tuning' in own && own.tuning) applyBalance(own.tuning);
+  const said = fight().texts;
+  ok(said.has('สู้เขา!') && !said.has('มานี่!') && !said.has('') && said.has('ยิง!'), 'his own words; an empty line is silent');
+  b.bossShout.text['captain.crew'] = 'ก'.repeat(SHOUT_LEN + 1);
+  ok(checkBalance(b, true).error !== undefined, 'a line too long is refused');
+  applyBalance({});
 }
 {
   // Enraged: three cutlass pirates; dead: the parrot and the shells go.

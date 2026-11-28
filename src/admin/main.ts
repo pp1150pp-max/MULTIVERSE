@@ -248,6 +248,7 @@ const SEARCH_INDEX: { tab: Tab; title: string; words?: string }[] = [
   { tab: 'balance', title: 'ตัวอย่างค่าจริงที่สุ่มได้' },
   { tab: 'balance', title: 'มอนธรรมดา (ตัวคูณ)', words: 'มอน จุดเกิด เลิกไล่ กลับบ้าน safe zone' },
   { tab: 'balance', title: 'ห้องบอส', words: 'บอส สลับเป้า ชุบ ขนนก อมตะ นับถอยหลัง รอโหลด ระเบิด หัวใจภูเขาไฟ กระจายดรอป เอฟเฟกต์สกิลบอส' },
+  { tab: 'balance', title: 'บอสตะโกน', words: 'กัปตันขาไม้ ข้อความ คำพูด ตะโกน ยิง สมอ ลูกเรือ' },
   { tab: 'balance', title: 'เมืองกลาง', words: 'แชนแนล ch แบ่งห้อง ขอบพื้นอิฐ' },
   { tab: 'balance', title: 'VIP: โบนัส EXP/ดรอป', words: 'vip โบนัส' },
   { tab: 'balance', title: 'กระเป๋า ร้านค้า แชท', words: 'ขยายช่อง ห้ามถอด สวม ร้านพ่อค้า ลิงก์ไอเทม' },

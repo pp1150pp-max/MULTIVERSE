@@ -106,8 +106,8 @@ const COVE_PROPS = [
   'smuggler_flag', 'cargo_net', 'bottles', 'loot_chest', 'pirate_boat', 'summoner_captain', 'decor_cove', 'island_cliff_cove', 'island_slabs_cove',
   ...['gunboat', 'wall', 'brazier', 'boulder', 'pillar', 'rubble', 'mast', 'tree'].map((n) => `room_cove_${n}`),
 ];
-/** The cove's move effects (sim/coveMoves.ts, peglegCaptain.ts): thrown ball, bomb, pellets, blast, anchor, shout, parrot mark. Paper only. */
-const COVE_FX = ['fx_iron_ball', 'fx_bomb', 'fx_explosion', 'fx_anchor', 'fx_pellets', 'fx_shout_ring', 'fx_parrot_mark', 'fx_ship_shell'];
+/** The cove's move effects (sim/coveMoves.ts, peglegCaptain.ts): thrown ball, bomb, pellets, blast, anchor, parrot mark. Paper only. */
+const COVE_FX = ['fx_iron_ball', 'fx_bomb', 'fx_explosion', 'fx_anchor', 'fx_pellets', 'fx_parrot_mark', 'fx_ship_shell'];
 /**
  * Floor 2's Ghost Ship Graveyard (FLOOR2_M3_GRAVEYARD.md, tools/cut_papercraft.cjs floor2_m3): paper only, under sprites/paper/props/.
  * The room kit has a figurehead and a mast instead of a rune stone and a tree (Terrain.placeRoom ROOM_KIT).

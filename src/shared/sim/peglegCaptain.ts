@@ -5,7 +5,8 @@
 //            shell the spot where that player stands, a few times. Shot down it is gone for a while (it never dies),
 //            then it flies back to his shoulder. On his shoulder it can't be hit;
 //  - shout:  he and his crew nearby run faster for a while.
-// Its numbers are in src/shared/moveTuning.ts (/admin). Damage is times his ATK, so keys make it hit harder too.
+// His moves are shouted in words over his head (src/shared/bossShout.ts). Its numbers are in src/shared/moveTuning.ts
+// (/admin). Damage is times his ATK, so keys make it hit harder too.
 // The gunboat shells go out in `Sim.hazards` like the crab's (k 'shell', drawn by src/client/hazards.ts).
 import { arenaRadius } from '../data/zones';
 import { GUNBOAT_ANGLES, gunboatDist } from './terrain';
@@ -14,6 +15,8 @@ import type { Monster } from './Monster';
 import type { Player } from './Player';
 import type { Sim } from './Sim';
 import { mv } from './beachMoves';
+import { currentBalance } from '../balance';
+import type { ShoutId } from '../bossShout';
 
 /** Seconds before his first anchor, parrot and shout of a fight. */
 const FIRST = { anchor: 4, parrot: 6, shout: 10 };
@@ -33,6 +36,12 @@ const SHOW_AFTER = 0.4;
 
 type ParrotState = 'shoulder' | 'fly' | 'perch' | 'home' | 'down';
 interface Active { h: ShellHazard; landed: boolean }
+
+/** His words over his head as he makes a move (/admin card "บอสตะโกน"; switched off or an empty line = nothing). */
+export function captainYell(sim: Sim, m: Monster, move: ShoutId, above = 0.6): void {
+  const cfg = currentBalance().bossShout;
+  if (cfg.on && cfg.text[move]) sim.text(m.x, m.topY + above, m.z, cfg.text[move], 'crit', 1.4);
+}
 
 export class PeglegCaptainBrain {
   private anchorCd = FIRST.anchor;
@@ -230,6 +239,7 @@ export class PeglegCaptainBrain {
           sim.anim(b.id, 'attack', { duration: 0.5 });
           sim.text(p.x, p.topY + 0.8, p.z, 'นกแก้วชี้เป้า!', 'crit', 1, p.id);
           sim.log('นกแก้วเกาะหัวคุณ! เรือปืนกำลังยิงมาที่คุณ ตีนกให้ร่วงหรือวิ่งหลบ', '#ff8a6a', p.id);
+          captainYell(sim, m, 'captain.parrot');
         }
         break;
       }
@@ -336,6 +346,7 @@ export class PeglegCaptainBrain {
       m.face(p.x - m.x, p.z - m.z);
       sim.fx('lineTelegraph', m.x, m.z, this.anchorAngle, mv('captain.anchorRange'), ANCHOR_HALF * 2, windup);
       sim.anim(m.id, 'anchor', { duration: windup, fallback: 'attack' });
+      captainYell(sim, m, 'captain.anchor');
       return true;
     }
     return false;
@@ -382,8 +393,7 @@ export class PeglegCaptainBrain {
   private shout(sim: Sim, m: Monster): void {
     const sec = mv('captain.shoutSec');
     const reach = mv('captain.shoutRange');
-    sim.fx('sprite', 'fx_shout_ring', m.x, m.z, 2.4, 0.7, m.id);
-    sim.text(m.x, m.topY + 0.6, m.z, 'ตะโกนสั่งลูกเรือ!', 'crit', 1.1);
+    captainYell(sim, m, 'captain.shout');
     for (const o of sim.monsters) {
       if (!o.alive || o.def.move === 'parrot') continue;
       if (o !== m && (!o.summoned || Math.hypot(o.x - m.x, o.z - m.z) > reach)) continue;
