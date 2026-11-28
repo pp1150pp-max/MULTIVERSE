@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { finish, ok } from './check';
+import { openStep } from './open-step';
 import { cosById } from '../src/shared/data/cosmetics';
 import { ZONE_HUB } from '../src/shared/data/zones';
 import { Terrain } from '../src/shared/sim/terrain';
@@ -152,14 +153,7 @@ async function run(): Promise<void> {
   // The server's walking check uses the mount's speed: a step it accepts while riding is too long on foot.
   // (Half a second since the last step: on foot up to 3.5 × 0.5 × 1.4 + 0.3 = 2.75, riding 3.49.)
   const terrain = new Terrain(ZONE_HUB);
-  const stepFrom = (x: number, z: number) => {
-    for (let a = 0; a < 16; a++) {
-      const tx = x + Math.cos((a * Math.PI) / 8) * 3.2;
-      const tz = z + Math.sin((a * Math.PI) / 8) * 3.2;
-      if (!terrain.isBlocked(tx, tz, 0)) return { x: tx, z: tz };
-    }
-    throw new Error('no open spot to step to');
-  };
+  const stepFrom = (x: number, z: number) => openStep(terrain, { x, z }, 3.2);
   {
     const at = A.seen();
     const to = stepFrom(at.x, at.z);

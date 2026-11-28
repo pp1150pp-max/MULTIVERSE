@@ -424,8 +424,8 @@ export interface SnapshotMsg {
   room?: RoomSnap;
   /** In a "รอดมอนเป็นระลอก" run (src/shared/waveGame.ts). */
   waves?: WaveSnap;
-  /** Treasure chests of this map opened now (gone until they come back); left out when none. */
-  chestsGone?: string[];
+  /** Treasure chests near this player that are here now, where they stand; sent only when that list changes (left out = the same). */
+  chests?: { id: string; x: number; z: number }[];
   /** Your party, every member wherever they are (left out when you are in none). */
   party?: PartySnap;
   events: SimEvent[];

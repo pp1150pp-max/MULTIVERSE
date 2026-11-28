@@ -62,8 +62,8 @@ export interface Backend {
   readonly room: RoomSnap | null;
   /** The "รอดมอนเป็นระลอก" run you are in (null elsewhere); its seconds count down locally between snapshots. */
   readonly waves: WaveSnap | null;
-  /** Treasure chests of this map opened now (docs/systems/chests-shrines.md): not drawn, nothing to open. */
-  readonly chestsGone: ReadonlySet<string>;
+  /** Treasure chests near us that are here now, where they stand (docs/systems/chests-shrines.md). */
+  readonly chests: readonly { id: string; x: number; z: number }[];
   /** Simulation clock (seconds). */
   readonly time: number;
   /** Players in your map and channel right now, you included. */

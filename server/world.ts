@@ -156,6 +156,8 @@ interface Session {
   lastSeq: number;
   epoch: number;
   lastInv: string;
+  /** The treasure chests the last snapshot sent (as text). */
+  lastChests: string;
   lastStash: string;
   /** The tutorial state the last snapshot sent (JSON). */
   lastTut: string;
@@ -842,7 +844,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
       preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', lastAlbum: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), tally: this.keptTally(charId), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastChests: '', lastStash: '', lastTut: '', lastAlbum: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), tally: this.keptTally(charId), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -2549,6 +2551,7 @@ export class GameWorld {
     s.lastPosAt = performance.now();
     s.epoch++;
     s.lastInv = '';
+    s.lastChests = '';
     s.lastStash = '';
     s.lastTut = '';
     // The browser starts the new zone with empty lists: everything goes again.
@@ -2656,6 +2659,11 @@ export class GameWorld {
       me.tut = p.tut;
     }
     const sim = s.sim;
+    // Treasure chests near this player that are here now, only when that list changes.
+    const shown = sim.chestsShown().filter(near);
+    const shownKey = JSON.stringify(shown);
+    const chests = shownKey === s.lastChests ? undefined : shown;
+    s.lastChests = shownKey;
     const msg: SnapshotMsg = {
       t: 'snap',
       time: r2(sim.time),
@@ -2691,7 +2699,7 @@ export class GameWorld {
         : { hazards: sim.hazards.filter(near) }),
       room: this.rooms.snap(sim, p),
       waves: this.waveRooms.snap(sim, p),
-      ...(sim.chestGone.size ? { chestsGone: sim.chestsGone() } : {}),
+      ...(chests !== undefined ? { chests } : {}),
       loots: sim.loots.filter(near).map((l) => ({
         id: l.id, x: r2(l.x), z: r2(l.z), fromX: r2(l.fromX), fromZ: r2(l.fromZ), t: r2(l.t),
         kind: l.kind, dropped: l.dropped, owner: l.owner, ownerUntil: r2(l.ownerUntil),

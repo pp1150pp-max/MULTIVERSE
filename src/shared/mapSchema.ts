@@ -64,9 +64,11 @@ export interface MapPortal {
   prop?: string;
 }
 /**
- * Treasure chests and shrines (owner 2026-11-27, docs/systems/chests-shrines.md): only on floor 1's four farm maps for now
- * (TREASURE_MAP_IDS). A chest: the first player to open it gets what is inside, then it is gone until it comes back. A shrine:
- * touching it gives a timed buff (its `buff`, or one of the three at random).
+ * Treasure chests and shrines (owner 2026-11-27, docs/systems/chests-shrines.md): chests on the farm maps of floors 1 and 2
+ * (CHEST_MAP_IDS, floor 2 since 2026-11-28), shrines on floor 1's only (SHRINE_MAP_IDS). A chest: the first player to open it gets
+ * what is inside, then it is gone until it comes back. Its x/z here is where it stands only with random spots off
+ * (TreasureConfig.randomSpots); the entries count the map's chests. A shrine: touching it gives a timed buff (its `buff`, or one of
+ * the three at random).
  */
 export interface MapChest { id: string; x: number; z: number }
 export type ShrineBuff = 'atk' | 'speed' | 'exp';
@@ -74,8 +76,10 @@ export type ShrineKind = ShrineBuff | 'random';
 export const SHRINE_BUFFS: readonly ShrineBuff[] = ['atk', 'speed', 'exp'];
 export const SHRINE_KINDS: readonly ShrineKind[] = ['atk', 'speed', 'exp', 'random'];
 export interface MapShrine { id: string; x: number; z: number; buff: ShrineKind }
-/** The maps that may have chests and shrines (floor 1's farm maps, owner 2026-11-27: "เริ่มที่แมพฟาร์มชั้น 1"). */
-export const TREASURE_MAP_IDS: readonly string[] = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
+/** The maps that may have shrines (floor 1's farm maps, owner 2026-11-27: "เริ่มที่แมพฟาร์มชั้น 1"). */
+export const SHRINE_MAP_IDS: readonly string[] = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
+/** The maps that may have chests: every farm map of floors 1 and 2 (owner 2026-11-28). */
+export const CHEST_MAP_IDS: readonly string[] = [...SHRINE_MAP_IDS, 'shipwreck_beach', 'smugglers_cove', 'ghost_ship_graveyard', 'kraken_maelstrom'];
 /** Most of each one map may have. */
 export const TREASURE_MAX = 30;
 export interface MapSpawn { monster: string; x: number; z: number; radius: number; count: number; respawn: [number, number] }
@@ -123,9 +127,9 @@ export interface MapData {
   lair?: MapLair;
   /** Warp circles on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back). Absent = none. */
   warps?: MapWarp[];
-  /** Treasure chests (TREASURE_MAP_IDS only). Absent = none. */
+  /** Treasure chests (CHEST_MAP_IDS only). Absent = none. */
   chests?: MapChest[];
-  /** Shrines (TREASURE_MAP_IDS only). Absent = none. */
+  /** Shrines (SHRINE_MAP_IDS only). Absent = none. */
   shrines?: MapShrine[];
   /** Only boss rooms have it. Absent on every other map. */
   room?: MapRoom;
@@ -399,11 +403,12 @@ function validateInner(map: MapData, ctx: MapValidateCtx, err: Err, warn: Err): 
     placed('warp', id, w?.x, w?.z, `วงวาร์ป ${i + 1}`);
     placed('warp', id, w?.toX, w?.toZ, `ปลายทางวงวาร์ป ${i + 1}`);
   });
-  // Treasure chests and shrines: lists of at most TREASURE_MAX, unique ids, standing where a player can, on a farm map only.
+  // Treasure chests and shrines: lists of at most TREASURE_MAX, unique ids, standing where a player can, on the maps that may have them.
   for (const [list, kind, name] of [[map.chests, 'chest', 'หีบสมบัติ'], [map.shrines, 'shrine', 'ศาลเจ้า']] as const) {
     if (list === undefined) continue;
     if (!Array.isArray(list)) { err('schema', `"${kind === 'chest' ? 'chests' : 'shrines'}" must be a list`, kind); continue; }
-    if (list.length && !TREASURE_MAP_IDS.includes(map.id)) err('locked', `${name}วางได้เฉพาะแมพฟาร์มชั้น 1 (ป่ามรกต หนองน้ำหมอก ดินแดนหิมะ เกาะภูเขาไฟ)`, kind);
+    if (list.length && !(kind === 'chest' ? CHEST_MAP_IDS : SHRINE_MAP_IDS).includes(map.id))
+      err('locked', kind === 'chest' ? `${name}วางได้เฉพาะแมพฟาร์มชั้น 1 และชั้น 2` : `${name}วางได้เฉพาะแมพฟาร์มชั้น 1 (ป่ามรกต หนองน้ำหมอก ดินแดนหิมะ เกาะภูเขาไฟ)`, kind);
     if (list.length > TREASURE_MAX) err('range', `${name}ได้ไม่เกิน ${TREASURE_MAX} จุดต่อแมพ`, kind);
     dup(kind, list.map((c) => c?.id));
     list.forEach((c, i) => {

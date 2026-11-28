@@ -145,7 +145,7 @@ export interface ZoneDef {
   whirlpools?: Whirlpool[];
   /** Warp circles on the ground (the Kraken Maelstrom's way onto its whirlpool's island and back). */
   warps?: WarpPad[];
-  /** Treasure chests and shrines (floor 1's farm maps, docs/systems/chests-shrines.md). */
+  /** Treasure chests (the farm maps) and shrines (floor 1's), docs/systems/chests-shrines.md. */
   chests?: MapChest[];
   shrines?: MapShrine[];
   /** Size of the boss's arena, marked by the ring of stones (default DEFAULT_ARENA). Auto Play stays out of it. */
@@ -802,10 +802,15 @@ export const ZONE_HARBOR: ZoneDef = {
 };
 
 /**
- * Where the farm maps' treasure chests and shrines start (owner 2026-11-27: 4 chests and 2 shrines a map, moved in the map editor
- * afterwards). Final map units (after grownFarm and rotateZone), picked on open ground away from the camp, the doors and the boss.
+ * The farm maps' treasure chests and shrines (owner 2026-11-27: 4 chests and 2 shrines a map on floor 1; 2026-11-28: 4 chests on
+ * floor 2, no shrines), changed in the map editor afterwards. A chest's spot here counts only with random spots off
+ * (src/shared/chestSpots.ts). Final map units (after grownFarm and rotateZone), open ground away from the camp, doors and boss.
  */
-const FARM_TREASURE: Record<string, { chests: MapChest[]; shrines: MapShrine[] }> = {
+const FARM_TREASURE: Record<string, { chests: MapChest[]; shrines?: MapShrine[] }> = {
+  shipwreck_beach: { chests: [{ id: 'c1', x: 35, z: -41 }, { id: 'c2', x: 43, z: -5 }, { id: 'c3', x: -47, z: 18 }, { id: 'c4', x: -37, z: -11 }] },
+  smugglers_cove: { chests: [{ id: 'c1', x: 30, z: 14 }, { id: 'c2', x: -12, z: -26 }, { id: 'c3', x: 8, z: 35 }, { id: 'c4', x: -24, z: 21 }] },
+  ghost_ship_graveyard: { chests: [{ id: 'c1', x: 24, z: -28 }, { id: 'c2', x: 6, z: -2 }, { id: 'c3', x: -44, z: -45 }, { id: 'c4', x: -24, z: 15 }] },
+  kraken_maelstrom: { chests: [{ id: 'c1', x: 51, z: -26 }, { id: 'c2', x: 0, z: -38 }, { id: 'c3', x: 39, z: 10 }, { id: 'c4', x: 39, z: 44 }] },
   emerald_forest: {
     chests: [{ id: 'c1', x: -25, z: -5 }, { id: 'c2', x: 83, z: -83 }, { id: 'c3', x: -79, z: 83 }, { id: 'c4', x: -83, z: -83 }],
     shrines: [{ id: 's1', x: 1, z: -83, buff: 'atk' }, { id: 's2', x: 45, z: -21, buff: 'random' }],
@@ -825,7 +830,7 @@ const FARM_TREASURE: Record<string, { chests: MapChest[]; shrines: MapShrine[] }
 };
 const withTreasure = (z: ZoneDef): ZoneDef => {
   const t = FARM_TREASURE[z.id];
-  return t ? { ...z, chests: t.chests.map((c) => ({ ...c })), shrines: t.shrines.map((c) => ({ ...c })) } : z;
+  return t ? { ...z, chests: t.chests.map((c) => ({ ...c })), ...(t.shrines ? { shrines: t.shrines.map((c) => ({ ...c })) } : {}) } : z;
 };
 
 /** The floor-1 zones as the generators above make them. Only tools/bake_maps.ts and the bake test read these. */
@@ -836,10 +841,10 @@ export const GENERATED_ZONES: Record<string, ZoneDef> = {
   [ZONE_2.id]: withTreasure(ZONE_2),
   [ZONE_3.id]: withTreasure(ZONE_3),
   [ZONE_4.id]: withTreasure(ZONE_4),
-  [ZONE_BEACH.id]: ZONE_BEACH,
-  [ZONE_COVE.id]: ZONE_COVE,
-  [ZONE_GRAVE.id]: ZONE_GRAVE,
-  [ZONE_MAELSTROM.id]: ZONE_MAELSTROM,
+  [ZONE_BEACH.id]: withTreasure(ZONE_BEACH),
+  [ZONE_COVE.id]: withTreasure(ZONE_COVE),
+  [ZONE_GRAVE.id]: withTreasure(ZONE_GRAVE),
+  [ZONE_MAELSTROM.id]: withTreasure(ZONE_MAELSTROM),
 };
 
 /**

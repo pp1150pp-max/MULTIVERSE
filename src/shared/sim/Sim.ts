@@ -41,6 +41,7 @@ import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed'
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { DROP_LIFE, Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { chestGold, chestOdds, rollChestRow, SHRINE_BUFF_ICON, SHRINE_BUFF_NAME, shrinePct, type ChestRow } from '../treasure';
+import { pickChestSpot, type Spot } from '../chestSpots';
 import { SHRINE_BUFFS, type MapChest, type MapShrine, type ShrineBuff } from '../mapSchema';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
@@ -70,7 +71,7 @@ import { CARD_RARITY_NAME, cardName, isCardId, type CardId } from '../data/cards
 const MINION_POUNCE_WINDUP = 0.35;
 /** Hub spawn: random distance from the fountain centre, between these (fountain blocks ~1.7, rest range 4.5). */
 // Outside the fountain and its benches (HUB_FOUNTAIN_RADIUS), within its rest range (REST_RANGE.fountain).
-const HUB_SPAWN_RING: [number, number] = [4.4, 6.1];
+export const HUB_SPAWN_RING: [number, number] = [4.4, 6.1];
 /** Drops land where a player of this radius could stand (Player.radius), so they can always be picked up. */
 const LOOT_STAND_R = 0.4;
 /** A vanished boss gives up on its fight when no living player has been this close for VANISH_GIVE_UP seconds. */
@@ -177,6 +178,9 @@ export const LOOT_CLICK_RANGE = 1.5;
 
 /** Owner's balance (2026-11-09): gold drops x2, potion drop chance x2, boss potions x2. */
 const DROP_POTION_MULT = 2;
+
+/** A treasure chest's rolled spot (Sim.chestSpots). */
+export type ChestPlace = Spot & { zone: ZoneDef; opened: boolean };
 
 /** "10 นาที", "3 นาที 20 วิ", "45 วิ" (a chest or shrine wait, rounded up to seconds). */
 function fmtWait(sec: number): string {
@@ -1031,10 +1035,29 @@ export class Sim {
   chestGone: Map<string, number> = new Map();
   /** The clock chestGone counts in (seconds). The server sets a wall clock; alone (tests) it is this Sim's time. */
   chestClock: () => number = () => this.time;
+  /**
+   * Where each chest stands while spots are random: chest id → the spot rolled, for which layout, and whether it was opened there
+   * (the next time it is here it comes up somewhere else). Kept by the server's channels like chestGone.
+   */
+  chestSpots: Map<string, ChestPlace> = new Map();
 
-  /** This map's chests and shrines (none where the switch is off). */
+  /** This map's chests where they stand now, and its shrines (none where the switch is off). */
   get chests(): readonly MapChest[] {
-    return currentBalance().treasure.chests ? this.zone.chests ?? [] : [];
+    const cfg = currentBalance().treasure;
+    if (!cfg.chests) return [];
+    const list = this.zone.chests ?? [];
+    return cfg.randomSpots ? list.map((c) => this.chestPlace(c)) : list;
+  }
+  /** Chest `c`'s spot, rolled when it has none for this layout, or it is back after being opened (src/shared/chestSpots.ts). */
+  private chestPlace(c: MapChest): MapChest {
+    let s = this.chestSpots.get(c.id);
+    if (!s || s.zone !== this.zone || (s.opened && this.chestHere(c.id))) {
+      // Apart from the other chests standing now, and from where this one was last.
+      const taken = [...this.chestSpots].filter(([id, o]) => o.zone === this.zone && (id === c.id || !o.opened)).map(([, o]) => o);
+      const at = pickChestSpot(this.zone, this.terrain, currentBalance().treasure, taken, Math.random) ?? c;
+      this.chestSpots.set(c.id, (s = { x: at.x, z: at.z, zone: this.zone, opened: false }));
+    }
+    return { id: c.id, x: s.x, z: s.z };
   }
   get shrines(): readonly MapShrine[] {
     return currentBalance().treasure.shrines ? this.zone.shrines ?? [] : [];
@@ -1049,7 +1072,11 @@ export class Sim {
     const at = this.chestGone.get(id);
     return at === undefined ? 0 : Math.max(0, at - this.chestClock());
   }
-  /** The chests opened now, for the snapshot. */
+  /** The chests that are here now, where they stand: for the snapshot. */
+  chestsShown(): MapChest[] {
+    return this.chests.filter((c) => this.chestHere(c.id));
+  }
+  /** The ids of the chests opened now. */
   chestsGone(): string[] {
     const now = this.chestClock();
     return [...this.chestGone].filter(([, at]) => now < at).map(([id]) => id);
@@ -1110,15 +1137,19 @@ export class Sim {
     const c = this.chests.find((x) => x.id === p.chestId);
     p.chestId = '';
     if (!c) return;
-    // Someone else finished first: the chest went while this player was still opening it.
-    if (!this.chestHere(c.id)) return void this.text(p.x, p.topY, p.z, 'มีคนเปิดหีบนี้ไปก่อนแล้ว', 'info', 1.4, p.id);
+    // Someone else finished first: the chest went (or is back somewhere else) while this player was still opening it.
+    if (!this.chestHere(c.id) || Math.hypot(p.x - c.x, p.z - c.z) > currentBalance().treasure.range + 0.3) return void this.text(p.x, p.topY, p.z, 'มีคนเปิดหีบนี้ไปก่อนแล้ว', 'info', 1.4, p.id);
     this.openChest(p, c);
   }
 
   /** Opens chest `c` for `p`: gold, one row of the table (into the bag, or on the ground for them alone when it doesn't fit), gone for chestRespawn s. */
   openChest(p: Player, c: MapChest, r: Rng = Math.random): boolean {
     const cfg = currentBalance().treasure;
+    // Where it stands now (the pieces fall round it); the next time it comes up somewhere else.
+    const at = this.chests.find((x) => x.id === c.id) ?? c;
     this.chestGone.set(c.id, this.chestClock() + cfg.chestRespawn);
+    const place = this.chestSpots.get(c.id);
+    if (place) place.opened = true;
     const gold = chestGold(cfg, this.zone.levels, r);
     p.gold += gold;
     const key = this.zone.lair ? BOSS_KEY[this.zone.lair.boss] : undefined;
@@ -1132,15 +1163,15 @@ export class Sim {
       const g = row ? this.chestPrize(p, row, key, r) : null;
       if (!g) continue;
       got.push(g);
-      const [x, z] = this.lootSpot(c.x, c.z, 0.7 + r() * 1.6);
-      this.loots.push(new Loot(this.newId(), x, z, c.x, c.z, g.kind, { owner: p.id, ownerParty: null, ownerUntil: this.time + DROP_LIFE + 5 }));
+      const [x, z] = this.lootSpot(at.x, at.z, 0.7 + r() * 1.6);
+      this.loots.push(new Loot(this.newId(), x, z, at.x, at.z, g.kind, { owner: p.id, ownerParty: null, ownerUntil: this.time + DROP_LIFE + 5 }));
     }
     const count = (rar: string) => got.filter((g) => g.kind.type === 'item' && g.kind.item.rarity === rar).length;
     const [purple, orange] = [count('epic'), count('legendary')];
     const best = orange ? got.find((g) => g.kind.type === 'item' && g.kind.item.rarity === 'legendary') : got.find((g) => g.kind.type === 'item' && g.kind.item.rarity === 'epic');
     const rare = [orange ? `ส้ม ${orange}` : '', purple ? `ม่วง ${purple}` : ''].filter(Boolean).join(' ');
     const summary = `${gold.toLocaleString()} G + ของ ${got.length} ชิ้น${rare ? ` (${rare})` : ''}`;
-    this.fx('burst', c.x, 0.8, c.z, '#ffd24a', 26, 4);
+    this.fx('burst', at.x, 0.8, at.z, '#ffd24a', 26, 4);
     this.text(p.x, p.topY, p.z, `📦 ${summary}`, 'lvl', 1.6, p.id);
     this.log(`เปิดหีบสมบัติได้ ${summary} — ตกรอบหีบ เก็บได้เฉพาะคุณ (หีบนี้กลับมาใน ${fmtWait(cfg.chestRespawn)})`, best?.color ?? '#f2c230', p.id);
     if (got.length) this.log(`ของในหีบ: ${got.map((g) => g.text).join(', ')}`, best?.color ?? '#f2c230', p.id);

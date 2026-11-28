@@ -3,7 +3,7 @@
 // Each is one `Tool` added with `ed.addTool`; every change is one command of the PR 6 stack (ed.exec / live + commitLive).
 import { MONSTERS } from '../../shared/data/monsters';
 import { ZONES } from '../../shared/data/zones';
-import { ROOM_SPAWN_OFFSET, roomSpawnOf, SHRINE_KINDS, TREASURE_MAP_IDS, type MapData, type MapSpawn, type ShrineKind } from '../../shared/mapSchema';
+import { ROOM_SPAWN_OFFSET, roomSpawnOf, SHRINE_KINDS, CHEST_MAP_IDS, SHRINE_MAP_IDS, type MapData, type MapSpawn, type ShrineKind } from '../../shared/mapSchema';
 import type { EdPointer, Editor, Tool } from './editor';
 import { pick, type MapPatch } from './history';
 import { btn, el, note, numField, selectField } from './ui';
@@ -153,21 +153,20 @@ export function pinTool(): Tool {
         ed.exec('เพิ่มประตู', { portals: [...ed.map.portals, { to: DOOR_TARGETS[0]?.[0] ?? 'nexus_city', x, z, minLevel: 0 }] });
         ed.select([`portal:${ed.map.portals.length - 1}`]);
       }, 'วางประตูใหม่กลางจอ แล้วลากไปที่ที่ต้องการ');
-      // Chests and shrines: floor 1's farm maps only (validateMap refuses them elsewhere).
-      const farm = TREASURE_MAP_IDS.includes(ed.map.id);
-      const addChest = farm ? btn('＋ เพิ่มหีบสมบัติ', () => {
+      // Chests: the farm maps of floors 1 and 2; shrines: floor 1's only (validateMap refuses them elsewhere).
+      const addChest = CHEST_MAP_IDS.includes(ed.map.id) ? btn('＋ เพิ่มหีบสมบัติ', () => {
         const [x, z] = gridSnap(ed, ed.view.cx, ed.view.cz, false);
         const id = freshId(ed.map.chests ?? [], 'c');
         ed.exec('เพิ่มหีบสมบัติ', { chests: [...(ed.map.chests ?? []), { id, x, z }] });
         ed.select([`chest:${id}`]);
-      }, 'วางหีบใหม่กลางจอ แล้วลากไปที่ที่ต้องการ (ค่าเปิด/เกิดใหม่/ของในหีบอยู่ในการ์ด "หีบสมบัติ + ศาลเจ้า" ด้านล่าง)') : null;
-      const addShrine = farm ? btn('＋ เพิ่มศาลเจ้า', () => {
+      }, 'เพิ่มหีบ 1 ใบ (เปิดสุ่มจุดอยู่ = จำนวนหมุดคือจำนวนหีบ ตำแหน่งหมุดใช้เมื่อปิดสุ่มจุด · ค่าอื่นอยู่ในการ์ด "หีบสมบัติ + ศาลเจ้า" ด้านล่าง)') : null;
+      const addShrine = SHRINE_MAP_IDS.includes(ed.map.id) ? btn('＋ เพิ่มศาลเจ้า', () => {
         const [x, z] = gridSnap(ed, ed.view.cx, ed.view.cz, false);
         const id = freshId(ed.map.shrines ?? [], 's');
         ed.exec('เพิ่มศาลเจ้า', { shrines: [...(ed.map.shrines ?? []), { id, x, z, buff: 'random' }] });
         ed.select([`shrine:${id}`]);
       }, 'วางศาลใหม่กลางจอ แล้วลากไปที่ที่ต้องการ เลือกบัฟที่ช่องขวา') : null;
-      const adds = [addDoor, ...(addChest && addShrine ? [addChest, addShrine] : [])];
+      const adds = [addDoor, ...(addChest ? [addChest] : []), ...(addShrine ? [addShrine] : [])];
       if (!p) { box.append(note('ยังไม่ได้เลือกหมุด คลิกหมุดบนแมพ'), ...adds); return box; }
       const kindName = p.kind === 'npc' ? 'NPC' : p.kind === 'portal' ? 'ประตู' : p.kind === 'rest' ? 'จุดพัก' : p.kind === 'lair' ? 'ที่เรียกบอส'
         : p.kind === 'chest' ? 'หีบสมบัติ' : p.kind === 'shrine' ? 'ศาลเจ้า'

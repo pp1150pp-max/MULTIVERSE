@@ -998,5 +998,11 @@
   {"monster":"barnacle_crew","x":-12,"z":50,"radius":2.5,"count":1,"respawn":[14,20]},
   {"monster":"barnacle_crew","x":-51,"z":-2,"radius":2.5,"count":1,"respawn":[14,20]}
  ],
+ "chests": [
+  {"id":"c1","x":24,"z":-28},
+  {"id":"c2","x":6,"z":-2},
+  {"id":"c3","x":-44,"z":-45},
+  {"id":"c4","x":-24,"z":15}
+ ],
  "lair": {"boss":"ghost_captain","x":-42,"z":42}
 }

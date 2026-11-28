@@ -998,5 +998,11 @@
   {"monster":"spike_turtle","x":-17,"z":-42,"radius":2.5,"count":1,"respawn":[14,20]},
   {"monster":"spike_turtle","x":-38,"z":6,"radius":2.5,"count":1,"respawn":[14,20]}
  ],
+ "chests": [
+  {"id":"c1","x":35,"z":-41},
+  {"id":"c2","x":43,"z":-5},
+  {"id":"c3","x":-47,"z":18},
+  {"id":"c4","x":-37,"z":-11}
+ ],
  "lair": {"boss":"cannon_crab","x":-42,"z":-42}
 }
