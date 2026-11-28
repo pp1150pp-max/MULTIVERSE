@@ -1360,7 +1360,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
         ...GFX_LEVELS.map((t, i) => h('option', { value: String(i), selected: a[k] === i }, t)).reverse()));
     const gfxOn = h('input', { type: 'checkbox', checked: a.gfxMenu, onchange: (e: Event) => { a.gfxMenu = (e.target as HTMLInputElement).checked; refresh(); } });
     const tabsOn = h('input', { type: 'checkbox', checked: a.settingsTabs, onchange: (e: Event) => { a.settingsTabs = (e.target as HTMLInputElement).checked; refresh(); } });
-    const enhSmoothOn = h('input', { type: 'checkbox', checked: a.enhAuraSmooth, onchange: (e: Event) => { a.enhAuraSmooth = (e.target as HTMLInputElement).checked; refresh(); } });
+    const keyHintOn = h('input', { type: 'checkbox', checked: a.menuKeyHints, onchange: (e: Event) => { a.menuKeyHints = (e.target as HTMLInputElement).checked; refresh(); } });
+    const enhSmoothOn =h('input', { type: 'checkbox', checked: a.enhAuraSmooth, onchange: (e: Event) => { a.enhAuraSmooth = (e.target as HTMLInputElement).checked; refresh(); } });
     const enhFrontOn = h('input', { type: 'checkbox', checked: a.enhOrbGlowFront, onchange: (e: Event) => { a.enhOrbGlowFront = (e.target as HTMLInputElement).checked; refresh(); } });
     const nearOn = h('input', { type: 'checkbox', checked: a.orbsNearBar, onchange: (e: Event) => { a.orbsNearBar = (e.target as HTMLInputElement).checked; refresh(); } });
     fxCard.replaceChildren(
@@ -1381,6 +1382,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'หน้าต่างตั้งค่าในเกม'),
       h('div', { class: 'row bal-line' }, flag(tabsOn, a.settingsTabs !== ca.settingsTabs, ' หน้าต่างตั้งค่าแบบแท็บ (ทั่วไป กราฟิก เสียง ปุ่ม)')),
       h('div', { class: 'muted' }, 'เปิด (ค่าในโค้ด) = เมนู → ตั้งค่า เป็นหน้าแท็บ ทุกค่าอยู่ที่เดียว · ปิด = กลับไปแบบเดิม: ปุ่มเรียงลงมา และหน้าต่างกราฟิก / เสียง / ตั้งค่าปุ่ม แยกกัน · ค่าที่ผู้เล่นตั้งไว้ใช้ร่วมกันทั้งสองแบบ · มีผลตอนผู้เล่นเปิดหน้าตั้งค่าครั้งถัดไป'),
+      h('h3', {}, 'ป้ายปุ่มลัดบนปุ่มเมนู'),
+      h('div', { class: 'row bal-line' }, flag(keyHintOn, a.menuKeyHints !== ca.menuKeyHints, ' แสดงตัวอักษรปุ่มลัดเล็ก ๆ ที่มุมล่างขวาของปุ่ม (แถวไอคอนมุมขวาบน หน้าต่างเมนู ปุ่มลัดลอย)')),
+      h('div', { class: 'muted' }, 'เปลี่ยนตามปุ่มที่ผู้เล่นตั้งเองในเมนู → ตั้งค่า → ปุ่ม · ปุ่มที่ไม่มีปุ่มลัด (หรือผู้เล่นลบปุ่มออก) ไม่มีป้าย · ซ่อนบนจอสัมผัส · มีผลทันที'),
       h('h3', {}, 'เมนูกราฟิกของผู้เล่น'),
       h('div', { class: 'row bal-line' }, flag(gfxOn, a.gfxMenu !== ca.gfxMenu, ' แสดงปุ่ม "กราฟิก" ในเมนูเกม'), gfxPick('gfxDefault', 'คุณภาพเริ่มต้น'), gfxPick('gfxMax', 'สูงสุดที่เลือกได้')),
       h('div', { class: 'row bal-line' }, num('gfxMid', 0.05), num('gfxLow', 0.05)),

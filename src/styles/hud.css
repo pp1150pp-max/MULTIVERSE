@@ -64,6 +64,9 @@
 .sys-ico img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .sys-ico .ico-glyph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.5em; filter: sepia(0.8) saturate(0.7); }
 .top-icon .sys-ico { font-size: 44px; }
+/* Key letter at the icon's bottom-right (the red badge sits top-right); text set by sysmenu.ts, hidden on touch and while empty. */
+.key-hint { position: absolute; right: -1px; bottom: -1px; min-width: 14px; padding: 0 3px; box-sizing: border-box; font: 700 10px/14px var(--font, inherit); text-align: center; color: var(--ink); background: rgba(40, 26, 12, 0.85); border: 1px solid #b9925a; border-radius: 4px; text-shadow: none; pointer-events: none; }
+.key-hint:empty, body.touch-ui .key-hint { display: none; }
 .top-icon:hover:not(:disabled) .sys-ico img { filter: brightness(1.2); }
 .top-icon.active .sys-ico img { filter: drop-shadow(0 0 4px #8cff8c) drop-shadow(0 0 2px #8cff8c); }
 /* An admin's floating shortcut button (menuLayout `custom` + `free`): top left corner, moved by "จัดหน้าจอเกม" (hudLayoutCss shows it once placed on this device). */
