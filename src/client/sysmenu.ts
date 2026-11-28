@@ -8,6 +8,7 @@ import { imgUrl } from './img';
 import { gfxMenuOn } from './gfxPrefs';
 import { renderGfxSettings } from './gfxPanel';
 import { keybindWaiting, renderKeybindSettings, resetKeybindTab } from './keybindPanel';
+import { keyLabel, keyOf } from './keybinds';
 import { renderAudioSettings } from './audio/panel';
 import { LANG, LANG_NAME, LANG_ROW_LABEL, LANG_ROW_NOTE, langRowShown, langWanted, legacyLangButton, setLangPref } from './i18n';
 import { toggleGfxPanel } from './legacy/gfxWindow';
@@ -39,8 +40,21 @@ const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeA
  * Painted badge from public/assets/sprites/ui/ico_<name>.png, with a glyph drawn on top for systems with no art yet. Each
  * button's picture is CODE_ICON in src/shared/menuLayout.ts (or an admin's choice on /admin → จัดเมนูเกม).
  */
-const badge = (i: MenuIcon): string =>
-  `<img src="${imgUrl(`assets/sprites/ui/ico_${i.img}.png`)}" alt="">${i.glyph ? `<span class="ico-glyph">${esc(i.glyph)}</span>` : ''}`;
+const badge = (i: MenuIcon, act: string): string =>
+  `<img src="${imgUrl(`assets/sprites/ui/ico_${i.img}.png`)}" alt="">${i.glyph ? `<span class="ico-glyph">${esc(i.glyph)}</span>` : ''}${KEY_OF_ACT[act] ? `<b class="key-hint" data-kh="${KEY_OF_ACT[act]}"></b>` : ''}`;
+
+/** What a button does → the keybinds.ts action that opens it (only these have a key). The text is filled by `refreshKeyHints`. */
+const KEY_OF_ACT: Record<string, string> = { bag: 'bag', skills: 'skills', map: 'map', help: 'help', auto: 'auto' };
+
+/** Writes the player's own key letters into every .key-hint (empty = hidden: no key, or the /admin switch is off). */
+export function refreshKeyHints(): void {
+  const on = currentBalance().fxLayer.menuKeyHints;
+  for (const el of document.querySelectorAll<HTMLElement>('.key-hint[data-kh]')) {
+    const c = on ? keyOf(el.dataset.kh!) : '';
+    const t = c ? keyLabel(c) : '';
+    if (el.textContent !== t) el.textContent = t;
+  }
+}
 
 /** No such buttons for a guest (no mail, reports, trade, friends, daily login); keyed by what the button does. */
 const GUEST_NO = new Set(['mail', 'report', 'trade', 'friends', 'daily', 'album']);
@@ -73,7 +87,7 @@ export function menuButtonsHtml(lay: MenuLayoutConfig, guest: boolean): { top: s
   const ok = (id: string) => okAct(buttonAct(lay, id));
   // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.
   const badgeKey = (id: string) => esc(menuEntry(buttonAct(lay, id))?.label ?? '');
-  const ico = (id: string) => badge(buttonIcon(lay, id));
+  const ico = (id: string) => badge(buttonIcon(lay, id), buttonAct(lay, id));
   // data-act = what it does (a shortcut runs its action like the menu's own button; the graphics switch hides both).
   const tile = (id: string, extra = '') =>
     `<button class="sys-tile${extra}" data-act="${esc(buttonAct(lay, id))}"><span class="sys-ico">${ico(id)}</span><span class="sys-label">${esc(buttonLabel(lay, id))}</span><i class="badge hidden" data-badge="${badgeKey(id)}"></i></button>`;
@@ -227,6 +241,7 @@ export class SystemMenu {
     this.autoBtn = document.getElementById('top-auto') ?? document.createElement('button');
     this.applyGfxTile();
     this.renderBadges();
+    refreshKeyHints();
   }
 
   /** The graphics window's button only while /admin shows it (fxLayer.gfxMenu). */
@@ -263,6 +278,7 @@ export class SystemMenu {
   update(dt: number, acting: boolean, moving: boolean): void {
     this.clock += dt;
     if (this.drawn !== currentBalance().menuLayout) this.build();
+    refreshKeyHints(); // follows key changes and the /admin switch at once (a few buttons, writes only when the letter changes)
     this.autoBtn.classList.toggle('active', this.g.autoPlay);
     const autoLabel = this.autoBtn.querySelector('.sys-label');
     if (autoLabel) autoLabel.textContent = this.g.autoPlay ? 'AUTO: ON' : 'AUTO: OFF';
