@@ -118,7 +118,7 @@ export const EN_REST: Record<string, string> = {
   'ซื้อจากแคชช็อป: {0}': 'Cash shop purchase: {0}',
   'ของที่ซื้อจากแคชช็อป: {0} ×{1}': 'Bought in the cash shop: {0} ×{1}',
   'ซื้อด้วย {0} {1} (ตัวละคร {2}) กดรับของแนบได้เลย (ใบคูณและโทรโข่งผูกกับตัวละครที่กดรับ)': 'Bought with {0} {1} (character {2}) — collect the attachment (boosts and megaphones are bound to the character who collects them)',
-  'ใช้ได้เลยในหน้าต่าง "แต่งตัว"': 'Use it now in the "Wardrobe" window',
+  'ใช้ได้เลยที่กระเป๋า แท็บแฟชั่น': 'Use it now from the Fashion tab of your bag',
   'ของอยู่ในจดหมาย': 'The item is in your mail',
   'ซื้อ {0} แล้ว (−{1} {2}) {3}': 'Bought {0} (−{1} {2}) {3}',
 

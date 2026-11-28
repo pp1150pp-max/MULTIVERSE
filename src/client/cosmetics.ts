@@ -1,4 +1,5 @@
-// The cosmetics window ("แต่งตัว"), opened from the menu or at the stylist in town. Two tabs:
+// The cosmetics window ("แต่งตัว"), opened from the menu or at the stylist in town. Off in code (owner 2026-11-28,
+// Balance.wardrobeMenu on /admin): pieces are then worn from the fashion bag (fashionBag.ts). Two tabs:
 // - ร้าน: every cosmetic, with try-on (shown on your own character, only to you; taken off when the
 //   window closes). Buying is in the cash shop (src/client/cashShop.ts): the button opens it.
 // Pieces the owner hid in /admin (src/shared/cosShop.ts) aren't listed, except under ของฉัน while worn (to take off).
@@ -17,6 +18,7 @@ import { levelUpCard, levelUpLookOf } from './levelUpFx';
 import { dashCard, dashLookOf } from './dashFx';
 import { cosTune } from './cosTune';
 import { keyHint } from './keybinds';
+import { currentBalance } from '../shared/balance';
 
 type Tab = 'shop' | 'mine';
 
@@ -150,9 +152,9 @@ export class CosmeticsUI {
     return !this.win.classList.contains('hidden');
   }
 
-  /** `tab` picks the tab to open on (the stylist opens the shop). */
+  /** `tab` picks the tab to open on (the stylist opens the shop). Stays shut while /admin has the window off. */
   toggle(force?: boolean, tab?: Tab): void {
-    const show = force ?? !this.open;
+    const show = (force ?? !this.open) && currentBalance().wardrobeMenu;
     this.win.classList.toggle('hidden', !show);
     if (tab) this.tab = tab;
     if (!show) this.clearTry();
@@ -176,6 +178,7 @@ export class CosmeticsUI {
     if (this.mountBtn.textContent !== label) this.mountBtn.textContent = label;
     this.mountBtn.classList.toggle('on', me.mounted);
     if (!this.open) return;
+    if (!currentBalance().wardrobeMenu) return this.toggle(false);
     const key = JSON.stringify([this.tab, this.slot, this.trying, me.cosmetics, this.g.backend.cosOwned, cosHiddenKey(), orbItemsVersion(), cashVersion()]);
     if (key === this.drawn) return;
     this.drawn = key;

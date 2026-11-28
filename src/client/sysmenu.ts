@@ -68,6 +68,7 @@ export function menuButtonsHtml(lay: MenuLayoutConfig, guest: boolean): { top: s
   // No เต็มจอ where the browser can't do it (iPhone Safari); none of mail / report / trade / friends / daily for a guest.
   // Checked on what the button does, so an admin's shortcut to the same thing follows the same rules.
   const okAct = (a: string) => !(guest && GUEST_NO.has(a)) && !(a === 'fullscreen' && !document.fullscreenEnabled) && !(a === 'news' && !newsButtonOn()) && !(a === 'album' && !albumOn())
+    && !(a === 'cosmetics' && !currentBalance().wardrobeMenu)
     && !(a === 'keybinds' && !currentBalance().fxLayer.keyRebind);
   const ok = (id: string) => okAct(buttonAct(lay, id));
   // The badge key stays the code button's own Thai name (what setBadge uses), whatever the button is called now.
