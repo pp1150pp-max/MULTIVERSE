@@ -1455,8 +1455,13 @@ export class Hud {
     const moveRaw = itemMoveSpeed(p.equipment, p.cls.id);
     const moveNote = moveRaw > cappedItemMove(moveRaw)
       ? ` <span class="stat-cap">${t('(เต็มเพดาน, ของ {0})', [Math.round(moveRaw)])}</span>` : '';
-    $('stat-list').innerHTML = STAT_KEYS.map((k) =>
-      `<div class="stat"><span>${STAT_LABEL[k]}</span><b>${fmt(k, p.stats[k])}${k === 'moveSpeed' ? moveNote : ''}</b></div>`,
+    $('stat-list').innerHTML = STAT_KEYS.map((k) => {
+      // A buff on now: its share in green after the number (owner 2026-11-28).
+      const add = p.buffBonus[k] ?? 0;
+      const shown = fmt(k, add);
+      const buff = add && shown !== '0' && shown !== '0.0' ? ` <span class="stat-buff">(${add > 0 ? '+' : ''}${shown})</span>` : '';
+      return `<div class="stat"><span>${STAT_LABEL[k]}</span><b${buff ? ' class="buffed"' : ''}>${fmt(k, p.stats[k])}${buff}${k === 'moveSpeed' ? moveNote : ''}</b></div>`;
+    },
     ).join('') + cardFxHtml(Object.values(p.equipment));
     $('inv-gold').innerHTML = `${COIN_ICON} ${p.gold.toLocaleString()} G`;
     $('inv-pots').innerHTML = potionTotals(this.g.player);

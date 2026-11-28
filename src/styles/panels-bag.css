@@ -100,6 +100,8 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 1px 0; }
 .stat b { color: var(--gold-hi); font-weight: 400; }
 .stat b .stat-cap { color: #ffb070; font-size: 11px; }
+.stat b.buffed { color: #7dff8a; }
+.stat b .stat-buff { color: #7dff8a; font-size: 11px; }
 .cell {
   position: relative; width: 46px; height: 46px; border: 1px solid #8f7238; border-radius: 3px;
   background: #12100d; display: grid; place-items: center; font-size: 22px; cursor: pointer;

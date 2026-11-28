@@ -2603,7 +2603,7 @@ export class GameWorld {
     const st = this.deltaStats;
     const summaryTally = currentBalance().auto.summary ? s.auto?.tally ?? s.tally ?? null : null;
     const statics: Pick<PrivateSnap, StaticMeKey> = {
-      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, skills: p.skillBook,
+      potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, buffBonus: p.buffBonus, skills: p.skillBook,
       bossKills: p.bossKills, unlocks: p.unlocks, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone,
       // The "while you were away" summary's numbers (owner 2026-11-27): only while Auto runs and the switch is on.
       // The gear list is left out (it goes apart as `ag` below, only when it changes), so a gold pickup stays small.
@@ -3286,8 +3286,8 @@ const WS_CLOSE_DIRECT_OFF = 4100;
 /** How long the last Auto tally of a character that left the world is kept for the away summary. */
 const TALLY_KEEP_MS = 6 * 3600_000;
 /** PrivateSnap fields that hardly ever change: sent only when they did (snapshot delta). */
-type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'skills' | 'bossKills' | 'unlocks' | 'quests' | 'gearQuests' | 'gearDone' | 'at';
-const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'skills', 'bossKills', 'unlocks', 'quests', 'gearQuests', 'gearDone', 'at'];
+type StaticMeKey = 'potSel' | 'lootFilter' | 'autoSettings' | 'stats' | 'buffBonus' | 'skills' | 'bossKills' | 'unlocks' | 'quests' | 'gearQuests' | 'gearDone' | 'at';
+const STATIC_ME: readonly StaticMeKey[] = ['potSel', 'lootFilter', 'autoSettings', 'stats', 'buffBonus', 'skills', 'bossKills', 'unlocks', 'quests', 'gearQuests', 'gearDone', 'at'];
 type PlayerLook = Pick<PlayerSnap, 'name' | 'cls' | 'lv' | 'maxHp' | 'aura' | 'orbs' | 'cos' | 'mnt' | 'toad' | 'psv' | 'wpn' | 'arm'>;
 type MonsterLook = Pick<MonsterSnap, 'def' | 'lv' | 'mhp'>;
 
