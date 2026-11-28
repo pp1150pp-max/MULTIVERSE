@@ -1399,6 +1399,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const fallsOn = h('input', { type: 'checkbox', checked: a.harborFalls, onchange: (e: Event) => { a.harborFalls = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const postOn = h('input', { type: 'checkbox', checked: a.shPost, onchange: (e: Event) => { a.shPost = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const shaftsOn = h('input', { type: 'checkbox', checked: a.shShafts, onchange: (e: Event) => { a.shShafts = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const windOn = h('input', { type: 'checkbox', checked: a.shWind, onchange: (e: Event) => { a.shWind = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     // Each map's tone, mist and shafts (sceneGrade.ts): the draft keeps only what differs from the code.
     const setGrade = <K extends keyof SceneGrade>(id: string, k: K, v: SceneGrade[K]): void => {
       const g: Partial<SceneGrade> = { ...draft.sceneGrade[id], [k]: v };
@@ -1434,6 +1435,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'บ่อน้ำ ลาวา และน้ำวน'),
       h('div', { class: 'row bal-line' }, num('lavaWave', 0.1), num('whirlTwist', 0.1), num('whirlGlow', 0.1)),
       h('div', { class: 'muted' }, 'บ่อน้ำและลาวากระเพื่อมเฉพาะระดับสูง (บ่อน้ำแข็งนิ่งเสมอ แรงคลื่นใช้ค่า "แรงคลื่น" ด้านบน) · น้ำวน: ต่ำ = แถบสว่างหมุนเข้ากลาง สูง = + เกลียวบิดและกลางวนมืดเต้นช้า ๆ · คลื่นฟองรอบน้ำวนในห้องคราเคนโยกเบา ๆ ทั้งต่ำและสูง'),
+      h('h3', {}, 'ลม: ต้นไม้ หญ้า และเรือ'),
+      h('div', { class: 'row bal-line' }, flag(windOn, a.shWind !== ca.shWind, ' ลม (ปิด = ต้นไม้ หญ้า และเรือนิ่งแบบเดิม)')),
+      h('div', { class: 'row bal-line' }, num('windK', 0.1), num('windSpeed', 0.1), num('windDir', 15)),
+      h('div', { class: 'row bal-line' }, num('swayTree', 0.1), num('swayGrass', 0.1), num('swayShip', 0.1)),
+      h('div', { class: 'muted' }, 'ต่ำ: ต้นไม้ พุ่ม เฟิร์น กก ปาล์ม และสาหร่ายบนหินโยกจากโคน · สูง: + หญ้าและดอกไม้บนพื้นไหว เรือใหญ่ในท่าเรือโคลงทั้งลำ · ธงและใบเรือยังนิ่ง (รอภาพที่แยกผ้ากับเสา) · แรงลมคูณกับทั้ง 3 อย่าง · ภาพแผนที่และเงาใต้ของไม่ไหว · มีผลทันที'),
       h('h3', {}, 'แสงทั้งจอ'),
       h('div', { class: 'row bal-line' }, flag(postOn, a.shPost !== ca.shPost, ' แสงทั้งจอ (ปิด = ไม่มีขอบมืด โทนสี ลำแสง และหมอกไหล)'), flag(shaftsOn, a.shShafts !== ca.shShafts, ' ลำแสงแดด')),
       h('div', { class: 'row bal-line' }, num('vignette', 0.01), num('bossRoomPostK', 0.05), num('mistFlow', 0.1)),

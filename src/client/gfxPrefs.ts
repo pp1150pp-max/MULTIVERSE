@@ -83,5 +83,7 @@ export function setTouchProbe(probe: () => boolean): void {
 export const gfxShader = (): ShaderLevel => shaderLevelFor(cfg(), own().shader, onTouch(), softwareRender);
 /** The level the water and the cloud sea are drawn with (0 while /admin's water switch is off). */
 export const gfxWater = (): ShaderLevel => (cfg().shWater ? gfxShader() : 0);
+/** The level the wind is drawn with (0 while /admin's wind switch is off). */
+export const gfxWind = (): ShaderLevel => (cfg().shWind ? gfxShader() : 0);
 /** The level the light layer and the mist are drawn with (0 while /admin's light switch is off). */
 export const gfxPost = (): ShaderLevel => (cfg().shPost ? gfxShader() : 0);
