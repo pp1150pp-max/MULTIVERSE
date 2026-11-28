@@ -8,6 +8,7 @@ import {
 } from '../data/harbor';
 import { mulberry32, pick, rand, type Rng } from '../rng';
 import type { Vec2 } from '../types';
+import { currentBalance } from '../balance';
 import { MapRegistry } from '../mapRegistry';
 import { pointInPolygon, ROOM_EDGE, type MapData, type Pt } from '../mapSchema';
 
@@ -282,10 +283,21 @@ export function npcHasCollider(id: NpcId, zone: ZoneDef): boolean {
   return !(id === 'navigator' && zone.town !== 'harbor');
 }
 
+/** Cell size of the collider grid (m). */
+const COL_CELL = 4;
+const cellKey = (cx: number, cz: number): number => (cx + 32768) * 65536 + (cz + 32768);
+/** Reused list of collider indices (resolve runs one at a time). */
+const NEAR: number[] = [];
+
 export class Terrain {
   readonly half: number;
   readonly bound: number;
   readonly colliders: Collider[] = [];
+  /**
+   * The colliders by 4 m cell (indices into `colliders`, lowest first), for resolve() (owner 2026-11-28: the server's CPU, see
+   * simPerfTuning.ts). Built on first use; built again when the list changes length (releaseBossSolid drops it).
+   */
+  private colGrid: { n: number; maxR: number; cells: Map<number, number[]> } | null = null;
   /** Solid boxes (a prop's `solid: {w, d}` turned by its `rot`). Only maps that have them. */
   readonly boxes: BoxCollider[] = [];
   /** Closed polygons nobody can enter (a map's `blockers`). */
@@ -387,6 +399,7 @@ export class Terrain {
       const c = this.colliders[i];
       if (Math.abs(c.x - b.x) < 0.01 && Math.abs(c.z - b.z) < 0.01 && c.r <= this.zone.bossSolid + 0.01) this.colliders.splice(i, 1);
     }
+    this.colGrid = null;
   }
 
   /** Lava underfoot? It burns (see Sim.tickLava). */
@@ -424,18 +437,8 @@ export class Terrain {
   /** Push a circle out of static colliders and keep it inside the zone. */
   /** `ghost`: passes through props (colliders and boxes) but still not through blockers or off the map. */
   resolve(u: { x: number; z: number; radius: number }, ghost = false): void {
-    for (const c of ghost ? [] : this.colliders) {
-      const dx = u.x - c.x;
-      const dz = u.z - c.z;
-      const min = c.r + u.radius;
-      if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < min * min) {
-        const d = Math.sqrt(d2) || 0.001;
-        const push = (min - d) / d;
-        u.x += dx * push;
-        u.z += dz * push;
-      }
+    if (!ghost && !(currentBalance().simPerf.grid && this.resolveNear(u))) {
+      for (const c of this.colliders) this.pushOut(u, c);
     }
     if (!ghost) for (const b of this.boxes) this.pushOutOfBox(u, b);
     for (const poly of this.blockers) this.pushOutOfPoly(u, poly);
@@ -472,6 +475,77 @@ export class Terrain {
         u.z *= max / d;
       }
     }
+  }
+
+  /** Pushes circle `u` out of collider `c` (one step of resolve). */
+  private pushOut(u: { x: number; z: number; radius: number }, c: Collider): void {
+    const dx = u.x - c.x;
+    const dz = u.z - c.z;
+    const min = c.r + u.radius;
+    if (Math.abs(dx) > min || Math.abs(dz) > min) return;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < min * min) {
+      const d = Math.sqrt(d2) || 0.001;
+      const push = (min - d) / d;
+      u.x += dx * push;
+      u.z += dz * push;
+    }
+  }
+
+  /**
+   * resolve()'s colliders, only those in the cells around `u`, in the same order as the full list: the very same pushes.
+   * A collider out there can only matter once `u` has been pushed more than SLACK, so then it starts again from where `u` was
+   * and returns false (the caller walks the whole list).
+   */
+  private resolveNear(u: { x: number; z: number; radius: number }): boolean {
+    const g = this.colliderGrid();
+    const x0 = u.x;
+    const z0 = u.z;
+    const slack = u.radius + 1;
+    const reach = u.radius + g.maxR + slack;
+    const ax = Math.floor((x0 - reach) / COL_CELL);
+    const bx = Math.floor((x0 + reach) / COL_CELL);
+    const az = Math.floor((z0 - reach) / COL_CELL);
+    const bz = Math.floor((z0 + reach) / COL_CELL);
+    const idx = NEAR;
+    idx.length = 0;
+    for (let cx = ax; cx <= bx; cx++) {
+      for (let cz = az; cz <= bz; cz++) {
+        const list = g.cells.get(cellKey(cx, cz));
+        if (list) for (const i of list) idx.push(i);
+      }
+    }
+    if (idx.length > 1) idx.sort((a, b) => a - b);
+    let last = -1;
+    for (const i of idx) {
+      if (i === last) continue;
+      last = i;
+      this.pushOut(u, this.colliders[i]);
+    }
+    if (Math.abs(u.x - x0) <= slack && Math.abs(u.z - z0) <= slack) return true;
+    u.x = x0;
+    u.z = z0;
+    return false;
+  }
+
+  private colliderGrid(): { n: number; maxR: number; cells: Map<number, number[]> } {
+    const list = this.colliders;
+    if (this.colGrid && this.colGrid.n === list.length) return this.colGrid;
+    const cells = new Map<number, number[]>();
+    let maxR = 0;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      maxR = Math.max(maxR, c.r);
+      for (let cx = Math.floor((c.x - c.r) / COL_CELL); cx <= Math.floor((c.x + c.r) / COL_CELL); cx++) {
+        for (let cz = Math.floor((c.z - c.r) / COL_CELL); cz <= Math.floor((c.z + c.r) / COL_CELL); cz++) {
+          const k = cellKey(cx, cz);
+          let at = cells.get(k);
+          if (!at) cells.set(k, (at = []));
+          at.push(i);
+        }
+      }
+    }
+    return (this.colGrid = { n: list.length, maxR, cells });
   }
 
   private pushOutOfBox(u: { x: number; z: number; radius: number }, b: BoxCollider): void {
