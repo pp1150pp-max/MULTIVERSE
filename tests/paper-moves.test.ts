@@ -42,8 +42,19 @@ for (const d of [0.5, 1.2, 4, 20]) {
   ok(Math.abs(total(s) - d) < 1e-6 && s.every((x) => x.secs >= 0), `the hide lasts ${d}s`);
 }
 
-// Only these three sheets: the other floor 2 monsters' extra moves stay unplayed.
-ok(steps('ghost_sailor', 'fade', 1) === null && steps('kraken_tentacle_sea', 'grab', 1) === null, 'other sheets only attack');
+// Sheets without their own moves here only attack.
+ok(steps('kraken_tentacle_sea', 'grab', 1) === null && steps('ghost_sailor', 'dive', 1) === null, 'other sheets only attack');
+
+// Floor 2 field monsters going under (graveMoves.ts phase, maelstromMoves.ts dive): their own pictures, held on the third.
+for (const [sheet, name] of [['ghost_sailor', 'fade'], ['shark_knight', 'dive']] as const) {
+  const s = steps(sheet, name, 0.4);
+  ok(!!s && s.every((x) => meta[sheet].moves![Math.floor(x.col / 4)] === name), `${sheet}: ${name} plays its own pictures`);
+  ok(at(sheet, name, 0.4, 0) === `${name}:0` && at(sheet, name, 0.4, 0.5) === `${name}:2` && at(sheet, name, 0.4, 0.6) === null,
+    `${sheet}: ${name} goes under in the Sim's time`);
+}
+// A powder-keg runner's fuse (views.ts plays it for its 'attack'): the lit keg held until the blast, not the throw.
+ok(at('keg_prisoner', 'fuse', 1.2, 0) === 'charge:0' && at('keg_prisoner', 'fuse', 1.2, 1.25) === 'charge:0'
+  && at('keg_prisoner', 'attack', 0.5, 0) === 'throw:0', 'keg runner: the fuse holds the lit keg; a live prisoner still throws');
 
 // The Kraken (owner 2026-11-28 pictures): every move it sends finds its own pictures; its arms coil and hold a grab.
 for (const name of ['arm_slam', 'arm_cut', 'ink', 'dive']) {

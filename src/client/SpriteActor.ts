@@ -160,7 +160,7 @@ export class SpriteActor implements Actor {
 
   /**
    * Simple sheets only have walk frames, so one-shot animations are no-ops. A paper monster plays 'attack', and a floor 2
-   * boss its own moves (paperMoves.ts): `duration` = the wind-up's or the hold's seconds, as the Sim sends it. A new move
+   * boss (or a field monster listed there) its own moves (paperMoves.ts): `duration` = the wind-up's or the hold's seconds, as the Sim sends it. A new move
    * takes over from the one playing.
    */
   play(name: string, opts?: PlayOpts): boolean {

@@ -67,6 +67,7 @@ import { TouchGestures } from './touch/gestures';
 import { gfxOwnNumsOnly, gfxShakeOn, setSoftwareRender, setTouchProbe } from './gfxPrefs';
 import { updateHudLayout } from './hudLayout';
 import { PostFx } from './postFx';
+import { keyHint } from './keybinds';
 
 const S = Math.SQRT1_2;
 // Screen-space right / up projected onto the ground plane.
@@ -577,7 +578,7 @@ export class Game {
         const v = this.viewById(ev.id);
         if (v instanceof PlayerView) v.onAnim(ev);
         // A monster winding up, or a floor 2 boss's move: only sheets with those frames (the paper monsters) show it.
-        else if (v) v.actor.play(ev.name, { duration: ev.duration });
+        else if (v) v.onAnim(ev.name, ev.duration);
         break;
       }
       case 'item':
@@ -1000,7 +1001,7 @@ export class Game {
     const restIn = Math.max(0, Math.ceil(p.restCd));
     const restName = rest?.kind === 'fountain' ? 'น้ำพุ' : 'กองไฟ';
     // Touch: no T key — tap the NPC, rest spot or altar itself; near an NPC a "พูดคุย" button shows too.
-    const key = isTouchMode() ? 'แตะ' : 'กด T ';
+    const key = isTouchMode() ? 'แตะ' : `กด ${keyHint('talk')} `;
     const prompt = this.hud.dialogOpen || this.npcDialog.open ? null
       : near ? `${near.name} — ${key}เพื่อ${near.action}`
       : summ ? `แท่นเรียก${bossShortName(MONSTERS[summ.boss].nameTh)} — ${key}เพื่อใส่กุญแจ`

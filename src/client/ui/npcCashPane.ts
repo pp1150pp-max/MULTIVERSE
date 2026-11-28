@@ -4,6 +4,7 @@
 // Switch: currentBalance().npcTalk.cashPane (off = the old window). Browser only.
 import type { Game } from '../Game';
 import { NpcHostPane, type HostPaneSpec } from './npcHostPane';
+import { cashCatalogNow } from '../cashData';
 
 export function npcCashPane(g: Game, say: (text: string) => void): NpcHostPane {
   const spec: HostPaneSpec = {
@@ -14,6 +15,8 @@ export function npcCashPane(g: Game, say: (text: string) => void): NpcHostPane {
     views: [],
     hint: () => '',
     designW: 800,
+    // The new layout (/admin แคชช็อป "หน้าต่างแบบใหม่"): the shop fills the panel and only its item list scrolls.
+    fill: () => !cashCatalogNow().oldLayout,
     cell: () => ({ usable: false, tip: '' }),
     click: () => undefined,
     sig: () => '',

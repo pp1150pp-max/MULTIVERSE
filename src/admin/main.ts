@@ -4,6 +4,7 @@
 // The page is split by tab: shared helpers/state in core.ts, one file per tab under tabs/.
 import '../client/noBrowserMenu';
 import './admin.css';
+import { usePaperUi } from '../client/img';
 import { FEATURE_GROUPS, OWNER_ROLE, type AdminMe, type AdminMeta } from '../shared/admin';
 import { applyBalance, checkBalance } from '../shared/balance';
 import { renderBalance } from './balance';
@@ -446,4 +447,6 @@ function setTab(t: Tab): void {
 
 hooks.authLost = onAuthLost;
 hooks.setTab = setTab;
+// Item and skill icons come from sprites/paper/, as on the game page: set before any tab draws them.
+usePaperUi();
 void start();

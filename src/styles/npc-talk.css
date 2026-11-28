@@ -291,6 +291,10 @@
 /* Its head keeps the crystals, VIP badge and the top-up "+"; the title and ✕ are the talk window's. */
 #npc-talk .nh-box > #cash-win > .panel-head { display: flex; justify-content: flex-end; }
 #npc-talk .nh-box > #cash-win > .panel-head > span:first-child, #npc-talk .nh-box > #cash-win > .panel-head > button:last-child { display: none; }
+/* The new layout fills the panel (height set by npcHostPane.ts): the panel never scrolls, only the shop's item list; the
+   title row holds nothing visible here (the crystals moved to the tab row). */
+#npc-talk .nh-box.nh-fill { overflow: hidden; }
+#npc-talk .nh-box > #cash-win.cash-a > .panel-head { display: none; }
 /* Trying a cosmetic on hides the cash shop to show the character: the whole talk window steps aside with it. */
 #npc-talk:has(#cash-win.peek) { display: none; }
 /* The Seeker's quests: "ฟังเรื่องราว" is already an answer of the talk window. */

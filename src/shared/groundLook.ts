@@ -44,12 +44,14 @@ export type DecorSpot = 'verge' | 'field' | 'road' | 'shore' | 'water';
 /**
  * Small details with no collision, one atlas per theme (sprites/paper/props/<key>.png, a grid read left to right, top to bottom).
  * Each spot lists the cells that grow there, repeated to make some more common. `flat` cells are painted lying on the ground.
+ * `sway` cells are standing plants, which move in the wind (never stones, shells, logs and the like).
  */
-export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; spots: Record<DecorSpot, number[]>; flat?: number[] }> = {
+export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; spots: Record<DecorSpot, number[]>; sway: number[]; flat?: number[] }> = {
   forest: {
     key: 'decor_forest',
     cols: 4,
     rows: 3,
+    sway: [0, 1, 2, 3, 4, 5, 6],
     spots: {
       verge: [0, 0, 0, 1, 1, 6, 7],
       field: [0, 0, 1, 2, 2, 3, 4, 5, 6, 9, 10, 11],
@@ -62,6 +64,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_marsh',
     cols: 4,
     rows: 3,
+    sway: [0, 1, 2, 10],
     spots: {
       verge: [0, 0, 0, 1, 10, 11],
       field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
@@ -75,6 +78,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_snow',
     cols: 4,
     rows: 3,
+    sway: [0, 1, 4, 5, 10],
     spots: {
       verge: [0, 0, 0, 1, 10, 11],
       field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
@@ -88,6 +92,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_volcano',
     cols: 4,
     rows: 3,
+    sway: [0, 1, 4, 5, 10],
     spots: {
       verge: [0, 0, 0, 1, 10, 11],
       field: [0, 0, 1, 2, 3, 4, 5, 9, 10, 11],
@@ -102,6 +107,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_beach',
     cols: 4,
     rows: 3,
+    sway: [7, 8],
     spots: {
       verge: [7, 7, 7, 0, 1, 8],
       field: [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 9, 10],
@@ -116,6 +122,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_cove',
     cols: 4,
     rows: 3,
+    sway: [2, 3],
     spots: {
       verge: [2, 2, 3, 0, 1, 4],
       field: [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -130,6 +137,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_graveyard',
     cols: 4,
     rows: 3,
+    sway: [1, 8],
     spots: {
       verge: [8, 8, 1, 0, 9, 3],
       field: [0, 0, 1, 2, 3, 4, 5, 8, 9, 9, 7, 11],
@@ -144,6 +152,7 @@ export const DECOR: Record<MapTheme, { key: string; cols: number; rows: number; 
     key: 'decor_maelstrom',
     cols: 4,
     rows: 3,
+    sway: [4],
     spots: {
       verge: [0, 1, 4, 8, 2],
       field: [0, 0, 1, 1, 2, 3, 4, 5, 8, 11],

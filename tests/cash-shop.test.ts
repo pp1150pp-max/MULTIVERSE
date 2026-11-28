@@ -33,6 +33,10 @@ import { cashBuyError, cashCatalog, checkCashShop, emptyCashShop, CASH_STONE_PRI
   ok(!!strict({ packages: [{ crystals: 0, bonus: 0, baht: 35 }] }).error, 'bad package refused');
   ok(!!strict({ items: { 'stone:enhance': { colour: 1 } } }).error, 'unknown field refused');
   ok(strict({ items: { 'stone:enhance': { price: CASH_STONE_PRICE.enhance } } }).value?.items['stone:enhance'] === undefined, 'the code price is not stored');
+  // The window layout switch (owner 2026-11-28): only the old layout is stored, and players are told.
+  ok(strict({ oldLayout: true }).value?.oldLayout === true && cashCatalog(strict({ oldLayout: true }).value!, {}, 0).oldLayout === true, 'old layout kept and sent');
+  ok(strict({ oldLayout: false }).value?.oldLayout === undefined && !('oldLayout' in cashCatalog(emptyCashShop(), {}, 0)), 'new layout is the default (not stored)');
+  ok(!!strict({ oldLayout: 'yes' }).error, 'oldLayout must be a boolean');
   const lenient = checkCashShop({ open: true, items: { 'stone:enhance': { price: -5, limit: 3 }, 'stone:nope': {} } }, false, {});
   ok(lenient.value?.open === true && lenient.value.items['stone:enhance']?.limit === 3 && lenient.value.items['stone:enhance']?.price === undefined, 'lenient read drops only the bad parts');
 

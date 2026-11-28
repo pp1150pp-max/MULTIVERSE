@@ -180,6 +180,29 @@
 #cash-win .cash-pack-first { font-size: 11px; font-weight: 700; color: #ffcf6a; }
 #cash-win .cash-pack-baht { font-size: 12px; color: var(--gold-hi); }
 #cash-win .cash-pack button { min-width: 80px; height: 28px; margin-top: 4px; }
+/* New layout "แบบ A" (owner 2026-11-28, src/client/cashShop.ts setLayout; /admin แคชช็อป "หน้าต่างแบบใหม่"): the tabs and the
+   VIP badge / crystals / "+" on one row at the top; the window has a fixed height that fits the screen (in the NPC talk window
+   npcHostPane.ts sets it to the panel's), and only the item list (and a long side list) scrolls, never the whole window. */
+#cash-win.cash-a:not(.hidden):not(.peek) { display: flex; flex-direction: column; }
+#cash-win.cash-a { top: min(56px, 7vh); height: min(640px, calc(100vh - min(56px, 7vh) - 10px)); }
+#cash-win.cash-a .cash-top { flex: none; display: flex; align-items: flex-end; gap: 8px; margin: 4px 0 8px; }
+#cash-win.cash-a .cash-top .ui-tabs { flex: 1; min-width: 0; margin: 0; padding-top: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#cash-win.cash-a .ui-tab { flex: none; min-width: 78px; }
+#cash-win.cash-a .cash-top .cash-head-right { position: static; transform: none; flex: none; }
+#cash-win.cash-a .cash-top .cash-plus {
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 0; box-shadow: none; font-size: 0; color: transparent;
+  background: url(/assets/sprites/ui/cash_plus.png) center / contain no-repeat;
+}
+#cash-win.cash-a .cash-top .cash-plus:hover { filter: brightness(1.25); }
+#cash-win.cash-a .cash-banner { flex: none; }
+#cash-win.cash-a .cash-body { flex: 1; min-height: 0; }
+#cash-win.cash-a .cash-grid { max-height: none; min-height: 0; }
+#cash-win.cash-a .cash-side { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#cash-win.cash-a .cash-grid, #cash-win.cash-a .cash-side { scrollbar-width: thin; scrollbar-color: #8a6a2c rgba(0, 0, 0, 0.3); }
+/* Phones (narrow): the side list is a row above the cards (the block above); it must not take the list's height. */
+@media (max-width: 560px) {
+  #cash-win.cash-a .cash-side { flex: none; max-height: 30%; }
+}
 #cash-win.peek { display: none; }
 #cash-peek { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(16, 12, 8, 0.92); font-size: 13px; pointer-events: auto; }
 #cash-peek.hidden { display: none; }

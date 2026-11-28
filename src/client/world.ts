@@ -25,7 +25,9 @@ import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './is
 import { HARBOR_FRAG, harborUniforms, paintHarborMask, paintHarborSides, updateHarborWater } from './harborGround';
 import { HarborFalls } from './harborFalls';
 import { CloudSea, skyMood } from './cloudSea';
-import { gfxPost, gfxWater } from './gfxPrefs';
+import { gfxPost, gfxWater, gfxWind } from './gfxPrefs';
+import { SWAY_PROPS } from './swayTable';
+import { Wind } from './wind';
 import { mistLook, sceneGradeOf } from '../shared/sceneGrade';
 import { frac, noiseTexture, turn } from './waterFx';
 import { cloneShared } from './texShare';
@@ -261,15 +263,26 @@ const GROUND_FRAG = /* glsl */ `
 
 /** Quads gathered per sheet, for drawing a mix of themes (the hub) one mesh per sheet. */
 class QuadGroups {
-  private readonly map = new Map<string, { positions: number[]; uvs: number[] }>();
-  get(key: string): { positions: number[]; uvs: number[] } {
+  private readonly map = new Map<string, QuadList>();
+  get(key: string): QuadList {
     let g = this.map.get(key);
-    if (!g) this.map.set(key, (g = { positions: [], uvs: [] }));
+    if (!g) this.map.set(key, (g = { positions: [], uvs: [], wind: [] }));
     return g;
   }
-  all(): IterableIterator<[string, { positions: number[]; uvs: number[] }]> {
+  all(): IterableIterator<[string, QuadList]> {
     return this.map.entries();
   }
+}
+
+/** One sheet's quads. `wind` is filled only for ground details (see swayQuad), left empty otherwise. */
+interface QuadList { positions: number[]; uvs: number[]; wind: number[] }
+
+/**
+ * The wind data of one standing quad (corners: foot, foot, top, top): its top may move in proportion to `size` (0 = the
+ * piece stays put), and all four share the spot it stands on, so it leans as one.
+ */
+function swayQuad(wind: number[], size: number, x: number, z: number): void {
+  wind.push(0, x, z, 0, x, z, size, x, z, size, x, z);
 }
 
 interface Fadeable { mat: THREE.SpriteMaterial; x: number; z: number; w: number; h: number; o: number }
@@ -584,6 +597,8 @@ export class World {
   /** Seconds of flow so far of the harbour's water and the pools (added up, so /admin's speeds never make them jump). */
   private harborFlow = 0;
   private poolFlow = 0;
+  /** Trees, plants, grass and ships in the wind (wind.ts). */
+  private readonly wind = new Wind(CAM_RIGHT);
   /** The land's broken shoreline. */
   private readonly outline: IslandOutline;
   /** The shore as drawn: the outline, or the harbour's softer one over its waterfall. */
@@ -1006,7 +1021,7 @@ export class World {
       const set = DECOR[this.themeAt(x, z)];
       const cell = pick(r, set.spots.verge);
       if (assetSources[set.key] !== 'file') continue;
-      const { positions, uvs } = groups.get(set.key);
+      const { positions, uvs, wind } = groups.get(set.key);
       const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.3);
       const hx = (CAM_RIGHT.x * size) / 2;
       const hz = (CAM_RIGHT.z * size) / 2;
@@ -1020,8 +1035,9 @@ export class World {
       const v0 = v1 - 1 / set.rows;
       const [ul, ur] = r() < 0.5 ? [u1, u0] : [u0, u1];
       uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
+      swayQuad(wind, set.sway.includes(cell) ? size : 0, x, z);
     }
-    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs);
+    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs, g.wind);
   }
 
   /** Fissures in the land around the rim, where it's coming apart. */
@@ -1169,8 +1185,11 @@ export class World {
     return out;
   }
 
-  /** Adds many quads from one atlas as a single mesh, so hundreds of details cost one draw call. */
-  private addQuads(key: string, positions: number[], uvs: number[]): void {
+  /**
+   * Adds many quads from one atlas as a single mesh, so hundreds of details cost one draw call. With `wind` (swayQuad,
+   * one per quad) the mesh sways; cliffs, cracks and planks pass none and stay still.
+   */
+  private addQuads(key: string, positions: number[], uvs: number[], wind: number[] = []): void {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
@@ -1180,7 +1199,12 @@ export class World {
       index.push(v, v + 1, v + 2, v, v + 2, v + 3);
     }
     geo.setIndex(index);
-    const mesh = new THREE.Mesh(geo, this.own(new THREE.MeshBasicMaterial({ map: sheets[key].texture, alphaTest: 0.5 })));
+    const mat = this.own(new THREE.MeshBasicMaterial({ map: sheets[key].texture, alphaTest: 0.5 }));
+    if (wind.length) {
+      geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
+      this.wind.quads(mat);
+    }
+    const mesh = new THREE.Mesh(geo, mat);
     mesh.frustumCulled = false;
     this.ownGeos.push(geo);
     this.add(mesh);
@@ -1204,7 +1228,7 @@ export class World {
     const up = new THREE.Vector3().crossVectors(right, ISO_DIR.clone().negate()).normalize();
     let decorSeq = 0;
     const place = (set: (typeof DECOR)[ZoneTheme], cell: number, x: number, z: number) => {
-      const { positions, uvs } = groups.get(set.key);
+      const { positions, uvs, wind } = groups.get(set.key);
       const size = DECOR_CELL_UNITS * rand(r, 0.85, 1.15);
       const flip = r() < 0.5;
       const u0 = (cell % set.cols) / set.cols;
@@ -1238,6 +1262,7 @@ export class World {
       }
       const [ul, ur] = flip ? [u1, u0] : [u0, u1];
       uvs.push(ul, v0, ur, v0, ur, v1, ul, v1);
+      swayQuad(wind, set.sway.includes(cell) && !set.flat?.includes(cell) ? size : 0, x, z);
     };
     /** A clump of details around a point, skipping anything that would land somewhere odd. */
     const clump = (spot: DecorSpot, x: number, z: number, count: number, spread: number) => {
@@ -1294,7 +1319,7 @@ export class World {
       if (spawns.some((sp) => near(x, z, sp, sp.radius * 0.6)) && r() < 0.7) continue;
       clump('field', x, z, 2 + ((r() * 4) | 0), 1.3);
     }
-    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs);
+    for (const [key, g] of groups.all()) this.addQuads(key, g.positions, g.uvs, g.wind);
   }
 
   /** Short runs of old boards lying flat across the trail, instead of a boardwalk all the way. */
@@ -1511,6 +1536,7 @@ export class World {
     this.pieceUniforms.uTime.value = this.t;
     this.updateSnow(dt, px, pz);
     this.updateWater(dt);
+    this.wind.update(dt, gfxWind(), currentBalance().fxLayer);
     this.updateSky(dt, (px - pz) * S * SPACE_DRIFT, -(px + pz) * S * SPACE_DRIFT);
     for (const f of this.fadeables) {
       const depth = f.x + f.z - (px + pz);
@@ -1568,14 +1594,21 @@ export class World {
       map.offset.x = 1;
       this.flipped.set(key, map);
     }
+    const sway = SWAY_PROPS[key];
     let mat: THREE.SpriteMaterial;
     if (fade || rot) {
       // Fading and turned pieces get their own material (opacity / rotation live on the material).
       mat = this.own(new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: fade, rotation: -(rot * Math.PI) / 180 }));
+      if (sway) this.wind.sprite(mat, sway);
     } else {
       const mk = flip ? key + ':flip' : key;
-      mat = this.sharedMats.get(mk) ?? new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false });
-      this.sharedMats.set(mk, mat);
+      let shared = this.sharedMats.get(mk);
+      if (!shared) {
+        shared = new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false });
+        if (sway) this.wind.sprite(shared, sway);
+        this.sharedMats.set(mk, shared);
+      }
+      mat = shared;
     }
     const spr = this.add(new THREE.Sprite(mat));
     const w = height * sh.cellAspect;
