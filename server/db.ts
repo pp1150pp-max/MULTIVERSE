@@ -25,6 +25,7 @@ import { checkOrbLook, DEFAULT_ORB_LOOK, ORB_LOOK_SETTING, sameOrbLook, type Orb
 import { MARKET_HISTORY_DAYS, marketCardIds, type MarketQuery } from '../src/shared/sim/market';
 import { MAIL_HISTORY_DAYS } from '../src/shared/mail';
 import { NEWS_ADMIN_LIST, NEWS_SHOW, NEWS_SWITCHES_DEFAULT, type AdminNewsNote, type NewsNote, type NewsSwitches } from '../src/shared/news';
+import { LANDING_DEFAULT, type LandingConfig } from '../src/shared/landing';
 import type { TradeLogRow } from '../src/shared/trade';
 import type { AdminReportRow } from '../src/shared/reports';
 import type { FriendChar } from '../src/shared/friends';
@@ -560,6 +561,26 @@ export class Db {
       // damaged value: the code's switches
     }
     return out;
+  }
+
+  /** The landing page's close beta window + news switch (src/shared/landing.ts); settings key `landing` holds only what differs from the code. */
+  landingConfig(): LandingConfig {
+    const out = { ...LANDING_DEFAULT };
+    try {
+      const o = JSON.parse(this.getSetting('landing') ?? '{}') as Partial<LandingConfig>;
+      if (typeof o.start === 'number' && Number.isFinite(o.start)) out.start = o.start;
+      if (typeof o.end === 'number' && Number.isFinite(o.end)) out.end = o.end;
+      if (typeof o.news === 'boolean') out.news = o.news;
+    } catch {
+      // damaged value: the code's window
+    }
+    return out;
+  }
+
+  setLandingConfig(c: LandingConfig): void {
+    const diff: Partial<LandingConfig> = {};
+    for (const k of ['start', 'end', 'news'] as const) if (c[k] !== LANDING_DEFAULT[k]) (diff as Record<string, unknown>)[k] = c[k];
+    this.setSetting('landing', Object.keys(diff).length ? JSON.stringify(diff) : null);
   }
 
   /** Stores only what differs from the code. */

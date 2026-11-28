@@ -6,6 +6,8 @@
 
 โค้ด: กติกาและตัวตรวจค่า `src/shared/news.ts` · ตาราง/เมธอด `news*` ใน `server/db.ts` · แท็บ /admin `server/admin-news.ts` + `src/admin/news.ts` · หน้าต่างในเกม `src/client/news.ts` · สคริปต์ลงจาก command line `server/add-news.ts` (`npm run add-news`) · เทสต์ `tests/news.test.ts`, `tests/news-server.test.ts`
 
+- **หน้าแนะนำเกม** (`/landing`) แสดง 4 ประกาศล่าสุดที่ไม่ได้ซ่อนจากตารางเดียวกันผ่าน `GET /api/landing` ([landing.md](landing.md)) · การ์ดตั้งเวลา close beta อยู่ในแท็บนี้
+
 ## ในเกม
 
 - ปุ่ม **"มีอะไรใหม่"** อยู่ในหน้าต่างเมนู (ถัดจาก "วิธีเล่น") ย้ายไปแถวมุมขวาบนได้ที่ /admin → จัดเมนูเกม (id `news`) · **Guest เห็นและเปิดได้**

@@ -20,6 +20,7 @@ import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
 import { mapsPublicApi } from './admin-maps';
+import { landingPublicApi } from './landing';
 import { applyMaps } from './maps-live';
 import { googleApi, googleLoginOn } from './google-api';
 import { loadGoogleConfig } from './google';
@@ -128,6 +129,8 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
 
   // The browser reads these before it loads pictures (src/client/mapSync.ts).
   if (mapsPublicApi(res, path, method, new URL(req.url ?? '/', 'http://localhost'), db)) return;
+  // The landing page (landing.html, docs/systems/landing.md): close beta window + latest notes, no login.
+  if (landingPublicApi(res, path, method, db)) return;
 
   if (await googleApi(req, res, path, { db, world, startSession })) return;
   if (await accountApi(req, res, path, { db, world, startSession, googleOn: () => googleLoginOn(db) && !!loadGoogleConfig(ROOT) })) return;
@@ -328,14 +331,18 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, path: stri
 
 // ------------------------------------------------------------ server
 
-/** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy and /terms pages. */
-const PAGES = new Set(['/admin', '/privacy', '/terms']);
+/** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy, /terms and /landing pages. */
+const PAGES = new Set(['/admin', '/privacy', '/terms', '/landing']);
 
 const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   try {
     if (path.startsWith('/api/')) await api(req, res, path);
     else if ((req.method === 'GET' || req.method === 'HEAD') && PAGES.has(path)) await serveStatic(req, res, path + '.html');
+    else if (path === '/landing/') {
+      res.writeHead(301, { Location: '/landing' });
+      res.end();
+    }
     else if (path === '/admin/') {
       // The page loads its files by relative paths (Vite base './'), which only work from /admin.
       res.writeHead(301, { Location: '/admin' });

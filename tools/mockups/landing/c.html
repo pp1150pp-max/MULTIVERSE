@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>แบบ C · ท่าเรือ + แผงข่าวในหน้าแรก — MULTIVERSE</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Kanit:wght@300;400;600&display=swap" rel="stylesheet" />
+<style>
+  /* Sea-blue + gold: floor 2 harbour art leads; news and the play panel sit inside the first screen. */
+  :root { --bg:#0f1a24; --panel:#152634ee; --line:#2c4558; --ink:#eaf1f2; --muted:#9db3bd; --gold:#f2d58a; --teal:#66b9c7; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 'Kanit','Leelawadee UI',Tahoma,sans-serif; }
+  .wrap { width:min(1160px, 100% - 32px); margin-inline:auto; }
+  .bar { background:var(--gold); color:#2a1a05; font-size:15px; }
+  .bar .wrap { display:flex; justify-content:center; align-items:center; gap:14px; min-height:40px; flex-wrap:wrap; }
+  .bar b { font-variant-numeric:tabular-nums; font-weight:600; }
+  [data-state=ended] .bar-time { display:none; }
+  header { background:#0f1a24f2; position:sticky; top:0; z-index:10; border-bottom:1px solid var(--line); }
+  header .wrap { display:flex; align-items:center; gap:24px; height:62px; }
+  header img { height:20px; }
+  header nav { display:flex; gap:22px; margin-left:auto; } header nav a { color:var(--muted); text-decoration:none; } header nav a:hover { color:var(--gold); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; border:0; text-decoration:none; font-weight:600; border-radius:999px; cursor:pointer;
+    background:linear-gradient(#ffe7a6,#e0b45a 60%,#c08f35); color:#2a1a05; box-shadow:0 0 0 3px #f2d58a33, 0 10px 30px #f2d58a40; transition:transform .15s, box-shadow .15s; }
+  .btn:hover { transform:translateY(-2px); box-shadow:0 0 0 5px #f2d58a44, 0 12px 34px #f2d58a55; }
+  .btn:active { transform:translateY(1px); }
+  .btn.sm { padding:7px 20px; } .btn.xl { padding:18px 64px; font-size:24px; }
+  .hero { position:relative; min-height:calc(100svh - 102px); display:flex; flex-direction:column; justify-content:flex-end;
+    background:url(../../../public/assets/sprites/paper/ui/loading/floor2_1.webp) center 30%/cover; }
+  .hero::before { content:''; position:absolute; inset:0; background:linear-gradient(#0f1a2420 0%, #0f1a2433 35%, #0f1a24f5 78%, var(--bg)); }
+  .hero .wrap { position:relative; padding:60px 0 40px; }
+  .hero-top { text-align:center; }
+  .hero h1 { margin:0; font-size:0; } .hero h1 img { width:min(600px,88vw); filter:drop-shadow(0 4px 14px #000c); }
+  .hero p.tag { margin:10px 0 0; font-size:19px; } .hero p.tag b { color:var(--gold); font-weight:600; }
+  .cd { margin:26px 0 22px; }
+  .cd-label { color:var(--gold); font-size:18px; }
+  .cd-row { display:flex; justify-content:center; align-items:baseline; gap:6px; font:800 56px/1 Cinzel, serif; font-variant-numeric:tabular-nums; margin-top:6px; }
+  .cd-row i { font-style:normal; color:var(--teal); font-size:40px; }
+  .cd-row small { font:400 15px Kanit, sans-serif; color:var(--muted); margin:0 10px 0 2px; }
+  [data-state=ended] .cd-row { display:none; }
+  .panels { display:grid; grid-template-columns:1.7fr 1fr; gap:18px; margin-top:44px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; backdrop-filter:blur(6px); }
+  .panel h2 { font-size:18px; margin:0 0 6px; display:flex; justify-content:space-between; }
+  .panel h2 a { font-size:14px; color:var(--teal); font-weight:400; }
+  .news { margin:0; padding:0; list-style:none; }
+  .news li { display:flex; gap:14px; padding:8px 0; border-top:1px solid var(--line); }
+  .news time { color:var(--muted); font-size:14px; flex:none; width:92px; }
+  .sample { font-size:12px; color:#e9a37f; }
+  .play ul { margin:0 0 14px; padding-left:1.2em; color:var(--muted); }
+  .play .btn { width:100%; padding:12px; font-size:18px; }
+  section.s { padding:92px 0; }
+  .s h2.big { font-size:clamp(26px,3.4vw,38px); margin:0 0 26px; line-height:1.2; }
+  .tabs { display:flex; gap:10px; margin-bottom:18px; }
+  .tabs button { font:inherit; color:var(--muted); background:none; border:1px solid var(--line); border-radius:999px; padding:8px 22px; cursor:pointer; }
+  .tabs button[aria-selected=true] { background:var(--gold); color:#2a1a05; border-color:var(--gold); }
+  .cls { display:none; grid-template-columns:1.4fr 1fr; gap:28px; align-items:center; }
+  .cls.on { display:grid; }
+  .cls img { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:14px; display:block; border:1px solid var(--line); }
+  .cls h3 { font-size:32px; margin:0; color:var(--gold); }
+  .cls p { color:var(--muted); font-size:17px; }
+  .world { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .zone { background:#152634; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .zone b { display:block; } .zone span { color:var(--muted); font-size:14px; }
+  .floor-h { margin:28px 0 10px; color:var(--teal); font-size:15px; letter-spacing:.08em; }
+  .bosses { display:flex; gap:14px; overflow-x:auto; padding-bottom:10px; scroll-snap-type:x mandatory; }
+  .boss { flex:0 0 180px; scroll-snap-align:start; }
+  .boss img { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:12px; display:block; border:1px solid var(--line); }
+  .boss b { display:block; margin-top:8px; line-height:1.3; } .boss span { font-size:13px; color:var(--muted); }
+  .sys { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .sys div { border-left:3px solid var(--gold); padding:4px 0 4px 14px; }
+  .sys h3 { margin:0; font-size:17px; } .sys p { margin:2px 0 0; font-size:14px; color:var(--muted); }
+  .close { text-align:center; padding:100px 16px; background:linear-gradient(#0f1a24e6, #0f1a24e6), url(../../../public/assets/sprites/paper/ui/loading/floor2_2.webp) center/cover; }
+  .close h2 { font-size:clamp(26px,3.4vw,38px); margin:0 0 24px; }
+  footer { padding:26px 0 36px; color:var(--muted); font-size:14px; border-top:1px solid var(--line); }
+  footer .wrap { display:flex; gap:20px; flex-wrap:wrap; } footer a { color:inherit; }
+  @media (max-width: 900px) {
+    header nav { display:none; }
+    .panels, .cls.on { grid-template-columns:1fr; }
+    .world { grid-template-columns:1fr 1fr; } .sys { grid-template-columns:1fr 1fr; }
+    .cd-row { font-size:38px; } .cd-row i { font-size:28px; }
+    .btn.xl { width:100%; padding:16px; }
+  }
+</style>
+</head>
+<body data-cd>
+<div class="bar"><div class="wrap"><span data-cd-label>Close Beta เริ่มในอีก</span><b class="bar-time"><span data-cd-d>0</span> วัน <span data-cd-h>00</span>:<span data-cd-m>00</span>:<span data-cd-s>00</span></b><span>· 28 พ.ย. – 5 ธ.ค. 2569 18:00 น.</span></div></div>
+<header><div class="wrap">
+  <img src="../../../public/assets/sprites/paper/ui/logo.png" alt="MULTIVERSE" />
+  <nav><a href="#">หน้าแรก</a><a href="#news">ข่าวสาร</a><a href="#classes">อาชีพ</a><a href="#world">โลกของเกม</a><a href="#systems">ระบบเด่น</a></nav>
+  <a class="btn sm" href="https://play.multiverse-game.com">เข้าเกม</a>
+</div></header>
+
+<section class="hero"><div class="wrap">
+  <div class="hero-top">
+    <h1><img src="../../../public/assets/sprites/paper/ui/logo.png" alt="MULTIVERSE" /></h1>
+    <p class="tag">Action RPG ออนไลน์ · <b>เล่นฟรีบนเบราว์เซอร์ ทั้ง PC และมือถือ</b></p>
+    <div class="cd" data-cd>
+      <div class="cd-label" data-cd-label>Close Beta เริ่มในอีก</div>
+      <div class="cd-row"><span data-cd-d>0</span><small>วัน</small><span data-cd-h>00</span><i>:</i><span data-cd-m>00</span><i>:</i><span data-cd-s>00</span></div>
+    </div>
+    <a class="btn xl" href="https://play.multiverse-game.com">เข้าเกม</a>
+  </div>
+  <div class="panels" id="news">
+    <div class="panel"><h2>ข่าวล่าสุด <a href="#">ดูทั้งหมด</a></h2><span class="sample">ตัวอย่างข่าว (จากชื่อ PR ล่าสุด)</span><ul class="news">
+      <li><time>28 พ.ย.</time>นักดาบได้พาสซีฟ "ฟันทะลวง"</li>
+      <li><time>28 พ.ย.</time>ปุ่มเรียงของในหน้าต่างร้าน ช่างตีเหล็ก คลัง ตลาด</li>
+      <li><time>27 พ.ย.</time>กัปตันขาไม้ตะโกนเป็นข้อความเหนือหัว</li>
+    </ul></div>
+    <div class="panel play"><h2>เริ่มเล่นใน 1 นาที</h2><ul><li>ไม่ต้องลงโปรแกรม</li><li>Guest หรือ Google</li></ul><a class="btn" href="https://play.multiverse-game.com">เข้าเกม</a></div>
+  </div>
+</div></section>
+
+<section class="s" id="classes"><div class="wrap">
+  <h2 class="big">เลือกอาชีพของคุณ</h2>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-t="0">นักดาบ</button><button role="tab" aria-selected="false" data-t="1">มือปืน</button><button role="tab" aria-selected="false" data-t="2">เมจ</button>
+  </div>
+  <div class="cls on"><img src="../../../public/assets/sprites/paper/ui/loading/sword.webp" alt="" /><div><h3>นักดาบ</h3><p>สายประชิด ทนทาน พาสซีฟ "ฟันทะลวง" แดชพุ่งผ่านมอนแล้วฟันทุกตัวที่ผ่าน</p></div></div>
+  <div class="cls"><img src="../../../public/assets/sprites/paper/ui/loading/gunslinger.webp" alt="" /><div><h3>มือปืน</h3><p>ยิงระยะไกล วางกับระเบิดได้หลายลูก พาสซีฟ "ยิงแล้ววิ่ง" ตีธรรมดาโดยไม่ต้องหยุดเดิน</p></div></div>
+  <div class="cls"><img src="../../../public/assets/sprites/paper/ui/loading/mage.webp" alt="" /><div><h3>เมจ</h3><p>เวทธาตุวงกว้าง ผสมธาตุเกิดปฏิกิริยา พาสซีฟ "ก้าวมิติ" แดชโผล่ปลายทางทันที</p></div></div>
+</div></section>
+
+<section class="s" id="world" style="background:#0c151d"><div class="wrap">
+  <h2 class="big">8 แมพ 2 ชั้น Lv 1–80</h2>
+  <div class="floor-h">ชั้น 1 · เมืองศูนย์กลางมิติ</div>
+  <div class="world"><div class="zone"><b>ป่ามรกต</b><span>Lv 1–10</span></div><div class="zone"><b>หนองน้ำหมอก</b><span>Lv 11–20</span></div><div class="zone"><b>ดินแดนหิมะ</b><span>Lv 21–30</span></div><div class="zone"><b>เกาะภูเขาไฟ</b><span>Lv 31–40</span></div></div>
+  <div class="floor-h">ชั้น 2 · ท่าเรือมิติ</div>
+  <div class="world"><div class="zone"><b>หาดเรือแตก</b><span>Lv 41–50</span></div><div class="zone"><b>อ่าวลักลอบ</b><span>Lv 51–60</span></div><div class="zone"><b>สุสานเรือผี</b><span>Lv 61–70</span></div><div class="zone"><b>วังวนกลางทะเล</b><span>Lv 71–80</span></div></div>
+  <div class="floor-h">บอสประจำแมพ · ใส่กุญแจ 1–10 อันเรียก</div>
+  <div class="bosses">
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_forest_bear.webp" alt="" /><b>หมี</b><span>Lv 10</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_bog_witch.webp" alt="" /><b>แม่มดหนอง</b><span>Lv 20</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_yeti.webp" alt="" /><b>เยติ</b><span>Lv 30</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_volcano_heart.webp" alt="" /><b>หัวใจภูเขาไฟ</b><span>Lv 40</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_cannon_crab.webp" alt="" /><b>ปูยักษ์กระดองปืนใหญ่</b><span>Lv 50</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_pegleg_captain.webp" alt="" /><b>กัปตันขาไม้</b><span>Lv 60</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_ghost_captain.webp" alt="" /><b>กัปตันผีเรือคนตาย</b><span>Lv 70</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_kraken.webp" alt="" /><b>คราเคน</b><span>Lv 80</span></div>
+  </div>
+</div></section>
+
+<section class="s" id="systems"><div class="wrap">
+  <h2 class="big">ระบบเด่น</h2>
+  <div class="sys">
+    <div><h3>ปาร์ตี้ 3 คน</h3><p>ของดรอปแชร์ทั้งทีม</p></div><div><h3>ธาตุ 5 ธาตุ</h3><p>ปฏิกิริยา 10 แบบ</p></div><div><h3>ตีบวก + การ์ด</h3><p>เจาะรู เสียบการ์ดจากมอน</p></div><div><h3>ตลาดและเทรด</h3><p>ฝากขาย หรือแลกกับเพื่อน</p></div>
+    <div><h3>Auto Play</h3><p>ฟาร์มต่อบน server</p></div><div><h3>Perfect Dodge</h3><p>หลบพอดี ได้บัฟดาเมจ</p></div><div><h3>เซ็ตไอเทมชั้น 2</h3><p>โบนัส 3/6/9 ชิ้น</p></div><div><h3>ของแต่งตัว</h3><p>ปีก สัตว์ขี่ สัตว์เลี้ยง</p></div>
+  </div>
+</div></section>
+
+<section class="close"><h2>ท่าเรือมิติรอคุณอยู่</h2><a class="btn xl" href="https://play.multiverse-game.com">เข้าเกม</a></section>
+<footer><div class="wrap"><span>© 2569 MULTIVERSE</span><a href="#">นโยบายความเป็นส่วนตัว</a><a href="#">ข้อตกลงการใช้งาน</a></div></footer>
+<script src="countdown.js"></script>
+<script>
+  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    document.querySelectorAll('.cls').forEach((c, i) => c.classList.toggle('on', i === +b.dataset.t));
+  }));
+</script>
+</body>
+</html>
