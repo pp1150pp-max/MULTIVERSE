@@ -181,8 +181,8 @@ export const LOOT_CLICK_RANGE = 1.5;
 /** Owner's balance (2026-11-09): gold drops x2, potion drop chance x2, boss potions x2. */
 const DROP_POTION_MULT = 2;
 
-/** A treasure chest's rolled spot (Sim.chestSpots). */
-export type ChestPlace = Spot & { ground: readonly Spot[]; opened: boolean };
+/** A treasure chest's rolled spot (Sim.chestSpots). `ground` = the list it was last found good in (none: saved before a restart). */
+export type ChestPlace = Spot & { ground?: readonly Spot[]; opened: boolean };
 
 /** "10 นาที", "3 นาที 20 วิ", "45 วิ" (a chest or shrine wait, rounded up to seconds). */
 function fmtWait(sec: number): string {
@@ -1044,10 +1044,12 @@ export class Sim {
   /** The clock chestGone counts in (seconds). The server sets a wall clock; alone (tests) it is this Sim's time. */
   chestClock: () => number = () => this.time;
   /**
-   * Where each chest stands while spots are random: chest id → the spot rolled, for which layout, and whether it was opened there
-   * (the next time it is here it comes up somewhere else). Kept by the server's channels like chestGone.
+   * Where each chest stands while spots are random: chest id → the spot rolled and whether it was opened there (the next time it
+   * is here it comes up somewhere else). Kept by the server's channels like chestGone.
    */
   chestSpots: Map<string, ChestPlace> = new Map();
+  /** Called when chestGone or a spot changes: the server's channels save both, so a restart keeps them. */
+  chestChanged: () => void = () => {};
 
   /** This map's chests where they stand now, and its shrines (none where the switch is off). */
   get chests(): readonly MapChest[] {
@@ -1056,15 +1058,23 @@ export class Sim {
     const list = this.zone.chests ?? [];
     return cfg.randomSpots ? list.map((c) => this.chestPlace(c)) : list;
   }
-  /** Chest `c`'s spot, rolled when it has none for this layout, or it is back after being opened (src/shared/chestSpots.ts). */
+  /**
+   * Chest `c`'s spot (src/shared/chestSpots.ts). A new one is rolled only when it has none, it is back after being opened, or a
+   * chest may no longer stand where it was (the layout changed there). Otherwise it stays, also when the layout is rebuilt or
+   * published again and across a server restart (owner 2026-11-28).
+   */
   private chestPlace(c: MapChest): MapChest {
     let s = this.chestSpots.get(c.id);
     const ground = chestGround(this.zone, this.terrain);
-    if (!s || s.ground !== ground || (s.opened && this.chestHere(c.id))) {
-      // Apart from the other chests standing now, and from where this one was last.
-      const taken = [...this.chestSpots].filter(([id, o]) => o.ground === ground && (id === c.id || !o.opened)).map(([, o]) => o);
+    const stale = !!s && s.ground !== ground && !ground.some((g) => g.x === s!.x && g.z === s!.z);
+    if (s && !stale) s.ground = ground;
+    if (!s || stale || (s.opened && this.chestHere(c.id))) {
+      // Apart from the map's other chests standing now, and from where this one was last.
+      const ids = new Set(this.zone.chests?.map((x) => x.id));
+      const taken = [...this.chestSpots].filter(([id, o]) => ids.has(id) && (id === c.id || !o.opened)).map(([, o]) => o);
       const at = pickChestSpot(this.zone, this.terrain, currentBalance().treasure, taken, Math.random) ?? c;
       this.chestSpots.set(c.id, (s = { x: at.x, z: at.z, ground, opened: false }));
+      this.chestChanged();
     }
     return { id: c.id, x: s.x, z: s.z };
   }
@@ -1159,6 +1169,7 @@ export class Sim {
     this.chestGone.set(c.id, this.chestClock() + cfg.chestRespawn);
     const place = this.chestSpots.get(c.id);
     if (place) place.opened = true;
+    this.chestChanged();
     const gold = chestGold(cfg, this.zone.levels, r);
     p.gold += gold;
     const key = this.zone.lair ? BOSS_KEY[this.zone.lair.boss] : undefined;

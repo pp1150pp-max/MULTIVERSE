@@ -6,6 +6,7 @@
 // It knows nothing of sessions or sockets (server/world.ts does), so tests can drive it with plain Sims.
 // Rules agreed with the owner: docs/systems/channels.md.
 import { Sim } from '../src/shared/sim/Sim';
+import { currentBalance } from '../src/shared/balance';
 import type { ZoneDef } from '../src/shared/data/zones';
 import { CH_PARTY_CAP, CH_RECONNECT_MS, CH_RESERVED, CH_SOLO_CAP, CH_SWITCH_CALM, hasChannels, type ChannelRow } from '../src/shared/channels';
 
@@ -64,6 +65,18 @@ export interface PlaceOpts {
   prefer?: number;
 }
 
+/** One channel's chests as saved: the opened ones with when each is back (wall-clock seconds), and where each stands. */
+export interface ChestSave {
+  gone: [string, number][];
+  spots: [string, { x: number; z: number; opened: boolean }][];
+}
+
+/** Where chests are saved so a server restart keeps them (the database, server/db.ts chest_state). Key `<zone>:<ch>`. */
+export interface ChestKeeper {
+  load(key: string): ChestSave | undefined;
+  save(key: string, state: ChestSave): void;
+}
+
 export class Channels {
   private readonly byZone = new Map<string, Channel[]>();
   private readonly bySim = new Map<Sim, Channel>();
@@ -91,6 +104,8 @@ export class Channels {
      * without channels does not keep its one channel open like the hub: it closes when empty and opens again on the next visit.
      */
     private readonly find: (zoneId: string) => ZoneDef | undefined = () => undefined,
+    /** Saves chests across restarts (none: they live only as long as this object). */
+    private readonly keeper?: ChestKeeper,
   ) {
     for (const zone of zones) {
       this.byZone.set(zone.id, []);
@@ -298,12 +313,20 @@ export class Channels {
     // Chests count in wall-clock seconds, the same for every channel and across a channel closing and opening again.
     const key = `${zone.id}:${n}`;
     let gone = this.chestStore.get(key);
-    if (!gone) this.chestStore.set(key, (gone = new Map()));
-    c.sim.chestGone = gone;
     let spots = this.chestSpotStore.get(key);
-    if (!spots) this.chestSpotStore.set(key, (spots = new Map()));
+    if (!gone || !spots) {
+      // The first time since the server started: as saved before it stopped, unless the /admin switch says start over.
+      const saved = zone.chests?.length && currentBalance().treasure.keepOnRestart ? this.keeper?.load(key) : undefined;
+      this.chestStore.set(key, (gone = new Map(saved?.gone)));
+      this.chestSpotStore.set(key, (spots = new Map(saved?.spots)));
+    }
+    c.sim.chestGone = gone;
     c.sim.chestSpots = spots;
     c.sim.chestClock = () => this.now() / 1000;
+    c.sim.chestChanged = () => this.keeper?.save(key, {
+      gone: [...gone],
+      spots: [...spots].map(([id, s]) => [id, { x: s.x, z: s.z, opened: s.opened }]),
+    });
     list.push(c);
     list.sort((a, b) => a.ch - b.ch);
     this.bySim.set(c.sim, c);
