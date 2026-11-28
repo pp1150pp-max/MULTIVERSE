@@ -85,6 +85,8 @@ export interface AutoConfig {
    */
   summary: boolean;
   summaryMin: number;
+  /** The newest pieces of gear the summary keeps as pictures per Auto run (owner 2026-11-28); more = a "+N" cell. */
+  summaryGear: number;
 }
 
 /** What is saved: only what differs from the code. */
@@ -104,6 +106,7 @@ export interface AutoTuning {
   priorityDist?: number;
   summary?: boolean;
   summaryMin?: number;
+  summaryGear?: number;
 }
 
 export const AUTO_RANGE = {
@@ -115,6 +118,7 @@ export const AUTO_RANGE = {
   skillGap: [0, 2],
   priorityDist: [0, 60],
   summaryMin: [1, 60],
+  summaryGear: [10, 500],
 } as const satisfies Record<string, readonly [number, number]>;
 export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   giveUpSec: 'Auto ข้ามของที่เก็บไม่ได้หลัง (วิ)',
@@ -125,6 +129,7 @@ export const AUTO_NUM_NAME: Record<keyof typeof AUTO_RANGE, string> = {
   skillGap: 'Auto เว้นระหว่างสกิล ค่าเริ่มต้น (วิ)',
   priorityDist: 'Auto เก็บก่อน: ระยะสูงสุด (0 = ทั้งวง Auto)',
   summaryMin: 'หน้าสรุป Auto ขึ้นเมื่อไม่แตะเกม (นาที)',
+  summaryGear: 'หน้าสรุป Auto: เก็บภาพอุปกรณ์สูงสุด (ชิ้นต่อรอบ)',
 };
 /** Name of the "while you were away" summary switch. */
 export const AUTO_SUMMARY_NAME = 'หน้าสรุปผล Auto ตอนไม่แตะเกม';
@@ -156,6 +161,7 @@ export function codeAuto(): AutoConfig {
     priorityDist: 0,
     summary: true,
     summaryMin: 3,
+    summaryGear: 100,
   };
 }
 const CODE = codeAuto();

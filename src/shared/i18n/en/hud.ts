@@ -222,4 +222,13 @@ export const EN_HUD: Record<string, string> = {
   'พักหน้าจอ': 'Rest screen',
   'เริ่มพักหน้าจอ': 'Start rest screen',
   'จอมืดทั้งจอ ไม่วาดภาพเกม เหลือหน้าสรุปผล Auto นับต่อเรื่อย ๆ · ปิดด้วย ✕ หรือดับเบิลคลิก': 'Black screen, the game is not drawn, only the Auto summary keeps counting · Close with ✕ or a double-click',
+  // Its new look (owner 2026-11-28): big numbers + the items as a grid.
+  'เลเวลอัพ +{0}': 'Level up +{0}',
+  'เลเวลสูงสุดแล้ว': 'Max level reached',
+  'ต้องลงบอส {0} ก่อน EXP ถึงจะขึ้น': 'Beat {0} first to gain EXP',
+  'ไอเทมที่ได้ · {0} ชิ้น': 'Items found · {0}',
+  'อุปกรณ์อีก {0} ชิ้น': '{0} more gear',
+  'ยังไม่ได้ไอเทม': 'No items yet',
+  'ยาที่ใช้ {0} ขวด': 'Potions used: {0}',
+  'ตาย {0} ครั้ง': 'Died {0} times',
 };

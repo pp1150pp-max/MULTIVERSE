@@ -433,6 +433,7 @@ export class OnlineBackend implements Backend {
     this.me = new Player(myId, NO_SIM, data);
     // The away summary's numbers (also the last Auto run's after coming back, src/client/ui/autoSummary.ts).
     if (first.me.at) this.me.autoTally = first.me.at;
+    if (first.me.ag) this.me.autoGear = first.me.ag;
     this.me.x = mine.x;
     this.me.z = mine.z;
     this.playerMap.set(myId, this.me);
@@ -1112,6 +1113,7 @@ export class OnlineBackend implements Backend {
     if (pv.gearQuests) me.gearQuests = pv.gearQuests;
     if (pv.gearDone) me.gearDone = pv.gearDone;
     if (pv.at) me.autoTally = pv.at;
+    if (pv.ag) me.autoGear = pv.ag;
     if (pv.tut) me.tut = pv.tut;
     if (pv.album) {
       me.album = cleanAlbum(pv.album);
