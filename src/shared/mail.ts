@@ -68,14 +68,17 @@ export function cleanAttach(raw: unknown): MailAttach | string {
   return { gold, items };
 }
 
-/** The attachment as lines of Thai text (for the mail window and the admin history). */
-export function describeAttach(a: MailAttach): string[] {
+/**
+ * The attachment as lines of Thai text (for the mail window and the admin history). `cls`: name class gear as
+ * this class gets it (the reader's mail window); without it, the kind's first name.
+ */
+export function describeAttach(a: MailAttach, cls?: ClassId): string[] {
   const out: string[] = [];
   if (a.gold) out.push(`ทอง ${a.gold.toLocaleString()} G`);
   for (const x of a.items) {
     if (x.kind === 'equip') {
       const b = ITEM_BASES.find((q) => q.id === x.baseId);
-      const name = b ? (b.names.any ?? Object.values(b.names)[0] ?? b.id) : x.baseId;
+      const name = b ? (b.names.any ?? (cls && b.names[cls]) ?? Object.values(b.names)[0] ?? b.id) : x.baseId;
       out.push(`${x.plus ? `+${x.plus} ` : ''}${name} [${RARITY_LABEL[x.rarity]}]${x.level ? ` Lv.${x.level}` : ''} × ${x.count}`);
     } else {
       const s = (x.kind === 'potion' ? adminStack({ kind: 'potion', potion: x.potion, size: x.size }) : adminStack({ kind: 'stone', stone: x.stone })) as AdminStack;
@@ -155,7 +158,11 @@ export function roomShortText(bag: (BagEntry | null)[], entries: BagEntry[], slo
 
 /** One mail in the list. `attach`: it still has unclaimed attachments (so it can't be deleted). */
 export interface MailHead { id: number; from: string; title: string; at: number; expiresAt: number; read: boolean; attach: boolean }
-export interface MailFull extends MailHead { body: string; lines: string[] }
+/**
+ * `lines` and `gifts` are what still waits to be claimed (empty / absent once claimed). `lines` is describeAttach(gifts):
+ * gold first (if any), then each item in order. The window draws its icons from `gifts`.
+ */
+export interface MailFull extends MailHead { body: string; lines: string[]; gifts?: MailAttach }
 
 export type MailCall =
   | { a: 'mailList' }
