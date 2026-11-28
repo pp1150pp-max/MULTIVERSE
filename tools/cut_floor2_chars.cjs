@@ -51,7 +51,10 @@ const MONSTERS = {
   kraken_tentacle: { map: 'floor2_m4', moves: ['idle', 'slam'] },
   // The map's tentacles rising out of the whirlpool (FLOOR2_M4_REVISION.md, owner 2026-11-26); the room's arms keep kraken_tentacle.
   kraken_tentacle_sea: { map: 'floor2_m4', moves: ['idle', 'slam'] },
+  // Rising out of the water at its room's top corner (FLOOR2_M4_KRAKEN_ROOM.md, owner 2026-11-28).
   kraken: { map: 'floor2_m4', boss: true, moves: ['idle', 'arm_slam', 'arm_cut', 'ink', 'dive'], ref: { dive: 'first' } },
+  // Its own giant arms round the room's floor (owner 2026-11-28), apart from the map's tentacles: idle, slam, grab.
+  kraken_arm: { map: 'floor2_m4', boss: true, moves: ['idle', 'slam_tentacle', 'grab'] },
 };
 const KEYS = { crab: 'floor2_m1/key_crab_claw.png', captain: 'floor2_m2/key_treasure_compass.png', ghost: 'floor2_m3/key_ghost_bell.png', kraken: 'floor2_m4/key_kraken_eye.png' };
 /** Raw sheet → set id in src/shared/data/sets.ts. Cells in the order of FLOOR2_SETS.md. */
@@ -68,7 +71,9 @@ async function read(file) {
 
 async function save(pipeline, rel) {
   const file = path.join(OUT, rel);
-  if (tracked.has(path.resolve(file))) throw new Error(`${rel} is already in git (a floor 1 file): refusing to overwrite`);
+  // Floor 2 is in main now, so its own monster sheets are in git too: those may be re-cut (a new picture), floor 1's never.
+  const own = /^monsters\/([a-z0-9_]+)\.png$/.exec(rel.replace(/\\/g, '/'));
+  if (tracked.has(path.resolve(file)) && !(own && MONSTERS[own[1]])) throw new Error(`${rel} is already in git (a floor 1 file): refusing to overwrite`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await pipeline.png({ compressionLevel: 9 }).toFile(file);
   const m = await sharp(file).metadata();

@@ -136,9 +136,9 @@ const MAELSTROM_PROPS = [
 const MAELSTROM_FX = ['fx_shark_fin', 'fx_bubble', 'fx_bubble_trap', 'fx_sword_wave', 'fx_ink_blob', 'fx_ink_splat', 'fx_suction', 'fx_slam_splash'];
 /**
  * Monsters drawn from a paper sheet under another name: floor 2 bosses whose cut sheets (tools/cut_floor2_chars.cjs) are named after the
- * picture, and the kraken's arms in its room, which are its tentacles.
+ * picture, and the map's tentacles, which rise out of the whirlpool. The kraken's arms in its room have their own sheet (kraken_arm).
  */
-const PAPER_MONSTER_FILE: Record<string, string> = { cannon_crab: 'giant_crab', pegleg_captain: 'peg_captain', kraken_arm: 'kraken_tentacle', kraken_tentacle: 'kraken_tentacle_sea' };
+const PAPER_MONSTER_FILE: Record<string, string> = { cannon_crab: 'giant_crab', pegleg_captain: 'peg_captain', kraken_tentacle: 'kraken_tentacle_sea' };
 /** The harbour's NPC sheets and the navigator's (SHEET_SPECS keys): paper only. */
 const PAPER_ONLY_NPC = new Set(['hb_supply_merchant', 'hb_dock_keeper', 'hb_shipwright', 'hb_harbor_broker', 'hb_smuggler_npc', 'navigator']);
 const PAPER_GROUND = new Set(['grass', 'dirt', 'pave', 'room_forest', 'marsh', 'mud', 'water', 'room_marsh',

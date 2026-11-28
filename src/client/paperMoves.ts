@@ -45,7 +45,7 @@ const shellBarrage: Timeline = (pic, d) => {
 
 /**
  * The floor 2 bosses' own moves, by paper sheet name then Sim event name (sim/cannonCrab.ts, peglegCaptain.ts,
- * ghostCaptain.ts). Other sheets only play 'attack', their second move.
+ * ghostCaptain.ts, kraken.ts). Other sheets only play 'attack', their second move.
  */
 const BOSS_MOVES: Record<string, Record<string, Timeline>> = {
   giant_crab: {
@@ -71,6 +71,21 @@ const BOSS_MOVES: Record<string, Record<string, Timeline>> = {
     vanish: (pic, d) => {
       const each = Math.min(0.2, d / 3);
       return [pic('vanish', 0, each), pic('vanish', 1, each), pic('vanish', 2, d - 2 * each + TAIL)];
+    },
+  },
+  // The Kraken in its room's corner (owner 2026-11-28 pictures): a side arm sweeping, its head surfacing, ink, sinking.
+  kraken: {
+    arm_slam: strike('arm_slam'),
+    arm_cut: release('arm_cut', 0.25, 0.3),
+    ink: release('ink', 0.15, 0.2),
+    // Down over the time it takes; it stays faded under the water afterwards (its rise is the next arm_cut).
+    dive: (pic, d) => [pic('dive', 0, d / 3), pic('dive', 1, d / 3), pic('dive', 2, d / 3 + TAIL)],
+  },
+  // Its giant arms round the floor: the slam is 'attack' (their second move); a grab coils and holds while it drags.
+  kraken_arm: {
+    grab: (pic, d) => {
+      const reach = Math.min(0.5, d / 2);
+      return [pic('grab', 0, reach * 0.3), pic('grab', 1, reach * 0.3), pic('grab', 2, reach * 0.4), pic('grab', 3, Math.max(0, d - reach) + TAIL)];
     },
   },
 };
