@@ -194,6 +194,14 @@
 #npc-talk .ns-tab.on { background: linear-gradient(#f2c654, #c99a3a); color: #3a2010; font-weight: 600; border-color: #ffd86a; }
 #npc-talk .ns-sort { margin-left: auto; display: flex; gap: 0.2em; align-items: flex-end; }
 #npc-talk .ns-sort.hidden { display: none; }
+#npc-talk .ns-tab { white-space: nowrap; }
+/* The narrow bag beside the smith / stash / market: tabs and sort don't fit one row, so the sort controls
+   become a small toolbar row above the tabs (rounded all round, not tab-shaped). */
+#npc-talk .nh-bag .ns-tabs { flex-wrap: wrap; }
+#npc-talk .nh-bag .ns-sort { order: -1; flex-basis: 100%; justify-content: flex-end; align-items: center; margin: 0 0 0.35em; }
+#npc-talk .nh-bag .ns-sort select, #npc-talk .nh-bag .ns-sort .ns-tab { border-bottom: 2px solid #8a6a2c; border-radius: 7px; }
+#npc-talk .nh-bag .ns-sort .ns-tab.on { border-color: #ffd86a; }
+#npc-talk .nh-bag .ns-sort select { min-width: 0; flex: 0 1 auto; }
 #npc-talk .ns-sort select {
   padding: 0.2em 0.3em; font-size: max(9px, 0.72em); border: 2px solid #8a6a2c; border-bottom: none; border-radius: 7px 7px 0 0;
   background: linear-gradient(#3a2414, #2a180c); color: #c8b48a;

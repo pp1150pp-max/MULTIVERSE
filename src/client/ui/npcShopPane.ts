@@ -173,7 +173,7 @@ export class NpcShopPane {
       const n = b.querySelector('.n')!;
       n.textContent = b.dataset.t === 'bb' && p.buyback.length ? ` (${p.buyback.length})` : b.dataset.t === 'sell' && this.basket.size ? ` (${this.basket.size})` : '';
     }
-    for (const b of this.bagTabs.querySelectorAll<HTMLElement>('.ns-tab')) b.classList.toggle('on', b.dataset.b === this.bagTab);
+    for (const b of this.bagTabs.querySelectorAll<HTMLElement>(':scope > .ns-tab')) b.classList.toggle('on', b.dataset.b === this.bagTab);
     this.foot.innerHTML = `<span class="g">${gold(p.gold)} G</span><span class="pots">${potionTotals(p)}</span>`;
     if (this.tab === 'buy') this.drawBuy();
     else if (this.tab === 'bb') this.drawBuyback();
