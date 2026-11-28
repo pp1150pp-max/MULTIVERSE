@@ -107,6 +107,12 @@ export interface FxApi {
    * The client draws a vanishing ring and an appearing ring in the colours of the worn dash cosmetic.
    */
   warp(x1: number, z1: number, x2: number, z2: number, by: number): void;
+  /**
+   * The sword's Dash Slash (class passive, owner 2026-11-28): player `by` dashed from (x1, z1) to (x2, z2) slashing the
+   * monsters at `hits` (x, z pairs, maybe none). The client draws a slash along the path and a mark on each, in the
+   * colours of the worn dash cosmetic.
+   */
+  dashSlash(x1: number, z1: number, x2: number, z2: number, by: number, hits: number[]): void;
   /** Player `by`'s pet picked up the drop that lay at (x, z) (sim/petLoot.ts): the client flies it to the player. */
   petLoot(x: number, z: number, by: number, kind: 'gold' | 'item' | 'potion' | 'stone'): void;
 }
@@ -139,6 +145,8 @@ export type SfxName =
   | 'headshot_fire'
   // The mage's Warp (class passive, owner 2026-11-27)
   | 'warp'
+  // The sword's Dash Slash (class passive, owner 2026-11-28): the first monster a dash slashes
+  | 'dashslash'
   // Bosses (owner 2026-11-22, docs/systems/audio.md)
   | 'boss_arrive' | 'boss_appear' | 'witch_cast' | 'witch_vial' | 'witch_grasp' | 'witch_hex'
   | 'heart_meteor' | 'heart_ring' | 'heart_beam' | 'heart_charge' | 'heart_phase';
