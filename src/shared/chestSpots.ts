@@ -5,7 +5,7 @@
 import { inSafeArea, inWhirlpoolCircle, lairOf, type ZoneDef } from './data/zones';
 import { groundPools, type PoolBlob } from './groundPools';
 import type { Rng } from './rng';
-import type { Terrain } from './sim/terrain';
+import { Terrain } from './sim/terrain';
 import type { TreasureConfig } from './treasure';
 
 export interface Spot { x: number; z: number }
@@ -62,12 +62,36 @@ function nearbyBlocked(terrain: Terrain): (x: number, z: number, r: number) => b
   };
 }
 
-/** Every grid spot a chest may stand on, per zone as laid out now (searched once: it walks the whole map). */
-const cache = new WeakMap<ZoneDef, { rev: number; spots: Spot[] }>();
+/** Everything the search and the picking look at, as text: the same text is the same map, whatever object holds it. */
+const layoutKey = (zone: ZoneDef, t: Terrain): string => JSON.stringify([zone.id, zone.theme, zone.seed, zone.start, zone.safe, zone.portals,
+  zone.warps, zone.lair, zone.whirlpools, zone.iceLakes, zone.lavaPools, t.bound, t.pathSegments, t.colliders, t.boxes, t.blockers,
+  t.props.filter((p) => p.key === 'tide_pool')]);
 
+const byTerrain = new WeakMap<Terrain, Spot[]>();
+const byZone = new Map<string, { key: string; spots: Spot[] }>();
+
+/**
+ * Every grid spot a chest may stand on. Searched once per layout (it walks the whole map): the same layout built again (a new
+ * channel, a balance save that rebuilds the zones) gets the very same list back.
+ */
 export function chestGround(zone: ZoneDef, terrain: Terrain): readonly Spot[] {
-  const had = cache.get(zone);
-  if (had && had.rev === terrain.mapRev) return had.spots;
+  let spots = byTerrain.get(terrain);
+  if (!spots) {
+    const key = layoutKey(zone, terrain);
+    const had = byZone.get(zone.id);
+    spots = had?.key === key ? had.spots : searchGround(zone, terrain);
+    byZone.set(zone.id, { key, spots });
+    byTerrain.set(terrain, spots);
+  }
+  return spots;
+}
+
+/** Searches every map with chests now (about a second): the server does it at start, not while the first player walks in. */
+export function warmChestGround(zones: Iterable<ZoneDef>): void {
+  for (const zone of zones) if (zone.chests?.length) chestGround(zone, new Terrain(zone));
+}
+
+function searchGround(zone: ZoneDef, terrain: Terrain): Spot[] {
   // Walk the grid from the camp: only ground a player can get to.
   const half = Math.floor(terrain.bound / CELL);
   const n = half * 2 + 1;
@@ -100,7 +124,6 @@ export function chestGround(zone: ZoneDef, terrain: Terrain): readonly Spot[] {
     visit(c, r + 1);
     visit(c, r - 1);
   }
-  cache.set(zone, { rev: terrain.mapRev, spots });
   return spots;
 }
 

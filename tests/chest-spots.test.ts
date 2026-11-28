@@ -142,6 +142,18 @@ for (const id of CHEST_MAP_IDS) {
   const b = ch.ensure(zone.id, 1)!;
   ok(a.sim !== b.sim && JSON.stringify(b.sim.chests) === spots, 'reopened channel: the same spots (hopping channels moves nothing)');
   ok(JSON.stringify(ch.ensure(zone.id, 2)!.sim.chests) !== spots, 'another channel has its own');
+  // The zones are rebuilt on every balance save: the same layout in a new object moves nothing, a changed one does.
+  let changed = false;
+  const rebuilt = new Channels([zone], Date.now, undefined, (z) => (changed ? { ...z, start: { x: z.start.x - 4, z: z.start.z } } : { ...z }));
+  const c = rebuilt.ensure(zone.id, 1)!;
+  const was = JSON.stringify(c.sim.chests);
+  rebuilt.sweep();
+  const d = rebuilt.ensure(zone.id, 1)!;
+  ok(d.sim.zone !== c.sim.zone && JSON.stringify(d.sim.chests) === was, 'the same layout rebuilt: the same spots');
+  ok(chestGround(d.sim.zone, d.sim.terrain) === chestGround(c.sim.zone, c.sim.terrain), 'and it is not searched again');
+  changed = true;
+  rebuilt.sweep();
+  ok(JSON.stringify(rebuilt.ensure(zone.id, 1)!.sim.chests) !== was, 'a changed layout: new spots');
 }
 
 // ---- map files and /admin

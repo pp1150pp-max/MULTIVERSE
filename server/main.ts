@@ -21,6 +21,8 @@ import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
 import { mapsPublicApi } from './admin-maps';
 import { applyMaps } from './maps-live';
+import { warmChestGround } from '../src/shared/chestSpots';
+import { ZONES } from '../src/shared/data/zones';
 import { googleApi, googleLoginOn } from './google-api';
 import { loadGoogleConfig } from './google';
 import { accountApi } from './account-api';
@@ -64,6 +66,8 @@ applyCardTuning(db.cardTuning());
 applyBalance(db.balance());
 // The published map layouts (admin map editor) replace the bundled JSON before any room is made (unless the switch is off).
 applyMaps(db);
+// Where treasure chests may come up, searched before anyone is in (src/shared/chestSpots.ts).
+warmChestGround(Object.values(ZONES));
 const backups = new Backups(db, DB_FILE);
 const limiter = new AttemptLimiter();
 /** Brake on making guests: each new guest counts as one "attempt" for its address. */

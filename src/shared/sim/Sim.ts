@@ -42,7 +42,7 @@ import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed'
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
 import { DROP_LIFE, Loot, LOOT_PRIORITY_TIME, type LootKind } from './Loot';
 import { chestGold, chestOdds, rollChestRow, SHRINE_BUFF_ICON, SHRINE_BUFF_NAME, shrinePct, type ChestRow } from '../treasure';
-import { pickChestSpot, type Spot } from '../chestSpots';
+import { chestGround, pickChestSpot, type Spot } from '../chestSpots';
 import { SHRINE_BUFFS, type MapChest, type MapShrine, type ShrineBuff } from '../mapSchema';
 import { nextRowPrice, STASH_GOLD_MAX, STASH_ROW } from './stash';
 import { splitInto } from './split';
@@ -181,7 +181,7 @@ export const LOOT_CLICK_RANGE = 1.5;
 const DROP_POTION_MULT = 2;
 
 /** A treasure chest's rolled spot (Sim.chestSpots). */
-export type ChestPlace = Spot & { zone: ZoneDef; opened: boolean };
+export type ChestPlace = Spot & { ground: readonly Spot[]; opened: boolean };
 
 /** "10 นาที", "3 นาที 20 วิ", "45 วิ" (a chest or shrine wait, rounded up to seconds). */
 function fmtWait(sec: number): string {
@@ -1055,11 +1055,12 @@ export class Sim {
   /** Chest `c`'s spot, rolled when it has none for this layout, or it is back after being opened (src/shared/chestSpots.ts). */
   private chestPlace(c: MapChest): MapChest {
     let s = this.chestSpots.get(c.id);
-    if (!s || s.zone !== this.zone || (s.opened && this.chestHere(c.id))) {
+    const ground = chestGround(this.zone, this.terrain);
+    if (!s || s.ground !== ground || (s.opened && this.chestHere(c.id))) {
       // Apart from the other chests standing now, and from where this one was last.
-      const taken = [...this.chestSpots].filter(([id, o]) => o.zone === this.zone && (id === c.id || !o.opened)).map(([, o]) => o);
+      const taken = [...this.chestSpots].filter(([id, o]) => o.ground === ground && (id === c.id || !o.opened)).map(([, o]) => o);
       const at = pickChestSpot(this.zone, this.terrain, currentBalance().treasure, taken, Math.random) ?? c;
-      this.chestSpots.set(c.id, (s = { x: at.x, z: at.z, zone: this.zone, opened: false }));
+      this.chestSpots.set(c.id, (s = { x: at.x, z: at.z, ground, opened: false }));
     }
     return { id: c.id, x: s.x, z: s.z };
   }
