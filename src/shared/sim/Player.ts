@@ -3,6 +3,7 @@ import type { AutoTally, GearPick } from './autoTally';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import { suctionStep } from './kraken';
+import { slashStep } from './dashSlash';
 import type { Terrain } from './terrain';
 import type { Intent, SkillEffect } from './types';
 import { castSkill, basicAttack, quarksCue, emptyGunBuffs, type GunBuffs } from './skills';
@@ -628,6 +629,11 @@ export class Player extends Unit {
   private dashVx = 0;
   private dashVz = 0;
   private chargeHit = new Set<Monster>();
+  /** The sword's Dash Slash runs on this dash (dashSlash.ts): where it started and the spots it hit, for the slash marks. */
+  private slashing = false;
+  private slashFromX = 0;
+  private slashFromZ = 0;
+  private slashSpots: number[] = [];
   private noMpMsgT = 0;
 
   constructor(id: number, private readonly sim: Sim, data: CharacterData) {
@@ -766,6 +772,11 @@ export class Player extends Unit {
   /** The mage's class passive Warp works now: the dash appears at its end at once, with charges (classPassives.ts). */
   warpOn(): boolean {
     return classPassiveOn(currentBalance().skills.classPassive, this.cls.id, this.level, 'warp');
+  }
+
+  /** The sword's class passive Dash Slash works now: the plain dash slashes the monsters it passes (dashSlash.ts). */
+  slashOn(): boolean {
+    return classPassiveOn(currentBalance().skills.classPassive, this.cls.id, this.level, 'slash');
   }
 
   /** The plain dash's full cooldown (the sword's passive may cut it). */
@@ -1265,6 +1276,15 @@ export class Player extends Unit {
     passiveOnDash(this);
   }
 
+  /** The Dash Slash's dash is over: one message with the path and every spot it hit (the browser draws the slash). */
+  private endSlash(): void {
+    if (!this.slashing) return;
+    this.slashing = false;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    this.sim.fx('dashSlash', r2(this.slashFromX), r2(this.slashFromZ), r2(this.x), r2(this.z), this.id, this.slashSpots);
+    this.slashSpots = [];
+  }
+
   startDash(dx: number, dz: number, dist: number, time: number, kind: 'dash' | 'charge'): void {
     const l = Math.hypot(dx, dz) || 1;
     this.dashVx = (dx / l) * (dist / time);
@@ -1273,6 +1293,10 @@ export class Player extends Unit {
     this.invulnT = time + 0.05;
     this.dashKind = kind;
     this.chargeHit.clear();
+    this.slashing = kind === 'dash' && this.slashOn();
+    this.slashFromX = this.x;
+    this.slashFromZ = this.z;
+    this.slashSpots = [];
     this.moveTarget = null;
     this.atkRootT = 0;
     this.face(dx, dz);
@@ -1471,9 +1495,24 @@ export class Player extends Unit {
       this.charmT = 0;
       this.charmBy = null;
       this.dashT -= dt;
-      this.x += this.dashVx * dt;
-      this.z += this.dashVz * dt;
-      sim.terrain.resolve(this);
+      if (this.slashing) {
+        // The sword's Dash Slash: in short steps against the terrain (as Warp walks its path), so even a thin wall stops
+        // it, each stretch slashing what it passed; the marks once it ends.
+        const steps = Math.max(1, Math.ceil((Math.hypot(this.dashVx, this.dashVz) * dt) / WARP_STEP));
+        for (let i = 0; i < steps; i++) {
+          const fromX = this.x;
+          const fromZ = this.z;
+          this.x += (this.dashVx * dt) / steps;
+          this.z += (this.dashVz * dt) / steps;
+          sim.terrain.resolve(this);
+          slashStep(sim, this, fromX, fromZ, this.chargeHit, this.slashSpots);
+        }
+        if (this.dashT <= 0) this.endSlash();
+      } else {
+        this.x += this.dashVx * dt;
+        this.z += this.dashVz * dt;
+        sim.terrain.resolve(this);
+      }
       if (this.dashKind === 'charge') {
         for (const m of sim.monsters) {
           if (!m.alive || this.chargeHit.has(m)) continue;

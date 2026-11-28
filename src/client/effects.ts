@@ -12,7 +12,7 @@ import { gfxOthers, gfxParticles, gfxQuality } from './gfxPrefs';
 import { playReaction } from './reactionFx';
 import type { ReactionId } from '../shared/elementTuning';
 import { LEVELUP_STYLE, levelUpLookOf, playLevelUp } from './levelUpFx';
-import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash, playWarp } from './dashFx';
+import { DASH_DIST, DASH_STYLE, DASH_TIME, dashLookOf, playDash, playSlash, playWarp, SLASH_PLAIN } from './dashFx';
 import { cosTune } from './cosTune';
 import { bossFxOn, bossFxSpot, isBossEffect, isBossMelee, playBossExtras } from './bossFx';
 
@@ -883,6 +883,24 @@ export class Effects implements FxApi {
     const mine = !this.layerHooks || by === this.layerHooks.me();
     const others = mine ? 1 : gfxOthers();
     playWarp((o, life, tick) => this.add(o, life, tick), x1, z1, x2, z2, style, look, {
+      particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
+      extras: gfxQuality() > 0 && others > 0,
+    });
+  }
+
+  /**
+   * The sword's Dash Slash (class passive, owner 2026-11-28): the blade streak along the dash and a cut on each monster
+   * hit, in the worn dash cosmetic's colours (or silver when none is worn, or /admin turned dash cosmetics off).
+   * Within the graphics menu, as dashWith.
+   */
+  dashSlash(x1: number, z1: number, x2: number, z2: number, by: number, hits: number[]): void {
+    const id = this.dashOf?.(by);
+    const style = id && DASH_STYLE[id] && currentBalance().fxLayer.dashNew ? DASH_STYLE[id] : null;
+    const cos = style ? dashLookOf(cosTune(id!)) : null;
+    const look = cos ? { size: cos.size, color1: cos.color1, color2: cos.color2 } : { size: 1, ...SLASH_PLAIN };
+    const mine = !this.layerHooks || by === this.layerHooks.me();
+    const others = mine ? 1 : gfxOthers();
+    playSlash((o, life, tick) => this.add(o, life, tick), x1, z1, x2, z2, Array.isArray(hits) ? hits : [], style, look, {
       particles: gfxParticles() * others * (TOUCH ? 0.5 : 1),
       extras: gfxQuality() > 0 && others > 0,
     });
