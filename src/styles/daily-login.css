@@ -1,6 +1,6 @@
 /* Daily login calendar: 7 columns, one cell per day with its reward. */
 /* No scrollbars (owner): the width follows the screen height too, so up to 6 weeks of cells always fit. */
-#daily-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(460px, calc(100vw - 32px), max(300px, calc((100vh - 340px) * 7 / 6 + 60px))); font-size: 12px; }
+#daily-win { left: 50%; top: 8px; transform: translateX(-50%); width: min(460px, calc(100vw - 32px), max(288px, calc((100vh - 340px) * 7 / 6 + 60px))); font-size: 12px; }
 #daily-win .daily-note, #daily-win .daily-foot { margin: 6px 8px; color: var(--ink-dim); font-size: 11px; }
 #daily-win .daily-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 8px; }
 #daily-win .daily-wd { text-align: center; color: var(--gold); font-size: 11px; }
@@ -31,6 +31,9 @@
 #daily-win .daily-bonus-item .gi { width: 16px; height: 16px; }
 #daily-win .daily-bonus-state { color: var(--ink-dim); }
 #daily-win .daily-bonus-box.got .daily-bonus-state { color: #9fe0a0; font-weight: 700; }
+/* Low screens: the bonus boxes lose their chest pictures (and the narrow desktop calendar its top note) to still fit. */
+@media (max-height: 620px) { #daily-win .daily-bonus-art { display: none; } }
+@media (min-height: 521px) and (max-height: 620px) { #daily-win .daily-note { display: none; } }
 /* Short screens (a phone on its side): calendar on the left sized by the height, text and buttons on the right. */
 @media (max-height: 520px) {
   #daily-win {
@@ -38,7 +41,7 @@
     grid-template-columns: calc((100vh - 96px) / 6.4 * 7) 1fr; grid-template-areas: 'head head' 'grid note' 'grid bonus' 'grid foot' 'grid btns';
   }
   #daily-win .daily-bonus { grid-area: bonus; grid-template-columns: 1fr; margin: 0; gap: 2px; align-content: start; }
-  #daily-win .daily-bonus-art { max-width: 24px; }
+  #daily-win .daily-bonus-head { display: none; }
   #daily-win .daily-bonus-info { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0 6px; }
   #daily-win .panel-head { grid-area: head; margin-bottom: 8px; }
   #daily-win .daily-grid { grid-area: grid; padding: 0; gap: 2px; }
