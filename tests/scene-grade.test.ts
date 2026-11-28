@@ -3,7 +3,7 @@
 import { applyBalance, balanceChanges, checkBalance, codeBalance, currentBalance, mergeBalance } from '../src/shared/balance';
 import { GENERATED_ZONES } from '../src/shared/data/zones';
 import { checkFxLayerTuning, codeFxLayer, fxLayerChanges, mergeFxLayer } from '../src/shared/fxLayerTuning';
-import { codeSceneGrade, mistLook, postLook, sceneGradeOf, SHAFT_PEAK } from '../src/shared/sceneGrade';
+import { CLOUD_PEAK, codeSceneGrade, FLICKER_PEAK, mistLook, postLook, sceneGradeOf, SHAFT_PEAK, TONE_SWING } from '../src/shared/sceneGrade';
 import { finish, ok } from './check';
 
 const cfg = codeFxLayer();
@@ -30,6 +30,23 @@ ok(postLook(2, { ...cfg, bossRoomPostK: 0 }, codeSceneGrade('emerald_forest_room
 ok(postLook(1, { ...cfg, shShafts: false }, forest, false)!.shaft === 0, 'shafts switched off');
 ok(postLook(2, { ...cfg, vignette: 0 }, codeSceneGrade('misty_marsh'), false) === null, 'nothing to draw = no draw');
 ok(postLook(2, { ...cfg, shaftK: 3 }, { ...forest, shaft: 2 }, false)!.shaft === 0.5, 'shafts never past half');
+
+// The light moves (owner 2026-11-28).
+ok(cfg.shLightMove && cfg.lmShaft && cfg.lmCloud && cfg.lmFlicker && cfg.lmTone && cfg.lmShaftK === 1 && cfg.lmToneSpeed === 1, 'light motion on in code at ×1');
+const clouded = Object.keys(GENERATED_ZONES).filter((id) => codeSceneGrade(id).cloud > 0).sort();
+ok(clouded.join() === toned.join(), `cloud shadows on the warm daytime maps (${clouded})`);
+const flickering = Object.keys(GENERATED_ZONES).filter((id) => codeSceneGrade(id).flicker > 0);
+ok(flickering.join() === 'ashen_isle', `fire flicker on the volcano island only (${flickering})`);
+ok(low.sway === 1 && low.shimmer === 0 && low.cloud === 0 && low.toneSwing === TONE_SWING, 'low: shafts sway and the tone swings, no shimmer or clouds');
+ok(high.sway === 1 && high.shimmer === 1 && high.cloud === CLOUD_PEAK, 'high: + shimmer and cloud shadows');
+const still = postLook(2, { ...cfg, shLightMove: false }, forest, false)!;
+ok(still.sway === 0 && still.shimmer === 0 && still.toneSwing === 0 && still.cloud === 0 && still.flicker === 0, 'switched off = still as before');
+ok(postLook(2, { ...cfg, lmCloud: false }, forest, false)!.cloud === 0 && postLook(2, { ...cfg, lmShaft: false }, forest, false)!.sway === 0, 'each part has its own switch');
+ok(postLook(2, { ...cfg, shShafts: false }, forest, false)!.sway === 0, 'no shafts, nothing to sway');
+const ash = codeSceneGrade('ashen_isle');
+ok(postLook(1, { ...cfg, vignette: 0 }, ash, false)?.flicker === FLICKER_PEAK, 'fire flicker on low too, drawn even with nothing else');
+ok(postLook(2, cfg, { ...ash, flicker: 2 }, true)!.flicker === FLICKER_PEAK, 'boss rooms: ×bossRoomPostK');
+ok(postLook(2, { ...cfg, lmCloudK: 3 }, { ...forest, cloud: 2 }, false)!.cloud <= 0.4, 'cloud shadows never too dark');
 
 const marsh = { ...codeSceneGrade('misty_marsh'), mist: 1.5 };
 ok(mistLook(0, 1, marsh, false).thick === 1 && mistLook(1, 1, marsh, false).flow === 0 && mistLook(1, 1, marsh, false).thick === 1, 'off and low keep the old mist');

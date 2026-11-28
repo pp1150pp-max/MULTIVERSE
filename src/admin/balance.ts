@@ -1435,6 +1435,8 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const postOn = h('input', { type: 'checkbox', checked: a.shPost, onchange: (e: Event) => { a.shPost = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const shaftsOn = h('input', { type: 'checkbox', checked: a.shShafts, onchange: (e: Event) => { a.shShafts = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const windOn = h('input', { type: 'checkbox', checked: a.shWind, onchange: (e: Event) => { a.shWind = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const moveFlag = (k: 'shLightMove' | 'lmShaft' | 'lmCloud' | 'lmFlicker' | 'lmTone', label: string) =>
+      flag(h('input', { type: 'checkbox', checked: a[k], onchange: (e: Event) => { a[k] = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } }), a[k] !== ca[k], label);
     // Each map's tone, mist and shafts (sceneGrade.ts): the draft keeps only what differs from the code.
     const setGrade = <K extends keyof SceneGrade>(id: string, k: K, v: SceneGrade[K]): void => {
       const g: Partial<SceneGrade> = { ...draft.sceneGrade[id], [k]: v };
@@ -1450,7 +1452,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       const tint = h('input', { type: 'color', value: grade().tint, title: `ค่าในโค้ด: ${codeGrade.tint}`, onchange: (e: Event) => { setGrade(id, 'tint', (e.target as HTMLInputElement).value.toLowerCase()); changed(); } });
       const cell = (k: SceneGradeKey, step: number) =>
         h('td', {}, numBox(() => grade()[k], (n) => setGrade(id, k, n), codeGrade[k], ...SCENE_GRADE_RANGE[k], step, changed));
-      return h('tr', {}, title, h('td', {}, tint), cell('tintK', 0.01), cell('saturation', 0.01), cell('brightness', 0.01), cell('mist', 0.1), cell('shaft', 0.1),
+      return h('tr', {}, title, h('td', {}, tint), cell('tintK', 0.01), cell('saturation', 0.01), cell('brightness', 0.01), cell('mist', 0.1), cell('shaft', 0.1), cell('cloud', 0.1), cell('flicker', 0.1),
         h('td', {}, h('button', { type: 'button', onclick: () => { delete draft.sceneGrade[id]; refresh(); drawFx(); } }, 'คืนค่า')));
     };
     const gradeMaps = [...Object.keys(GENERATED_ZONES).map((id) => ({ id, nameTh: ZONES[id].nameTh })), ...customDefs()];
@@ -1480,7 +1482,14 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' }, num('vignette', 0.01), num('bossRoomPostK', 0.05), num('mistFlow', 0.1)),
       h('div', { class: 'row bal-line' }, num('shaftK', 0.1), num('shaftSpeed', 0.1), num('shaftAngle', 1)),
       h('div', { class: 'muted' }, 'ต่ำ: ขอบมืด + ย้อมสีแมพ + ลำแสง · สูง: + ริ้วในลำแสง ความอิ่มสี ความสว่าง และหมอกไหลเป็นริ้ว · ป้ายชื่อ เลขดาเมจ และ HUD ไม่โดน · ความอิ่มสี/ความสว่างที่ไม่ใช่ 1 ต้องคัดลอกภาพจอทุกเฟรม (กินเครื่องกว่า โดยเฉพาะมือถือ)'),
-      h('h3', {}, 'โทนสี หมอก และลำแสง ต่อแมพ'),
+      h('h3', {}, 'แสงขยับ'),
+      h('div', { class: 'row bal-line' }, moveFlag('shLightMove', ' แสงขยับ (ปิด = แสงนิ่งแบบเดิม)')),
+      h('div', { class: 'row bal-line' }, moveFlag('lmShaft', ' ลำแสงส่ายและระยิบ'), num('lmShaftK', 0.1), num('lmShaftSpeed', 0.1)),
+      h('div', { class: 'row bal-line' }, moveFlag('lmCloud', ' เงาเมฆผ่านพื้น'), num('lmCloudK', 0.1), num('lmCloudSpeed', 0.1)),
+      h('div', { class: 'row bal-line' }, moveFlag('lmFlicker', ' แสงไฟกะพริบ'), num('lmFlickerK', 0.1), num('lmFlickerSpeed', 0.1)),
+      h('div', { class: 'row bal-line' }, moveFlag('lmTone', ' โทนสีขึ้นลงช้า ๆ'), num('lmToneK', 0.1), num('lmToneSpeed', 0.1)),
+      h('div', { class: 'muted' }, 'ต่ำ: ลำแสงส่ายไปมาและเอียงโยก + โทนสีขึ้นลง (±25% รอบละ 40 วิ) + แสงไฟกะพริบ · สูง: + ริ้วในลำแสงไหล (ระยิบ) และเงาเมฆลอยตามทิศลม (ใช้ "ทิศลมบนจอ" ด้านบน) ติดพื้นเวลาเดิน · ปิด: ไม่ขยับ · แมพไหนมีเงาเมฆ/แสงไฟกะพริบ ตั้งในคอลัมน์ "× เงาเมฆ" และ "× แสงไฟกะพริบ" ของตารางด้านล่าง · ห้องบอส × ตาม "× ขอบมืดและแสงในห้องบอส"'),
+      h('h3', {}, 'โทนสี หมอก ลำแสง เงาเมฆ และแสงไฟ ต่อแมพ'),
       h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
         h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), ...(Object.keys(SCENE_GRADE_NAME) as (keyof SceneGrade)[]).map((k) => h('th', {}, SCENE_GRADE_NAME[k])), h('th', {}, ''))),
         h('tbody', {}, ...gradeMaps.map((z) => gradeRow(z.id, z.nameTh))))),
