@@ -155,7 +155,11 @@ export function roomShortText(bag: (BagEntry | null)[], entries: BagEntry[], slo
 
 /** One mail in the list. `attach`: it still has unclaimed attachments (so it can't be deleted). */
 export interface MailHead { id: number; from: string; title: string; at: number; expiresAt: number; read: boolean; attach: boolean }
-export interface MailFull extends MailHead { body: string; lines: string[] }
+/**
+ * `lines` and `gifts` are what still waits to be claimed (empty / absent once claimed). `lines` is describeAttach(gifts):
+ * gold first (if any), then each item in order. The window draws its icons from `gifts`.
+ */
+export interface MailFull extends MailHead { body: string; lines: string[]; gifts?: MailAttach }
 
 export type MailCall =
   | { a: 'mailList' }

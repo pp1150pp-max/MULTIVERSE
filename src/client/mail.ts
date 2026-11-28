@@ -3,8 +3,11 @@
 // easy to swap for painted art later.
 import { noTranslate as noTr } from './i18n';
 import type { Game } from './Game';
-import type { MailFull, MailHead, MailReply } from '../shared/mail';
+import type { MailAttachItem, MailFull, MailHead, MailReply } from '../shared/mail';
 import { playSound } from './audio/sfx';
+import { makeItem } from '../shared/data/items';
+import { isStoneKind, RARITY_COLOR, type BagEntry } from '../shared/types';
+import { COIN_ICON, itemIcon } from './icons';
 
 const BADGE_KEY = 'จดหมาย';
 
@@ -53,7 +56,7 @@ export class MailUI {
   toggle(force?: boolean): void {
     const show = force ?? !this.open;
     this.win.classList.toggle('hidden', !show);
-    if (!show) return;
+    if (!show) return this.g.hud.hideTip();
     this.reading = null;
     this.say('');
     this.render();
@@ -131,6 +134,7 @@ export class MailUI {
   }
 
   private render(): void {
+    this.g.hud.hideTip(); // the cell it points at is about to go
     this.body.replaceChildren();
     if (this.reading) return this.renderMail(this.reading);
     const bar = el('div', 'mail-bar');
@@ -173,7 +177,9 @@ export class MailUI {
     del.onclick = () => void this.remove(m.id);
     const attach = el('div', 'mail-attach');
     if (m.lines.length) {
-      attach.append(el('b', '', 'ของแนบ'), ...m.lines.map((l) => el('div', '', l)));
+      const items = el('div', 'mail-items');
+      items.append(...this.attachRows(m));
+      attach.append(el('b', '', 'ของแนบ'), items);
     } else if (!m.attach) attach.append(el('span', 'mail-meta', 'ไม่มีของแนบที่รอรับ'));
     const bar = el('div', 'mail-bar');
     bar.append(back, claim, del);
@@ -184,5 +190,46 @@ export class MailUI {
       attach,
       bar,
     );
+  }
+
+  /** Each attachment as a bag cell with its name beside it. m.lines and the cells share one order: gold, then the items. */
+  private attachRows(m: MailFull): HTMLElement[] {
+    const { gold = 0, items = [] } = m.gifts ?? {};
+    const cells = [
+      ...(gold ? [{ html: `<div class="cell" style="--rc:#d8b45a">${COIN_ICON}</div>` }] : []),
+      ...items.map((x) => this.attachCell(x)),
+    ];
+    return m.lines.map((line, i) => {
+      const row = el('div', 'mail-item');
+      const c: { html: string; entry?: BagEntry } | undefined = cells[i];
+      row.innerHTML = c?.html ?? ''; // our own icon markup only, never mail text
+      const entry = c?.entry;
+      const cell = row.querySelector<HTMLElement>('.cell');
+      if (entry && cell) {
+        cell.onmousemove = (e) => this.g.hud.showEntryTip(entry, e, '');
+        cell.onmouseleave = () => this.g.hud.hideTip();
+      }
+      row.append(el('span', '', line));
+      return row;
+    });
+  }
+
+  /**
+   * One attachment's cell. Potions and stones are the bag's own cell and tooltip. Gear is only rolled when it is
+   * claimed, so its cell shows the look (picture for your class, rarity frame, +N, ×count) and no stats.
+   */
+  private attachCell(x: MailAttachItem): { html: string; entry?: BagEntry } {
+    if (x.kind === 'equip') {
+      const p = this.g.player;
+      const item = makeItem(x.baseId, x.rarity, x.level ?? p.level, p.cls.id);
+      if (!item) return { html: '<div class="cell empty"></div>' }; // a kind removed since it was sent
+      const plus = x.plus ? `<span class="iplus">+${x.plus}</span>` : '';
+      return { html: `<div class="cell r-${item.rarity}" style="--rc:${RARITY_COLOR[item.rarity]}">${itemIcon(item)}${plus}<span class="ilv">×${x.count}</span></div>` };
+    }
+    let entry: BagEntry;
+    if (x.kind === 'potion') entry = { potion: x.potion, size: x.size, count: x.count };
+    else if (isStoneKind(x.stone)) entry = { stone: x.stone, count: x.count };
+    else return { html: '<div class="cell empty"></div>' };
+    return { html: this.g.hud.itemCell(entry, ''), entry };
   }
 }

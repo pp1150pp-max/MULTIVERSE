@@ -183,9 +183,13 @@ export class Mail {
     const r = this.db.mailGet(id, a.accountId, a.charId, now);
     if (!r) return fail('ไม่พบจดหมายนี้ (อาจหมดอายุหรือถูกดึงกลับแล้ว)');
     this.db.mailMarkRead(id, now);
-    const att = parseAttach(r.attach);
-    const mail: MailFull = { ...this.head({ ...r, read_at: r.read_at ?? now }), body: r.body, lines: r.claimed_at === null ? describeAttach(att) : [] };
-    return { ok: true, mail, unread: this.unread(a) };
+    return { ok: true, mail: this.full({ ...r, read_at: r.read_at ?? now }), unread: this.unread(a) };
+  }
+
+  /** One mail as the read view gets it: the attachments only while they still wait to be claimed. */
+  private full(r: MailDbRow): MailFull {
+    const gifts = r.claimed_at === null ? parseAttach(r.attach) : undefined;
+    return { ...this.head(r), body: r.body, lines: gifts ? describeAttach(gifts) : [], ...(gifts ? { gifts } : {}) };
   }
 
   /** Marks everything read; attachments stay waiting. */
@@ -254,7 +258,7 @@ export class Mail {
     reply.unread = this.unread(a);
     if (id !== -1) {
       const m = this.db.mailGet(id, a.accountId, a.charId, now);
-      if (m) reply.mail = { ...this.head(m), body: m.body, lines: m.claimed_at === null ? describeAttach(parseAttach(m.attach)) : [] };
+      if (m) reply.mail = this.full(m);
     }
     return reply;
   }
