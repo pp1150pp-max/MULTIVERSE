@@ -231,7 +231,7 @@ export interface Balance {
   /** Each map's tone, mist and sun shafts (sceneGrade.ts): only what differs from the code. */
   sceneGrade: SceneGradeTuning;
   /**
-   * Floor-1 farm maps (FARM_IDS): % of the map's spawn spots in use, by map id; a map left out is 100 (owner 2026-11-25). The spots
+   * Farm maps (FARM_IDS, floor 1 and 2): % of the map's spawn spots in use, by map id; a map left out is 100 (owner 2026-11-25). The spots
    * switched off are spread evenly over the map and over each kind (packCount).
    */
   farmSpots: Record<string, number>;
@@ -814,11 +814,11 @@ export const classBalance = (id: ClassId): ClassBalance => current.classes[id];
  * How many monsters spawn spot number `index` of map `zoneId` keeps, `count` in the code: count × the map's
  * multiplier, the fraction spread evenly over the spots by index (so ×1.5 gives every other spot one more).
  */
-export function packCount(zoneId: string, count: number, index: number, b: Balance = current): number {
+export function packCount(zoneId: string, count: number, index: number, b: Balance = current, fixed = false): number {
   // A farm spot switched off in /admin (Balance.farmSpots): golden-ratio spread again, so the spots left on are even over the
-  // map and over every kind (the spots are listed kind by kind).
+  // map and over every kind (the spots are listed kind by kind). Not a `fixed` one (radius 0: the kraken's tentacles round its whirlpool).
   const on = b.farmSpots[zoneId];
-  if (on !== undefined && ((index * 0.6180339887 + 0.5) % 1) >= on / 100) return 0;
+  if (on !== undefined && !fixed && ((index * 0.6180339887 + 0.5) % 1) >= on / 100) return 0;
   const m = b.mobPack[zoneId] ?? 1;
   if (m === 1 || count <= 0) return count;
   const want = count * m;
@@ -1800,7 +1800,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.mobDropOnSafe !== b.mobDropOnSafe) out.push(`มอนเลิกไล่เมื่อผู้เล่นเข้าเมือง/safe zone ${a.mobDropOnSafe ? 'เปิด' : 'ปิด'} → ${b.mobDropOnSafe ? 'เปิด' : 'ปิด'}`);
   if (a.mapFromDb !== b.mapFromDb) out.push(`ใช้แมพจาก DB ${a.mapFromDb ? 'เปิด' : 'ปิด'} → ${b.mapFromDb ? 'เปิด' : 'ปิด'}`);
   if (a.mobRoamReach !== b.mobRoamReach) out.push(`ระยะที่จุดเกิดมอนย้ายได้จากจุดเดิม ${a.mobRoamReach} → ${b.mobRoamReach}`);
-  if (a.mobRoam !== b.mobRoam) out.push(`มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ ${a.mobRoam ? 'เปิด' : 'ปิด'} → ${b.mobRoam ? 'เปิด' : 'ปิด'}`);
+  if (a.mobRoam !== b.mobRoam) out.push(`มอนแมพฟาร์ม (ชั้น 1–2) เกิดใหม่สุ่มที่ ${a.mobRoam ? 'เปิด' : 'ปิด'} → ${b.mobRoam ? 'เปิด' : 'ปิด'}`);
   if (a.mobReturnIgnoreHits !== b.mobReturnIgnoreHits) out.push(`มอนเดินกลับบ้านไม่สนการโจมตี ${a.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'} → ${b.mobReturnIgnoreHits ? 'เปิด' : 'ปิด'}`);
   out.push(...floorGateChanges(a.floorGate, b.floorGate));
   out.push(...gearChanges(a.gear, b.gear));

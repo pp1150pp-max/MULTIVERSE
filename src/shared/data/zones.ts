@@ -332,9 +332,9 @@ function scatterZone(z: ZoneDef, list: Scatter[], end?: { x: number; z: number }
 }
 
 /**
- * Floor 1's four farm maps are this much bigger each way than they were drawn (owner 2026-11-24: x1.5 a side, about
- * 2.25x the area; the towns, boss rooms, floor 2 and editor-made maps keep their size). grownFarm() scales the drawing
- * (size, camp, roads, summoner, lakes and pools; the portal back stays beside the camp) before scatterZone, and FARM_DENSITY gives each kind of
+ * The farm maps are this much bigger each way than they were drawn (owner 2026-11-24: floor 1's four, x1.5 a side, about
+ * 2.25x the area; 2026-11-28: floor 2's four too; the towns, boss rooms and editor-made maps keep their size). grownFarm() scales the drawing
+ * (size, camp, roads, summoner, lakes and pools, the whirlpool with its island and warp circles; the portal back stays beside the camp) before scatterZone, and FARM_DENSITY gives each kind of
  * monster that many more spots so the map is as full as before. Trees and decor follow by themselves (Terrain.placeProps
  * fills by area). The seed and the arena stay: the boss rooms are built from those (bossRoom()).
  */
@@ -362,6 +362,9 @@ function grownFarm(z: ZoneDef): ZoneDef {
     portals: z.portals.map((p) => ({ ...p, x: z.start.x * k + (p.x - z.start.x), z: z.start.z * k + (p.z - z.start.z) })),
     iceLakes: z.iceLakes?.map(ellipse),
     lavaPools: z.lavaPools?.map(ellipse),
+    // The Kraken Maelstrom's whirlpool, its island and the warp circles onto it and back (owner 2026-11-28: grown x1.5 too).
+    ...(z.whirlpools ? { whirlpools: z.whirlpools.map((w) => ({ ...pt(w), r: w.r * k, ...(w.island ? { island: w.island * k } : {}) })) } : {}),
+    ...(z.warps ? { warps: z.warps.map((w) => ({ ...pt(w), toX: w.toX * k, toZ: w.toZ * k })) } : {}),
   };
 }
 
@@ -514,8 +517,6 @@ export const ZONE_4: ZoneDef = rotateZone(3, scatterZone(grownFarm({
   { group: [['magma_golem', 1]], count: 6, respawn: [14, 20] },
 ])));
 
-/** Floor 1's farm maps (grownFarm): their monster spots move about on respawn (Sim, Balance.mobRoam). */
-export const FARM_IDS: readonly string[] = [ZONE_1.id, ZONE_2.id, ZONE_3.id, ZONE_4.id];
 
 /** Where the hub's portals sit: one per corner, this far out on each axis. */
 const HUB_PORTAL = 54.5;
@@ -585,7 +586,7 @@ export const ZONE_HUB: ZoneDef = {
 };
 
 // Floor 2, map 1 (plan 2, 5.1): reached from the harbour's top pier, so the camp is at the bottom like the forest's.
-export const ZONE_BEACH: ZoneDef = scatterZone({
+export const ZONE_BEACH: ZoneDef = scatterZone(grownFarm({
   id: 'shipwreck_beach',
   name: 'Shipwreck Beach',
   nameTh: 'หาดเรือแตก',
@@ -613,16 +614,16 @@ export const ZONE_BEACH: ZoneDef = scatterZone({
   // Room for the crab's sidesteps and its cannon barrage.
   arenaRadius: 14,
   portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['hermit_crab', 1]], count: 12, respawn: [8, 12] },
   { group: [['thief_gull', 1]], count: 10, respawn: [10, 14] },
   { group: [['shock_eel', 1]], count: 9, respawn: [10, 14] },
   { group: [['spike_turtle', 1]], count: 8, respawn: [14, 20] },
-]);
+]));
 
 // Floor 2, map 2 (plan 2, 5.2): reached from the harbour's right pier, so the camp is on the left like the marsh's.
 // Numbers: owner 2026-11-24 (the proposed table, Shipwreck Beach's boost); every move number is in /admin (moveTuning.ts).
-export const ZONE_COVE: ZoneDef = rotateZone(1, scatterZone({
+export const ZONE_COVE: ZoneDef = rotateZone(1, scatterZone(grownFarm({
   id: 'smugglers_cove',
   name: "Smugglers' Cove",
   nameTh: 'อ่าวลักลอบ',
@@ -649,16 +650,16 @@ export const ZONE_COVE: ZoneDef = rotateZone(1, scatterZone({
   // Room for the anchor throw and the gunboats' shots from the edge of the arena.
   arenaRadius: 14,
   portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['prisoner', 1]], count: 12, respawn: [8, 12] },
   { group: [['cutlass_pirate', 1]], count: 10, respawn: [10, 14] },
   { group: [['shotgunner', 1]], count: 9, respawn: [10, 14] },
   { group: [['keg_prisoner', 1]], count: 8, respawn: [14, 20] },
-]));
+])));
 
 // Floor 2, map 3 (plan 2, 5.3): reached from the harbour's left pier, so the camp is on the right like Ashen Isle's.
 // Numbers: owner 2026-11-24 (the proposed table, the cove's boost); every move number is in /admin (moveTuning.ts).
-export const ZONE_GRAVE: ZoneDef = rotateZone(3, scatterZone({
+export const ZONE_GRAVE: ZoneDef = rotateZone(3, scatterZone(grownFarm({
   id: 'ghost_ship_graveyard',
   name: 'Ghost Ship Graveyard',
   nameTh: 'สุสานเรือผี',
@@ -685,15 +686,15 @@ export const ZONE_GRAVE: ZoneDef = rotateZone(3, scatterZone({
   // Room for the warp behind a target and the ghost sailors his bell calls.
   arenaRadius: 14,
   portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['ghost_monkey', 1]], count: 12, respawn: [8, 12] },
   { group: [['ghost_sailor', 1]], count: 10, respawn: [10, 14] },
   { group: [['ghost_siren', 1]], count: 9, respawn: [10, 14] },
   { group: [['barnacle_crew', 1]], count: 8, respawn: [14, 20] },
-]));
+])));
 
 /** Monsters are scattered at least this far past a whirlpool's rim (the tentacles' ring, rimSpawns). */
-const RIM_CLEAR = 7;
+export const RIM_CLEAR = 7;
 /** How far past a whirlpool's rim its tentacles rise (they stand half over the foam): the kraken's arms in its room. */
 export const RIM_OUT = 1.2;
 /** How far inside the map's whirlpool its tentacles rise (owner 2026-11-26: in the whirlpool, still in reach from its edge). */
@@ -714,8 +715,10 @@ function rimSpawns(z: ZoneDef, monster: string, count: number, respawn: [number,
   return { ...z, spawns: [...z.spawns, ...spawns] };
 }
 
-/** The Kraken Maelstrom's island in its whirlpool (owner 2026-11-26: "not too big"): the summoner in the middle, a warp circle back. */
+/** The Kraken Maelstrom's island in its whirlpool (owner 2026-11-26: "not too big"): the summoner in the middle, a warp circle back. As drawn: grownFarm makes it x1.5. */
 export const MAELSTROM_ISLAND = 7;
+/** Tentacles round the map's whirlpool (owner 2026-11-28: 15 when the map grew x1.5, about as far apart as the 10 were). */
+const MAELSTROM_TENTACLES = 15;
 // Before the zone's half turn (rotateZone 2): on the bottom of the screen once turned.
 const MAELSTROM_PAD: [number, number] = [-22, -22];
 const MAELSTROM_ISLAND_PAD: [number, number] = [-3.5, -3.5];
@@ -724,7 +727,7 @@ const MAELSTROM_ISLAND_PAD: [number, number] = [-3.5, -3.5];
 // half the map across fills its middle (owner 2026-11-19), the tentacles stand round its rim. The kraken's summoner stands on a small
 // island in its middle (owner 2026-11-26), reached by a warp circle on the whirlpool's bottom rim (on screen) where both roads end;
 // another on the island leads back. The old summoner's corner is ordinary map now. Numbers: owner 2026-11-24 (the proposed table, the graveyard's boost); every move number is in /admin (moveTuning.ts).
-export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone({
+export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone(grownFarm({
   id: 'kraken_maelstrom',
   name: 'Kraken Maelstrom',
   nameTh: 'วังวนกลางทะเล',
@@ -753,12 +756,18 @@ export const ZONE_MAELSTROM: ZoneDef = rotateZone(2, rimSpawns(scatterZone({
   // Room for the tentacles round the room's whirlpool and players round them.
   arenaRadius: 15,
   portals: [{ to: HARBOR_ID, x: 49.5, z: 49.5, minLevel: 0 }],
-}, [
+}), denser([
   { group: [['shark_knight', 1]], count: 12, respawn: [8, 12] },
   { group: [['seahorse_soldier', 1]], count: 10, respawn: [10, 14] },
   { group: [['ghost_pirate_king', 1]], count: 9, respawn: [10, 14] },
-// Monsters spread into the old summoner's corner too (owner 2026-11-26: ordinary map now): the far end lies past it.
-], { x: -60, z: -60 }), 'kraken_tentacle', 10, [14, 20], Math.PI / 10));
+// Monsters spread into the old summoner's corner too (owner 2026-11-26: ordinary map now): the far end lies past it (grown x1.5).
+]), { x: -60 * FARM_SCALE, z: -60 * FARM_SCALE }), 'kraken_tentacle', MAELSTROM_TENTACLES, [14, 20], Math.PI / 10));
+
+/**
+ * The farm maps grown x1.5 (grownFarm), floor 1's and floor 2's: their monster spots move about on respawn (Sim, Balance.mobRoam;
+ * not the kraken's tentacles, radius 0) and /admin can switch part of them off (Balance.farmSpots).
+ */
+export const FARM_IDS: readonly string[] = [ZONE_1.id, ZONE_2.id, ZONE_3.id, ZONE_4.id, ZONE_BEACH.id, ZONE_COVE.id, ZONE_GRAVE.id, ZONE_MAELSTROM.id];
 
 /** Where each harbour pier leads (top, right, left, bottom of the screen), by plan 2; none of them built yet. */
 const HARBOR_PIERS: [string, string][] = [
@@ -807,10 +816,10 @@ export const ZONE_HARBOR: ZoneDef = {
  * (src/shared/chestSpots.ts). Final map units (after grownFarm and rotateZone), open ground away from the camp, doors and boss.
  */
 const FARM_TREASURE: Record<string, { chests: MapChest[]; shrines?: MapShrine[] }> = {
-  shipwreck_beach: { chests: [{ id: 'c1', x: 35, z: -41 }, { id: 'c2', x: 43, z: -5 }, { id: 'c3', x: -47, z: 18 }, { id: 'c4', x: -37, z: -11 }] },
-  smugglers_cove: { chests: [{ id: 'c1', x: 30, z: 14 }, { id: 'c2', x: -12, z: -26 }, { id: 'c3', x: 8, z: 35 }, { id: 'c4', x: -24, z: 21 }] },
-  ghost_ship_graveyard: { chests: [{ id: 'c1', x: 24, z: -28 }, { id: 'c2', x: 6, z: -2 }, { id: 'c3', x: -44, z: -45 }, { id: 'c4', x: -24, z: 15 }] },
-  kraken_maelstrom: { chests: [{ id: 'c1', x: 51, z: -26 }, { id: 'c2', x: 0, z: -38 }, { id: 'c3', x: 39, z: 10 }, { id: 'c4', x: 39, z: 44 }] },
+  shipwreck_beach: { chests: [{ id: 'c1', x: 53, z: -61 }, { id: 'c2', x: 65, z: -7 }, { id: 'c3', x: -70, z: 27 }, { id: 'c4', x: -54, z: -15 }] },
+  smugglers_cove: { chests: [{ id: 'c1', x: 45, z: 21 }, { id: 'c2', x: -18, z: -39 }, { id: 'c3', x: 12, z: 53 }, { id: 'c4', x: -36, z: 32 }] },
+  ghost_ship_graveyard: { chests: [{ id: 'c1', x: 36, z: -42 }, { id: 'c2', x: 9, z: -3 }, { id: 'c3', x: -66, z: -67 }, { id: 'c4', x: -36, z: 23 }] },
+  kraken_maelstrom: { chests: [{ id: 'c1', x: 77, z: -39 }, { id: 'c2', x: 0, z: -57 }, { id: 'c3', x: 59, z: 15 }, { id: 'c4', x: 59, z: 66 }] },
   emerald_forest: {
     chests: [{ id: 'c1', x: -25, z: -5 }, { id: 'c2', x: 83, z: -83 }, { id: 'c3', x: -79, z: 83 }, { id: 'c4', x: -83, z: -83 }],
     shrines: [{ id: 's1', x: 1, z: -83, buff: 'atk' }, { id: 's2', x: 45, z: -21, buff: 'random' }],

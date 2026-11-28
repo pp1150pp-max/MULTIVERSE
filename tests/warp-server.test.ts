@@ -96,7 +96,7 @@ async function run(): Promise<void> {
   ok(cli.status === 0, 'wpowner is owner');
   // A draft of the maelstrom with no monster spots (the map editor's), walked in its preview room.
   const draft = (await api('GET', `/admin/maps/${SEA.id}/draft`, undefined, owner.tok)).data.map;
-  ok(draft?.warps?.length === 2 && draft.water.some((w: any) => w.island === 7), "the editor's draft carries the warp circles and the island");
+  ok(draft?.warps?.length === 2 && draft.water.some((w: any) => w.island === 7 * 1.5), "the editor's draft carries the warp circles and the island");
   const put = await api('PUT', `/admin/maps/${SEA.id}/draft`, { map: { ...draft, spawns: [] } }, owner.tok);
   ok(put.status === 200, `a draft without monsters saved (${put.status} ${JSON.stringify(put.data).slice(0, 160)})`);
   const C = joinWorld(owner.tok, owner.id, SEA.id);

@@ -46,7 +46,7 @@
 | น้ำท่าเรือชั้น 2 | `HARBOR_FRAG` (`harborGround.ts`) | `ShaderMaterial` | ภาพน้ำเลื่อนช้า ๆ 1 ชั้น |
 | หินและแผ่นดินลอย | `PieceBatch` (`island.ts`) | `ShaderMaterial` ขยับใน vertex shader | ใช่ |
 | ฉากหลังอวกาศ / ทะเลเมฆ | `paintSpace` / `paintSky` → `scene.background` | canvas 512×512 ปูซ้ำ filter แบบ Nearest | เลื่อนเฉพาะตอนผู้เล่นเดิน |
-| น้ำวน | `whirlpool.ts` | แผ่นราบ 4 ชั้น `MeshBasicMaterial` หมุน 0.12 / 0.26 / 0.5 / 1.1 rad/วิ · แมพ `kraken_maelstrom` (รัศมี 28) และห้องคราเคน | หมุน |
+| น้ำวน | `whirlpool.ts` | แผ่นราบ 4 ชั้น `MeshBasicMaterial` หมุน 0.12 / 0.26 / 0.5 / 1.1 rad/วิ · แมพ `kraken_maelstrom` (รัศมี 42) และห้องคราเคน | หมุน |
 | หมอก | `World.addFog` | sprite ใหญ่ลอยช้า จำนวนตามธีม (`PALETTES.fog`) | ใช่ |
 | หิมะ เถ้า | `addSnow` | `Points` | ใช่ |
 | ลูกแก้วตีบวก | `orbs.ts` | `ShaderMaterial` 2 ตัว (ตัวลูก + แสง) | ใช่ |

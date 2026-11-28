@@ -1,5 +1,6 @@
 // Floor 1's four farm maps grew x1.5 a side (owner 2026-11-24, docs/systems/map-editor.md "ขยายแมพฟาร์มชั้น 1"):
-// - only those four changed size; the towns, boss rooms and floor 2 keep theirs
+// - floor 2's four farm maps the same way (owner 2026-11-28): the Kraken Maelstrom's whirlpool, island and warp circles too, 15 tentacles
+// - only those changed size; the towns and boss rooms keep theirs
 // - each has about as many monsters per area as before (FARM_DENSITY), alone or 2–3 together, and a dead spot respawns elsewhere
 // - a layout drawn at another size than the game's file fails validateMap ('locked'), so the server skips an old published rev
 //   (applyMaps) and does not tell the browsers to load it (publishedRevs). Throwaway DB in the temp folder, never server/data.
@@ -18,34 +19,59 @@ import type { SpawnArea } from '../src/shared/data/zones';
 import { applyBalance, balanceChanges, checkBalance, currentBalance, packCount } from '../src/shared/balance';
 import { applyMaps, publishedRevs } from '../server/maps-live';
 
-const FARMS = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle'];
+const FARMS = ['emerald_forest', 'misty_marsh', 'frost_reach', 'ashen_isle', 'shipwreck_beach', 'smugglers_cove', 'ghost_ship_graveyard', 'kraken_maelstrom'];
 /** Sizes before the change (half 64, and how many monsters each map had). */
 const OLD_HALF = 64;
-const OLD_MONSTERS: Record<string, number> = { emerald_forest: 47, misty_marsh: 44, frost_reach: 41, ashen_isle: 42 };
+const OLD_MONSTERS: Record<string, number> = {
+  emerald_forest: 47, misty_marsh: 44, frost_reach: 41, ashen_isle: 42,
+  // Not counting the kraken's tentacles (radius 0, round its whirlpool: 10 then, 15 now).
+  shipwreck_beach: 39, smugglers_cove: 39, ghost_ship_graveyard: 39, kraken_maelstrom: 31,
+};
 
 ok(FARM_SCALE === 1.5, 'farm maps grow x1.5 a side');
 for (const id of FARMS) {
   const map = MapRegistry.bundled(id)!;
   ok(map.zone.half === OLD_HALF * FARM_SCALE && ZONES[id].half === map.zone.half, `${id}: half ${map.zone.half} (was ${OLD_HALF})`);
   ok(map.walkable.half === map.zone.half - 8, `${id}: walkable frame follows (${map.walkable.half})`);
-  const monsters = map.spawns.reduce((t, s) => t + s.count, 0);
+  const spots = map.spawns.filter((s) => s.radius > 0);
+  const monsters = spots.reduce((t, s) => t + s.count, 0);
   const ratio = monsters / OLD_MONSTERS[id];
   // x2.25 for the area, then x2 to fill the map (owner 2026-11-25, x3 was too many): about 200 a map.
-  ok(ratio > 4.2 && ratio < 4.8, `${id}: ${monsters} monsters on ${map.spawns.length} spots, x${ratio.toFixed(2)} (x2.25 area x2 fill)`);
+  ok(ratio > 4.2 && ratio < 4.8, `${id}: ${monsters} monsters on ${spots.length} spots, x${ratio.toFixed(2)} (x2.25 area x2 fill)`);
   // Owner 2026-11-25: alone or in groups of 2–3, mixed (about half each), not a fixed number per spot.
-  const lone = map.spawns.filter((s) => s.count === 1).length;
-  const groups = map.spawns.filter((s) => s.count >= 2 && s.count <= 3).length;
-  ok(lone >= map.spawns.length * 0.25 && groups >= map.spawns.length * 0.25 && map.spawns.every((s) => s.count <= 3),
+  const lone = spots.filter((s) => s.count === 1).length;
+  const groups = spots.filter((s) => s.count >= 2 && s.count <= 3).length;
+  ok(lone >= spots.length * 0.25 && groups >= spots.length * 0.25 && spots.every((s) => s.count <= 3),
     `${id}: spots mixed, ${lone} alone and ${groups} groups of 2–3`);
   const zone = ZONES[id];
   const back = zone.portals[0];
   ok(Math.hypot(back.x - zone.start.x, back.z - zone.start.z) < 9, `${id}: portal back to town still beside the camp`);
 }
-// Untouched: the towns, the boss rooms and floor 2.
-for (const [id, half] of [['nexus_city', 69], ['harbor_town', 35], ['shipwreck_beach', 64], ['smugglers_cove', 64]] as const) {
+// Untouched: the towns and the boss rooms.
+for (const [id, half] of [['nexus_city', 69], ['harbor_town', 35]] as const) {
   ok(MapRegistry.bundled(id)?.zone.half === half, `${id}: keeps half ${half}`);
 }
 for (const id of FARMS) ok(MapRegistry.bundled(`${id}_room`)!.zone.half < 40, `${id}_room: boss room keeps its own size`);
+
+// The Kraken Maelstrom (owner 2026-11-28): whirlpool, island and warp circles grown x1.5, 15 tentacles that never roam and stay on
+// when /admin switches part of the spots off.
+{
+  const sea = ZONES.kraken_maelstrom;
+  const w = sea.whirlpools![0];
+  ok(w.r === 28 * FARM_SCALE && w.island === 7 * FARM_SCALE, `whirlpool r ${w.r}, island ${w.island} (were 28 and 7)`);
+  const water = MapRegistry.bundled('kraken_maelstrom')!.water.find((x) => x.kind === 'whirlpool')!;
+  ok(water.rx === w.r && water.island === w.island, 'the baked file has the grown whirlpool');
+  const [rim, back] = sea.warps!;
+  ok(Math.hypot(rim.x, rim.z) > w.r && Math.hypot(back.x, back.z) < w.island!, 'warp circle just off the rim, its partner on the island');
+  const tentacles = sea.spawns.map((s, i) => [s, i] as const).filter(([s]) => s.monster === 'kraken_tentacle');
+  ok(tentacles.length === 15, `15 tentacles (${tentacles.length})`);
+  type Sp = { area: SpawnArea; roam?: boolean };
+  const sim = new Sim(sea);
+  const list = (sim as unknown as { spawners: Sp[] }).spawners;
+  ok(list.filter((sp) => sp.area.monster === 'kraken_tentacle').every((sp) => !sp.roam) && list.some((sp) => sp.roam), 'tentacles never roam, the others do');
+  const b = { ...currentBalance(), farmSpots: { kraken_maelstrom: 0 } };
+  ok(tentacles.every(([s, i]) => packCount('kraken_maelstrom', s.count, i, b, true) === 1), "0% spots: the tentacles stay");
+}
 
 // validateMap: another size than the bundled file = 'locked'; the same file passes.
 const PROP_KEYS = Object.keys(SHEET_SPECS);
