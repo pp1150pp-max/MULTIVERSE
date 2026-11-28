@@ -127,7 +127,9 @@
 #npc-talk.shop .nt-answers { opacity: 0; transform: translateX(3em); pointer-events: none; }
 #npc-talk.shop .nt-box { opacity: 0; transform: translateY(2em); pointer-events: none; }
 #npc-talk .nt-back {
-  position: absolute; right: 3.6em; top: 0.75em; z-index: 6; height: 1.9em; padding: 0 0.8em; border-radius: 6px; font-size: 0.85em;
+  /* Same height and top as ✕ (2.4em of the window), 0.7em gap to its left. */
+  position: absolute; right: calc(1.2% + 3.65em); top: 1.8%; z-index: 6; height: 2.82em; padding: 0 1em; border-radius: 6px; font-size: 0.85em;
+  display: flex; align-items: center; gap: 0.3em;
   background: #3a2414; border: 2px solid #c99a3a; color: #f2d58a; opacity: 0; pointer-events: none; transition: opacity 0.3s 0.25s;
 }
 #npc-talk.shop .nt-back { opacity: 1; pointer-events: auto; }
@@ -162,7 +164,7 @@
 #npc-talk .ns-medal img[src*="portrait_navigator"] { left: -4.8em; top: -2.6em; }
 /* Speech bubble beside it. */
 #npc-talk .ns-bubble {
-  position: absolute; left: 7em; top: 1.1em; width: 23.5em; min-height: 3.5em; padding: 0.5em 0.8em; border-radius: 12px;
+  position: absolute; left: 8.8em; top: 1.1em; width: 23.5em; min-height: 3.5em; padding: 0.5em 0.8em; border-radius: 12px;
   background: #f4e6c4; color: #3a2614; border: 2px solid #b8862e; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); font-size: 0.82em; line-height: 1.45;
   transition-delay: 0.25s;
 }
