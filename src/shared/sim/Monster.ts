@@ -16,6 +16,8 @@ import { bubbleStun, bubbleTrapped, seaAct, tentacleTick, type SeaMove } from '.
 import { KrakenBrain } from './kraken';
 import { currentBalance, monsterMults, NO_MONSTER_MULT, type MonsterMults } from '../balance';
 
+/** Special moves that never doze (Monster.dozable): the parrot rides its captain, a keg runs, a tentacle never walks. */
+const NO_DOZE_MOVES: ReadonlySet<string> = new Set(['parrot', 'keg', 'tentacle']);
 const BOSS_RAMP_PER_SEC = 0.2;
 const BOSS_RAMP_MAX = 3;
 /** Boss max HP added for each player past the first who hits it: 1 player x1, 2 x1.5, 3 x2… */
@@ -340,12 +342,15 @@ export class Monster extends Unit {
   dozeDt = 0;
 
   /**
-   * May skip updates while no player is near (owner 2026-11-28, simPerfTuning.ts): an ordinary monster of the plain kind
-   * (no special moves, brain or spells), alive, idle with no target, nothing under way (wind-up, fall, jump, stun).
+   * May skip updates while no player is near (owner 2026-11-28, simPerfTuning.ts): an ordinary monster (no brain or spells),
+   * alive, idle with no target, nothing under way (wind-up, fall, jump, stun, a hermit crab in its shell). Floor-2 special moves
+   * (owner 2026-11-29) only act on a target or when hit, and idle these monsters just wander like any other, so they doze too;
+   * not the ones that never walk like a monster (NO_DOZE_MOVES).
    */
   dozable(): boolean {
     return this.alive && this.state === 'idle' && !this.target && this.windupT <= 0 && this.stunT <= 0 && this.fallT <= 0 && this.jumpOutT <= 0 &&
-      !this.isBoss && !this.summoned && !this.hunter && !this.keg && !this.def.anchored && !this.def.move && !this.def.brain && !this.def.pattern && !this.def.spells;
+      this.hideT <= 0 && !this.isBoss && !this.summoned && !this.hunter && !this.keg && !this.def.anchored &&
+      !(this.def.move && NO_DOZE_MOVES.has(this.def.move)) && !this.def.brain && !this.def.pattern && !this.def.spells;
   }
   get isHostile(): boolean {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);

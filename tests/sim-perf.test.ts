@@ -126,4 +126,26 @@ const counted = () => {
   ok(c.n === 2, 'a chasing monster updates every tick');
 }
 
+{
+  // Floor 2 (owner 2026-11-29): monsters with special moves doze too, all but the parrot, the powder keg and the tentacles.
+  for (const id of ['shipwreck_beach', 'smugglers_cove', 'ghost_ship_graveyard', 'kraken_maelstrom']) {
+    const sim = new Sim(ZONES[id]);
+    const moves = sim.monsters.filter((m) => m.def.move);
+    const dozing = moves.filter((m) => m.dozable());
+    const never = sim.monsters.filter((m) => ['parrot', 'keg', 'tentacle'].includes(m.def.move ?? ''));
+    ok(dozing.length > 0 && never.every((m) => !m.dozable()), `${id}: ${dozing.length} of ${moves.length} special-move monsters may doze, none of the ${never.length} parrots/kegs/tentacles`);
+  }
+  const sim = new Sim(ZONES.shipwreck_beach);
+  const p = sim.addPlayer(hero);
+  p.stats.maxHp = p.hp = 1e9;
+  const crab = sim.monsters.find((m) => m.def.move === 'shell' && Math.hypot(m.x - p.x, m.z - p.z) > 70)!;
+  let n = 0;
+  const up = crab.update.bind(crab);
+  crab.update = (dt, s) => { n++; up(dt, s); };
+  for (let i = 0; i < 120; i++) sim.step(TICK);
+  ok(n >= 29 && n <= 31, `a far hermit crab updates every 4th tick (${n} of 120)`);
+  crab.hideT = 1;
+  ok(!crab.dozable(), 'a hermit crab in its shell does not doze');
+}
+
 finish('sim-perf');
