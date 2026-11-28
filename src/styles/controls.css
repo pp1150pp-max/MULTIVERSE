@@ -1,4 +1,4 @@
-/* ===== Control skin (scrollbar, select, input, checkbox, radio, range) — 16-bit look =====
+/* ===== Control skin (scrollbar, select, input, checkbox, radio, range) =====
    Everything reads the --ctl-* variables so the owner can swap in pictures later: set --ctl-arrow / --ctl-check /
    --ctl-radio-dot to url(...) and give the thumbs a background-image. Rules use plain element selectors on purpose:
    a window's own rule (e.g. `.bag-sort select`, `#market input`) is more specific and keeps its size/padding.
@@ -15,8 +15,9 @@
   --ctl-track-edge: #3a2f20;
   --ctl-sb-size: 10px;
   --ctl-box: 18px;
-  --ctl-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%23f2d58a' d='M0 0h10v1H8v1H7v1H6v1H4V3H3V2H2V1H0z M4 4h2v2H4z'/%3E%3C/svg%3E");
-  --ctl-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' shape-rendering='crispEdges'%3E%3Cpath fill='%23f2d58a' d='M1 5h2v1h1v1h1V6h1V5h1V4h1V3h1v2H9v1H8v1H7v1H6v1H4V8H3V7H2V6H1z'/%3E%3C/svg%3E");
+  /* Select arrow and checkbox tick: smooth paper cut-outs in brass (two layers: shadow piece, then the bright one). */
+  --ctl-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' stroke-width='1.2' stroke-linejoin='round'%3E%3Cpath fill='%23794717' stroke='%23794717' transform='translate(0 .8)' d='M1.5 1.1Q5 .8 8.5 1.1L5 4.4Z'/%3E%3Cpath fill='%23f9c767' stroke='%23f9c767' d='M1.5 1.1Q5 .8 8.5 1.1L5 4.4Z'/%3E%3C/svg%3E");
+  --ctl-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' fill='none' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='%23794717' transform='translate(0 .8)' d='M2 5Q3.2 5.8 4.1 7Q5.6 4.4 8 2.5'/%3E%3Cpath stroke='%23f9c767' d='M2 5Q3.2 5.8 4.1 7Q5.6 4.4 8 2.5'/%3E%3C/svg%3E");
 }
 @media (pointer: coarse) { :root { --ctl-box: 24px; --ctl-sb-size: 12px; } }
 
@@ -59,7 +60,7 @@ select {
 select:hover { border-color: var(--ctl-edge-hi); }
 select option, select optgroup { background: var(--ctl-bg-hi); color: var(--ctl-ink); }
 
-/* Checkbox / radio: pixel box, gold tick. The box grows on touch screens. */
+/* Checkbox / radio: dark box, brass tick. The box grows on touch screens. */
 input[type=checkbox], input[type=radio] {
   -webkit-appearance: none; -moz-appearance: none; appearance: none;
   flex: none; width: var(--ctl-box); height: var(--ctl-box); margin: 0 4px 0 0; vertical-align: middle; cursor: pointer;
