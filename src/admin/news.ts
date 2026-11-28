@@ -2,6 +2,7 @@
 // them and flips the two switches; GMs only look (the `newsEdit` tool). Notes added by /ship (tools: npm run add-news) show up here too.
 // The server checks every value again (server/admin-news.ts).
 import { NEWS_LINE_MAX, NEWS_LINES_MAX, NEWS_SHOW, NEWS_TITLE_MAX, newsDate, type AdminNews, type AdminNewsNote } from '../shared/news';
+import { LANDING_DEFAULT, LANDING_NEWS, fromThaiInput, toThaiInput, type AdminLanding } from '../shared/landing';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -78,6 +79,35 @@ export async function renderNews(view: HTMLElement, h: H, api: Api): Promise<voi
       save);
   };
 
+  // The landing page (landing.html, docs/systems/landing.md): close beta window + whether it lists the notes.
+  const landingCard = h('div', { class: 'card' }, h('h2', {}, 'หน้าแนะนำเกม (close beta)'), h('div', { class: 'muted' }, 'กำลังโหลด…'));
+  const drawLanding = (l: AdminLanding, done = ''): void => {
+    const lro = !l.canEdit;
+    const start = h('input', { type: 'datetime-local', value: toThaiInput(l.config.start), disabled: lro }) as HTMLInputElement;
+    const end = h('input', { type: 'datetime-local', value: toThaiInput(l.config.end), disabled: lro }) as HTMLInputElement;
+    const news = h('input', { type: 'checkbox', disabled: lro }) as HTMLInputElement;
+    news.checked = l.config.news;
+    const lmsg = h('div', { class: done ? 'msg ok' : 'msg' }, done);
+    const save = h('button', { class: 'primary', disabled: lro, onclick: async () => {
+      try {
+        const r = await api<AdminLanding>('POST', '/admin/landing', { start: fromThaiInput(start.value), end: fromThaiInput(end.value), news: news.checked });
+        drawLanding(r, 'บันทึกแล้ว — หน้าแนะนำเกมใช้ค่าใหม่ภายใน ~30 วินาที');
+      } catch (e) {
+        lmsg.className = 'msg bad';
+        lmsg.textContent = (e as Error).message;
+      }
+    } }, 'บันทึก');
+    const t = (at: number) => toThaiInput(at).replace('T', ' ');
+    landingCard.replaceChildren(
+      h('h2', {}, 'หน้าแนะนำเกม (close beta)'),
+      h('div', { class: 'muted' }, `นับถอยหลังบนหน้า /landing: ก่อนเริ่ม = นับถึงเวลาเริ่ม · ระหว่างเปิด = นับถึงเวลาจบ · หลังจบ = ข้อความว่าจบแล้ว · เวลาไทย · ค่าในโค้ด ${t(LANDING_DEFAULT.start)} ถึง ${t(LANDING_DEFAULT.end)}`),
+      h('label', { style: 'display:block;margin:6px 0' }, 'เริ่ม ', start),
+      h('label', { style: 'display:block;margin:6px 0' }, 'จบ ', end),
+      h('label', { style: 'display:block;margin:6px 0' }, news, ` แสดง ${LANDING_NEWS} ประกาศล่าสุดบนหน้าแนะนำเกม (ค่าในโค้ด: เปิด)`),
+      lmsg, save);
+  };
+  void api<AdminLanding>('GET', '/admin/landing').then((l) => drawLanding(l), (e: Error) => landingCard.replaceChildren(h('h2', {}, 'หน้าแนะนำเกม (close beta)'), h('div', { class: 'msg bad' }, `โหลดไม่สำเร็จ: ${e.message}`)));
+
   const draw = (): void => {
     const visibleIds = new Set(st.notes.filter((n) => !n.hidden).slice(0, NEWS_SHOW).map((n) => n.id));
     box.replaceChildren(
@@ -86,6 +116,7 @@ export async function renderNews(view: HTMLElement, h: H, api: Api): Promise<voi
         h('div', { class: 'muted' }, `ผู้เล่นเห็น ${NEWS_SHOW} ประกาศล่าสุดที่ไม่ได้ซ่อน (เวลาไทย) · ประกาศที่ /ship ลงให้หลังอัปเดต server ก็อยู่ที่นี่ แก้ได้ทีหลัง · ${st.canEdit ? '' : 'คุณดูได้อย่างเดียว'}`),
         msg),
       switches(),
+      landingCard,
       h('div', { class: 'card' }, h('h2', {}, 'เพิ่มประกาศ'), form(null)),
       h('div', { class: 'card' }, h('h2', {}, 'ประกาศที่ลงไว้'),
         st.notes.length ? h('div', {}, ...st.notes.map((n) => noteCard(n, visibleIds.has(n.id)))) : h('div', { class: 'muted' }, 'ยังไม่มีประกาศ')),
