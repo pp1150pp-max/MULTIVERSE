@@ -139,7 +139,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   if (method === 'GET' && path === `/api${NET_ROUTE_PATH}`) return send(res, 200, { direct: world.directUrl() } satisfies NetRouteResponse);
 
   // May players pick English? (/admin switch, read before the title screen: src/client/i18n.ts, docs/systems/i18n.md)
-  if (method === 'GET' && path === `/api${LANG_CONFIG_PATH}`) return send(res, 200, { english: currentBalance().english } satisfies LangConfigResponse);
+  if (method === 'GET' && path === `/api${LANG_CONFIG_PATH}`) return send(res, 200, { english: currentBalance().english, loginLook: currentBalance().loginLook } satisfies LangConfigResponse);
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
