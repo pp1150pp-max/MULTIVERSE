@@ -93,6 +93,8 @@ const BOSS_MOVES: Record<string, Record<string, Timeline>> = {
   },
   // Floor 2 field monsters closing the gap unseen (sim/graveMoves.ts phase, maelstromMoves.ts dive): it stays hidden after.
   ghost_sailor: { fade: goUnder('fade') },
+  // A powder-keg runner (views.ts) runs with the lit keg (its walk = charge); standing on its fuse, it holds it up until the blast.
+  keg_prisoner: { fuse: (pic, d) => [pic('charge', 0, d + TAIL)] },
   shark_knight: { dive: goUnder('dive') },
 };
 

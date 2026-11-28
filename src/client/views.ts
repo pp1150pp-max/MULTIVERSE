@@ -409,6 +409,12 @@ export class MonsterView {
     this.update(0, null);
   }
 
+  /** A Sim 'anim' event (paperMoves.ts): a powder-keg runner's fuse ('attack') holds the lit keg (owner 2026-11-28). */
+  onAnim(name: string, duration?: number): void {
+    const fuse = name === 'attack' && this.m.def.move === 'keg' && this.m.freed;
+    this.actor.play(fuse ? 'fuse' : name, { duration });
+  }
+
   update(dt: number, fx: Effects | null): void {
     const m = this.m;
     // A ship prisoner that threw its ball runs free (sheet move 'run': no ball at the leg, owner 2026-11-25).

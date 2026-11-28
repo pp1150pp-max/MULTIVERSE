@@ -52,6 +52,9 @@ for (const [sheet, name] of [['ghost_sailor', 'fade'], ['shark_knight', 'dive']]
   ok(at(sheet, name, 0.4, 0) === `${name}:0` && at(sheet, name, 0.4, 0.5) === `${name}:2` && at(sheet, name, 0.4, 0.6) === null,
     `${sheet}: ${name} goes under in the Sim's time`);
 }
+// A powder-keg runner's fuse (views.ts plays it for its 'attack'): the lit keg held until the blast, not the throw.
+ok(at('keg_prisoner', 'fuse', 1.2, 0) === 'charge:0' && at('keg_prisoner', 'fuse', 1.2, 1.25) === 'charge:0'
+  && at('keg_prisoner', 'attack', 0.5, 0) === 'throw:0', 'keg runner: the fuse holds the lit keg; a live prisoner still throws');
 
 // The Kraken (owner 2026-11-28 pictures): every move it sends finds its own pictures; its arms coil and hold a grab.
 for (const name of ['arm_slam', 'arm_cut', 'ink', 'dive']) {
