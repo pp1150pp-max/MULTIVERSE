@@ -1,8 +1,9 @@
 // Daily login (owner 2026-11-12): a monthly calendar per account, the day turns at 00:00 Thai time, the
 // first time in the game each day mails that day's reward, a missed day is gone except for 3 free make-ups a
-// month (any earlier day of the month), the owner can change each day's reward. Uses a throwaway database
-// and a fake clock; nothing here touches server/data.
-import { spawn, type ChildProcess } from 'node:child_process';
+// month (any earlier day of the month), the owner can change each day's reward. Milestone bonuses (owner
+// 2026-11-29): 7, 15 and 30 days got in one month. Uses a throwaway database and a fake clock; nothing here
+// touches server/data.
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
@@ -12,7 +13,11 @@ import { join } from 'node:path';
 import { Db } from '../server/db';
 import { Daily } from '../server/daily';
 import { Mail } from '../server/mail';
-import { cleanDailyOverrides, DAILY_DEFAULT, DAILY_MAKEUPS, daysInMonth, thaiDate } from '../src/shared/daily';
+import {
+  BONUS_DEFAULT, cleanBonus, cleanDailyOverrides, DAILY_BONUS_SETTING, DAILY_DEFAULT, DAILY_MAKEUPS, dayKey, daysInMonth, thaiDate,
+  type BonusConfig,
+} from '../src/shared/daily';
+import { rollAttach, type MailAttach } from '../src/shared/mail';
 import { finish, ok } from './check';
 
 // ---- Thai calendar days
@@ -86,6 +91,75 @@ try {
   v = daily.view(a);
   ok(v.month === 12 && v.days.length === 31 && v.makeupsLeft === DAILY_MAKEUPS && v.days[0].state === 'got', 'December: fresh calendar, 3 make-ups');
   ok(daily.makeup(a, 1) !== null, 'nothing earlier in December to make up');
+
+  // ---- milestone bonuses: 7, 15 and 30 days got in one month
+  const day = (month: string, d: number) => at(`${month}-${String(d).padStart(2, '0')}T05:00:00Z`);
+  /** Logs `id` in on these days; returns every tier mailed, with the day it came. */
+  const login = (id: number, month: string, from: number, to: number) => {
+    const got: string[] = [];
+    for (let d = from; d <= to; d++) {
+      now = day(month, d);
+      daily.deliver(id);
+      for (const tier of daily.bonus(id)) got.push(`${tier}@${d}`);
+    }
+    return got.join(' ');
+  };
+  const bonusMails = (id: number) => (mail.handle({ accountId: id, charId: 0, guest: false } as never, { a: 'mailList' }) as { list: { id: number; title: string }[] })
+    .list.filter((m) => m.title.startsWith('โบนัส'));
+  const attachOf = (id: number, title: string) => {
+    const m = bonusMails(id).find((x) => x.title === title)!;
+    return (mail.handle({ accountId: id, charId: 0, guest: false } as never, { a: 'mailRead', id: m.id }) as { mail: { gifts: MailAttach } }).mail.gifts;
+  };
+  const things = (a: MailAttach) => a.items.map((x) => `${x.kind === 'stone' ? x.stone : x.kind}x${x.count}`).join(',');
+
+  const c = db.createAccount('carol', 'x')!;
+  ok(login(c, '2027-01', 1, 6) === '' && bonusMails(c).length === 0, '6 days: no bonus yet');
+  ok(login(c, '2027-01', 7, 7) === '7@7', '7th day: the 7-day bonus');
+  ok(daily.bonus(c).length === 0 && bonusMails(c).length === 1, 'asked again: nothing more');
+  const first = attachOf(c, 'โบนัสล็อกอินสะสมครบ 7 วัน');
+  ok(things(first) === 'exp_scrollx1,drop_scrollx1,mystery_boxx1', `7 days holds 1+1+1 (${things(first)})`);
+  ok(rollAttach(first, 'sword', 10).length === 3, 'all three can be collected into a bag');
+  ok(login(c, '2027-01', 8, 31) === '15@15 30@30', 'then 15 and 30, once each');
+  ok(things(attachOf(c, 'โบนัสล็อกอินสะสมครบ 30 วัน')) === 'exp_scrollx3,drop_scrollx3,mystery_boxx5', '30 days holds 3+3+5');
+  let bv = daily.view(c);
+  ok(bv.count === 31 && bv.bonus.length === 3 && bv.bonus.every((x) => x.got), 'the window shows all three got');
+  ok(login(c, '2027-02', 1, 6) === '' && daily.view(c).bonus.every((x) => !x.got), 'a new month starts over');
+  ok(login(c, '2027-02', 7, 28) === '7@7 15@15 30@28', 'February: the last tier is every day of the month');
+  ok(daily.view(c).bonus[2].need === 28, 'and the window says 28');
+
+  // make-ups count, missed days don't reset
+  const d = db.createAccount('dave', 'x')!;
+  ok(login(d, '2027-03', 10, 10) + login(d, '2027-03', 20, 22) === '', '4 days, with gaps');
+  ok(daily.makeup(d, 1) === null && daily.makeup(d, 2) === null && daily.bonus(d).length === 0, '6 with two make-ups');
+  ok(daily.makeup(d, 3) === null && daily.bonus(d).join() === '7' && daily.bonus(d).length === 0, 'the third make-up reaches 7');
+
+  // the owner's settings
+  ok(typeof cleanBonus(BONUS_DEFAULT) === 'object', 'the code default is valid');
+  const edit = (f: (c: BonusConfig) => void) => {
+    const x = JSON.parse(JSON.stringify(BONUS_DEFAULT)) as BonusConfig;
+    f(x);
+    return x;
+  };
+  ok([edit((x) => (x.tiers[0].exp_scroll = 11)), edit((x) => (x.tiers[0].mystery_box = 101)), edit((x) => (x.tiers[0].drop_scroll = -1)),
+    edit((x) => (x.tiers[0].drop_scroll = 1.5)), edit((x) => x.tiers.pop()), edit((x) => (x.on = 1 as never)), null, {}]
+    .every((x) => typeof cleanBonus(x) === 'string'), 'bad settings refused');
+  const e = db.createAccount('erin', 'x')!;
+  ok(typeof daily.setBonus(edit((x) => (x.on = false))) === 'object', 'bonus switched off');
+  ok(login(e, '2027-04', 1, 15) === '' && daily.view(e).bonus.length === 0, 'off: nothing sent, nothing shown');
+  daily.setBonus(edit((x) => {
+    x.tiers[0] = { on: true, exp_scroll: 0, drop_scroll: 0, mystery_box: 100 };
+    x.tiers[1].on = false;
+  }));
+  ok(daily.bonus(e).join() === '7', 'switched on later in the month: the reached tier still arrives, the off one not');
+  ok(things(attachOf(e, 'โบนัสล็อกอินสะสมครบ 7 วัน')) === 'mystery_boxx100', 'with the owner\'s amounts (0 = left out)');
+  ok(daily.view(e).bonus.map((x) => x.tier).join() === '7,30', 'the off tier is not shown');
+  daily.setBonus(edit((x) => (x.tiers[1] = { on: true, exp_scroll: 0, drop_scroll: 0, mystery_box: 0 })));
+  ok(daily.bonus(e).length === 0, 'an all-zero tier is not used up');
+  daily.setBonus(BONUS_DEFAULT);
+  ok(db.getSetting(DAILY_BONUS_SETTING) === null || db.getSetting(DAILY_BONUS_SETTING) === undefined, 'the code default is not stored');
+  ok(daily.bonus(e).join() === '15', 'and arrives once it gives something');
+  db.setSetting(DAILY_BONUS_SETTING, 'broken');
+  ok(daily.bonusConfig().on === false, 'a broken stored value gives nothing');
   db.close();
 } finally {
   rmSync(dir, { recursive: true, force: true });
@@ -105,6 +179,10 @@ try {
     });
   });
   const BASE = `http://localhost:${PORT}`;
+  // An account that has 6 other days of this month already: joining today reaches the 7-day bonus.
+  const seeded = new Db(join(sdir, 'test.db'));
+  const veteran = seeded.createAccount('veteran', 'x')!;
+  seeded.close();
   const server: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
     cwd: ROOT, env: { ...process.env, PORT: String(PORT), DB_FILE: join(sdir, 'test.db') }, stdio: ['ignore', 'ignore', 'inherit'],
   });
@@ -151,6 +229,31 @@ try {
     c.act({ a: 'daily' });
     const again = await c.waitFor((m) => m.t === 'daily');
     ok(again && !again.view.popup, 'the HUD button shows it again without the popup flag');
+    // ---- the bonus, end to end
+    const t = thaiDate(Date.now());
+    const tok2 = (await api('POST', '/register', { username: 'daily2', password: 'secret123' })).data.token as string;
+    const hero = (await api('POST', '/characters', { name: 'Bonus', classId: 'sword' }, tok2)).data.id as number;
+    const sql = new Db(join(sdir, 'test.db'));
+    const id2 = (sql as unknown as { db: { prepare(q: string): { get(): { id: number } } } }).db.prepare("SELECT id FROM accounts WHERE username = 'daily2'").get().id;
+    for (const d of [1, 2, 3, 4, 5, 6, 7].filter((x) => x !== t.day).slice(0, 6)) sql.dailyClaim(id2, dayKey(t.year, t.month, d), false, Date.now());
+    ok(veteran !== id2, 'separate accounts');
+    sql.close();
+    const w2 = joinWorld(tok2, hero);
+    const bpop = await w2.waitFor((m) => m.t === 'daily');
+    ok(bpop?.view?.popup === true && bpop.view.won?.join() === '7' && bpop.view.count === 7, `joining on the 7th day: bonus popup (${bpop?.view?.won})`);
+    ok(!!(await w2.waitFor((m) => m.t === 'mailNote' && m.unread === 2)), "today's reward and the bonus are in the mailbox");
+    w2.ws.close();
+
+    // ---- /admin: only a role with the daily tool may change the bonus
+    const off = { ...BONUS_DEFAULT, on: false };
+    ok((await api('POST', '/admin/daily-bonus', { bonus: off }, tok2)).status >= 400, 'a player can not change the bonus');
+    const cli = spawnSync(process.execPath, ['--import', 'tsx', 'server/admin-role.ts', 'daily1', 'owner'], { cwd: ROOT, env: { ...process.env, DB_FILE: join(sdir, 'test.db') } });
+    ok(cli.status === 0, 'daily1 made owner');
+    const saved = await api('POST', '/admin/daily-bonus', { bonus: off }, tok);
+    ok(saved.status === 200 && saved.data.bonus.on === false, `the owner switches the bonus off (${saved.status})`);
+    ok((await api('GET', '/admin/daily', undefined, tok)).data.bonus.on === false, 'and reads it back');
+    ok((await api('POST', '/admin/daily-bonus', { bonus: { on: true } }, tok)).status === 400, 'a bad setting is refused');
+
     const g = await api('POST', '/guest', { name: 'GuestD', classId: 'mage' });
     const gw = joinWorld(g.data.token, g.data.character.id);
     await gw.waitFor((m) => m.t === 'snap');
