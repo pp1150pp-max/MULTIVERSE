@@ -5,6 +5,7 @@ import { Channels } from '../server/channels';
 import { applyBalance, balanceChanges } from '../src/shared/balance';
 import { CHEST_ROOM, chestGround, pickChestSpot, type Spot } from '../src/shared/chestSpots';
 import { inSafeArea, lairOf, ZONES, type ZoneDef } from '../src/shared/data/zones';
+import { groundPools, GROUND_POOLS } from '../src/shared/groundPools';
 import { MapRegistry, withBundledTreasure } from '../src/shared/mapRegistry';
 import { CHEST_MAP_IDS, SHRINE_MAP_IDS, validateMap, type MapData } from '../src/shared/mapSchema';
 import { mulberry32 } from '../src/shared/rng';
@@ -23,6 +24,7 @@ function wrong(zone: ZoneDef, t: Terrain, s: Spot): string[] {
   if ((zone.whirlpools ?? []).some((w) => dist(s, w) < w.r)) out.push('whirlpool');
   if ([...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])].some((l) => ((s.x - l.x) / l.rx) ** 2 + ((s.z - l.z) / l.rz) ** 2 < 1)) out.push('ice / lava');
   if (t.props.some((p) => p.key === 'tide_pool' && dist(s, p) < 1.2)) out.push('tide pool');
+  if (groundPools(zone, t).flat().some((l) => ((s.x - l.x) / l.rx) ** 2 + ((s.z - l.z) / l.rz) ** 2 < 1)) out.push('painted pool');
   if (inSafeArea(zone, s.x, s.z)) out.push('safe area');
   if (dist(s, zone.start) < cfg.campGap || t.restSpots.some((r) => dist(s, r) < cfg.campGap)) out.push('camp');
   if (zone.portals.some((p) => dist(s, p) < cfg.doorGap) || (zone.warps ?? []).some((w) => dist(s, w) < cfg.doorGap)) out.push('door');
@@ -36,6 +38,8 @@ for (const id of CHEST_MAP_IDS) {
   const zone = ZONES[id];
   const t = new Terrain(zone);
   ok((zone.chests?.length ?? 0) === 4, `${id}: 4 chests`);
+  const pools = groundPools(zone, t);
+  ok(pools.length === (GROUND_POOLS[zone.theme] ?? 0), `${id}: its painted pools are known (${pools.length})`);
   const r = mulberry32(1234);
   const bad = new Map<string, number>();
   const seen = new Set<string>();

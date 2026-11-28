@@ -7,7 +7,7 @@
 - **หีบ: แมพฟาร์มชั้น 1 และ 2 ทั้ง 8 แมพ** (`CHEST_MAP_IDS` ใน `src/shared/mapSchema.ts`, ชั้น 2 เจ้าของเพิ่ม 2026-11-28 ใช้ค่าและตารางเดียวกับชั้น 1) · **ศาลเจ้า: ชั้น 1 เท่านั้น** (`SHRINE_MAP_IDS`) · แมพอื่นรวมแมพสร้างเอง `validateMap` ไม่ให้ผ่าน
 - ค่าเริ่ม: **หีบ 4 ใบต่อแมพ ศาล 2 แห่งต่อแมพชั้น 1** (`FARM_TREASURE` ใน `zones.ts` อบลงไฟล์แมพแล้ว) เจ้าของเพิ่ม/ลบ (และย้ายศาล) เองในตัวแก้แมพ ได้ไม่เกิน 30 อย่างละแมพ
 - **หีบเกิดจุดสุ่มใหม่ทุกครั้ง ทั่วทั้งแมพ** (เจ้าของ 2026-11-28, `src/shared/chestSpots.ts`): ตอนเกิดครั้งแรกและทุกครั้งที่เกิดใหม่หลังถูกเปิด · จำนวนหมุดหีบในแมพ = จำนวนหีบ
-  - **ไม่เกิด:** ในน้ำวน (รวมเกาะกลาง) ทะเลสาบน้ำแข็ง แอ่งน้ำทะเล (ของวาง `tide_pool`) ลาวา (เผื่อขอบ 2 หน่วย) บนของกีดขวาง (ต้องมีที่โล่งรัศมี 1.2) ติดขอบแมพ (4 หน่วย) เขตปลอดภัยของเมือง และ**ที่เดินจากจุดเริ่มไปไม่ถึง**
+  - **ไม่เกิด:** ในน้ำวน (รวมเกาะกลาง) ทะเลสาบน้ำแข็ง **แอ่งน้ำที่วาดบนพื้น** (หนองน้ำหมอกและแมพชั้น 2, `src/shared/groundPools.ts` ที่ server กับ browser ใช้ร่วมกัน) แอ่งน้ำทะเล (ของวาง `tide_pool`) ลาวา (เผื่อขอบ 2 หน่วย) บนของกีดขวาง (ต้องมีที่โล่งรัศมี 1.2) ติดขอบแมพ (4 หน่วย) เขตปลอดภัยของเมือง และ**ที่เดินจากจุดเริ่มไปไม่ถึง**
   - **ระยะห่าง** (ปรับใน /admin, ค่าในโค้ด): หีบอื่นและจุดเดิมของตัวเอง 30 · จุดเริ่ม/จุดพัก 25 · ประตู/วงวาร์ป 12 · จุดเรียกบอส 16 · แมพแคบจนไม่มีจุดผ่าน ลดระยะลงครึ่งหนึ่งไปเรื่อย ๆ (ข้อ "ไม่เกิด" ด้านบนไม่ลด)
   - ปิดสวิตช์ "สุ่มจุด" (`randomSpots`) = หีบอยู่ที่หมุดในตัวแก้แมพเหมือนเดิม
   - จุดเก็บต่อ CH ที่ server เหมือนหีบที่ถูกเปิด (ย้าย CH ไปมา/ห้องว่างเปิดใหม่ จุดไม่เปลี่ยน) · รีสตาร์ท server หรือเผยแพร่แมพใหม่ = สุ่มใหม่
@@ -65,7 +65,7 @@
 
 ## ไฟล์
 
-`src/shared/treasure.ts` (ค่า ตาราง odds) · `src/shared/chestSpots.ts` (สุ่มจุด) · `src/shared/sim/Sim.ts` (`startChest` `tickChest` `openChest` `useShrine` `chestGone` `chestSpots`) · `src/shared/sim/Player.ts` (`shrineBuffs` `shrineCd` `chestT`) · `server/channels.ts` (ที่จำหีบต่อ CH) · `server/world.ts` (action, snapshot `chests` / `me.chestT` / `me.shr`, ย้ายแมพ, จำตอนออกเกม) · `src/client/Game.ts` (ข้อความ/กด T/แตะ) · `src/client/treasureViews.ts` · `src/admin/maps.ts` (การ์ด) · `src/admin/mapEditor/pointTools.ts` (หมุด) · เทสต์ `tests/chests-shrines.test.ts` `tests/chest-spots.test.ts` `tests/chest-spots-server.test.ts`
+`src/shared/treasure.ts` (ค่า ตาราง odds) · `src/shared/chestSpots.ts` (สุ่มจุด) · `src/shared/groundPools.ts` (ตำแหน่งแอ่งน้ำบนพื้น) · `src/shared/sim/Sim.ts` (`startChest` `tickChest` `openChest` `useShrine` `chestGone` `chestSpots`) · `src/shared/sim/Player.ts` (`shrineBuffs` `shrineCd` `chestT`) · `server/channels.ts` (ที่จำหีบต่อ CH) · `server/world.ts` (action, snapshot `chests` / `me.chestT` / `me.shr`, ย้ายแมพ, จำตอนออกเกม) · `src/client/Game.ts` (ข้อความ/กด T/แตะ) · `src/client/treasureViews.ts` · `src/admin/maps.ts` (การ์ด) · `src/admin/mapEditor/pointTools.ts` (หมุด) · เทสต์ `tests/chests-shrines.test.ts` `tests/chest-spots.test.ts` `tests/chest-spots-server.test.ts`
 
 ## ยังไม่ทำ / ถามเจ้าของภายหลัง
 

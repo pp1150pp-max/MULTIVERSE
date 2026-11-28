@@ -19,6 +19,7 @@ import type { PropSpec, Terrain } from '../shared/sim/terrain';
 import type { ZoneTheme } from '../shared/data/zones';
 import { CAMP_RADIUS, DECOR, DECOR_CELL_UNITS, THEME_TILES, TILE_UNITS, TRAIL_WIDTH, type DecorSpot } from '../shared/groundLook';
 import { mulberry32, pick, rand, type Rng } from '../shared/rng';
+import { GROUND_PATCHES, GROUND_POOLS, GROUND_SPECKS, GROUND_TUFTS, groundPools, rollPools } from '../shared/groundPools';
 import { assetSources, fxTex, groundTiles, sheets, skyArt, type GroundTile } from './assets';
 import { CAM_RIGHT_RAW, ISO_RAW, TOWN2_PROP_RE } from '../shared/isoProjection';
 import { closeBias, IslandOutline, paintSky, paintSpace, PieceBatch } from './island';
@@ -324,8 +325,6 @@ interface GroundPalette {
   flowers: string[];
   flowerCore: string;
   edge: string;
-  /** Murky water pools scattered off the path. */
-  pools: number;
   /** Drifting mist sprites. */
   fog: number;
   portalGlow: string;
@@ -354,7 +353,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#f5f1e0', '#f6d84a', '#ee8fb4', '#a9c9ff', '#ffffff'],
     flowerCore: '#c9a227',
     edge: 'rgba(10,35,12,0.45)',
-    pools: 0,
     fog: 0,
     portalGlow: '#6affd0',
   },
@@ -380,7 +378,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#c9b6e8', '#8fd0c0', '#e8e2c0'],
     flowerCore: '#6a5a8a',
     edge: 'rgba(8,16,14,0.55)',
-    pools: 70,
     fog: 34,
     portalGlow: '#6affd0',
   },
@@ -407,7 +404,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#c8dcea', '#b4cfe0', '#dbe8f0'],
     flowerCore: '#a0bed2',
     edge: 'rgba(8,14,24,0.5)',
-    pools: 0,
     fog: 8,
     portalGlow: '#8fdcff',
   },
@@ -434,7 +430,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#ff9a4a', '#e87a3a', '#ffc070'],
     flowerCore: '#c8501a',
     edge: 'rgba(14,8,8,0.55)',
-    pools: 0,
     fog: 10,
     portalGlow: '#ffb06a',
   },
@@ -461,7 +456,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#e8402e', '#ff7a5a', '#f6f0e0'],
     flowerCore: '#f2c24a',
     edge: 'rgba(40,60,70,0.35)',
-    pools: 26,
     fog: 0,
     portalGlow: '#6ae8ff',
   },
@@ -488,7 +482,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#e8a040', '#ff7a4a', '#f2d070'],
     flowerCore: '#c8501a',
     edge: 'rgba(40,20,30,0.4)',
-    pools: 18,
     fog: 0,
     portalGlow: '#6ae8ff',
   },
@@ -515,7 +508,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#6ae8d0', '#9af0e0', '#e88a40'],
     flowerCore: '#2a8a7a',
     edge: 'rgba(10,20,30,0.45)',
-    pools: 22,
     fog: 18,
     portalGlow: '#6ae8c8',
   },
@@ -542,7 +534,6 @@ const PALETTES: Record<ZoneTheme, GroundPalette> = {
     flowers: ['#e8503a', '#f2a04a', '#e8d8b0'],
     flowerCore: '#8a2a2a',
     edge: 'rgba(8,14,26,0.5)',
-    pools: 18,
     fog: 10,
     portalGlow: '#8ae0f0',
   },
@@ -1674,14 +1665,15 @@ export class World {
       }
       m.fill();
     };
-    this.paintBand(ctx, pal.patchDark, 3, patches(260));
-    this.paintBand(ctx, pal.patchLight, 3, patches(200));
+    // The server counts the random numbers used from here to the pools (shared/groundPools.ts): change both together.
+    this.paintBand(ctx, pal.patchDark, 3, patches(GROUND_PATCHES[0]));
+    this.paintBand(ctx, pal.patchLight, 3, patches(GROUND_PATCHES[1]));
     const specks = pal.specks;
-    for (let i = 0; i < 70000; i++) {
+    for (let i = 0; i < GROUND_SPECKS; i++) {
       ctx.fillStyle = specks[(r() * specks.length) | 0];
       ctx.fillRect((r() * N) | 0, (r() * N) | 0, 2 + ((r() * 2) | 0), 2);
     }
-    for (let i = 0; i < 9000; i++) {
+    for (let i = 0; i < GROUND_TUFTS; i++) {
       const x = (r() * N) | 0;
       const y = (r() * N) | 0;
       ctx.fillStyle = pal.tuft[0];
@@ -1691,7 +1683,7 @@ export class World {
       ctx.fillRect(x + 1, y, 1, 2);
     }
 
-    if (pal.pools) this.paintPools(ctx, r, P, k);
+    if (GROUND_POOLS[this.zone.theme]) this.paintPools(ctx, r, P, k);
     if (this.zone.iceLakes) this.paintIce(ctx, r, P, k);
     if (this.zone.lavaPools) this.paintLava(ctx, r, P, k);
 
@@ -2038,24 +2030,10 @@ export class World {
 
   /** Dark, still water pools with a muddy rim, a few lily pads and light glints. */
   private paintPools(ctx: CanvasRenderingContext2D, r: Rng, P: (x: number, z: number) => [number, number], k: number): void {
-    const B = this.bound;
-    const zone = this.zone;
-    const away = (x: number, z: number, p: { x: number; z: number }, d: number) => Math.hypot(x - p.x, z - p.z) > d;
-    const allBlobs: { x: number; z: number; rx: number; rz: number }[][] = [];
-    for (let i = 0, made = 0; i < 600 && made < this.pal.pools; i++) {
-      const x = rand(r, -B, B);
-      const z = rand(r, -B, B);
-      const rad = rand(r, 1.4, 4.2);
-      if (this.distToPath(x, z) < rad + 2.2) continue;
-      if (!away(x, z, zone.start, 12 + rad) || (lairOf(zone) && !away(x, z, lairOf(zone)!, clearingRadius(zone) + rad))) continue;
-      made++;
-      allBlobs.push(Array.from({ length: 3 + ((r() * 3) | 0) }, () => ({
-        x: x + rand(r, -rad * 0.6, rad * 0.6),
-        z: z + rand(r, -rad * 0.6, rad * 0.6),
-        rx: rad * rand(r, 0.5, 0.9),
-        rz: rad * rand(r, 0.4, 0.75),
-      })));
-    }
+    // Where the server knows them to be (no treasure chest comes up in one). The same draws are made from `r` too, so
+    // what is painted after the pools stays where it was.
+    rollPools(this.zone, this.terrain, r);
+    const allBlobs = groundPools(this.zone, this.terrain);
     this.poolBlobs = allBlobs.flat();
     const fill = (grow: number) => (m: CanvasRenderingContext2D) => {
       m.beginPath();

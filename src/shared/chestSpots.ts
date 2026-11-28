@@ -1,8 +1,9 @@
 // Where a treasure chest comes up (owner 2026-11-28: a new random spot every time it appears, anywhere on the map; rules:
-// docs/systems/chests-shrines.md). Never in water (a whirlpool, an ice lake, a tide pool), lava, anything solid or the town's
+// docs/systems/chests-shrines.md). Never in water (a whirlpool, an ice lake, a painted pool, a tide pool), lava, anything solid or the town's
 // safe area, and only where a player can walk from the camp. The distances kept from the camp, the doors, the boss summoner
 // and other chests are /admin numbers (TreasureConfig). Pure rules, no DOM: the server's Sim picks.
 import { inSafeArea, inWhirlpoolCircle, lairOf, type ZoneDef } from './data/zones';
+import { groundPools, type PoolBlob } from './groundPools';
 import type { Rng } from './rng';
 import type { Terrain } from './sim/terrain';
 import type { TreasureConfig } from './treasure';
@@ -19,10 +20,15 @@ export const CHEST_ROOM = 1.2;
 export const CHEST_EDGE = 4;
 export const CHEST_WET = 2;
 
-/** Water, lava or the safe area at (x, z), `pad` round them counted too. */
-export function chestKeepOut(zone: ZoneDef, terrain: Terrain, x: number, z: number, pad = CHEST_WET): boolean {
+/** Every ellipse of water or lava on the ground: ice lakes, lava, and the pools painted on the marsh and floor 2. */
+const wetOf = (zone: ZoneDef, terrain: Terrain): PoolBlob[] =>
+  [...(zone.iceLakes ?? []), ...(zone.lavaPools ?? []), ...groundPools(zone, terrain).flat()];
+
+/** Water, lava or the safe area at (x, z), CHEST_WET round them counted too (`wet` = wetOf the zone). */
+function keepOut(zone: ZoneDef, terrain: Terrain, wet: readonly PoolBlob[], x: number, z: number): boolean {
+  const pad = CHEST_WET;
   if (inWhirlpoolCircle(zone, x, z, pad)) return true;
-  if ([...(zone.iceLakes ?? []), ...(zone.lavaPools ?? [])].some((l) => Math.hypot((x - l.x) / (l.rx + pad), (z - l.z) / (l.rz + pad)) < 1)) return true;
+  if (wet.some((l) => Math.hypot((x - l.x) / (l.rx + pad), (z - l.z) / (l.rz + pad)) < 1)) return true;
   if (zone.safe && (inSafeArea(zone, x, z) || (Math.abs(x - zone.safe.x) < zone.safe.half + pad && Math.abs(z - zone.safe.z) < zone.safe.half + pad))) return true;
   return terrain.props.some((p) => p.key === 'tide_pool' && Math.hypot(x - p.x, z - p.z) < pad);
 }
@@ -80,6 +86,7 @@ export function chestGround(zone: ZoneDef, terrain: Terrain): readonly Spot[] {
   for (let ring = 0; ring < 12 && !queue.length; ring++) {
     for (let dr = -ring; dr <= ring; dr++) for (let dc = -ring; dc <= ring; dc++) visit(sc + dc, sr + dr);
   }
+  const wet = wetOf(zone, terrain);
   const spots: Spot[] = [];
   for (let q = 0; q < queue.length; q++) {
     const c = queue[q] % n;
@@ -87,7 +94,7 @@ export function chestGround(zone: ZoneDef, terrain: Terrain): readonly Spot[] {
     const x = at(c);
     const z = at(r);
     if (Math.abs(x) <= terrain.bound - CHEST_EDGE && Math.abs(z) <= terrain.bound - CHEST_EDGE
-      && !blocked(x, z, CHEST_ROOM) && !chestKeepOut(zone, terrain, x, z)) spots.push({ x, z });
+      && !blocked(x, z, CHEST_ROOM) && !keepOut(zone, terrain, wet, x, z)) spots.push({ x, z });
     visit(c + 1, r);
     visit(c - 1, r);
     visit(c, r + 1);
