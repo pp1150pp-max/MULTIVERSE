@@ -2,7 +2,7 @@
 // to show effects, damage numbers and messages.
 import { hitElement, markDamageMult, runReaction } from './elements';
 import type { ReactionId } from '../elementTuning';
-import { addItem, type AutoTally } from './autoTally';
+import { addExp as tallyExp, addGot, addItem, potKey, stoneKey, type AutoTally, type ExpBlock } from './autoTally';
 import { floorOf, hubOf, isHub, NO_BOOST, ZONES, inSafeArea, type MonsterBoost, type SafeArea, type ZoneDef, type SpawnArea } from '../data/zones';
 import { DROP_GOLD_MULT, MONSTERS } from '../data/monsters';
 import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, outLevelled } from '../formulas';
@@ -978,8 +978,9 @@ export class Sim {
     for (const [p, exp] of gained) {
       if (!m.damageBy.has(p.id) && exp > 0) this.text(p.x, p.topY + 0.4, p.z, `+${exp} EXP (ปาร์ตี้)`, 'exp', 1.1, p.id);
       const tally = this.autoTally(p);
-      if (tally && p.level < MAX_LEVEL) tally.exp += exp;
-      this.addExp(p, exp);
+      const { got, why } = this.addExp(p, exp);
+      // Only what reached the bar (owner 2026-11-28): nothing at the level cap, a full bar's worth at a boss gate.
+      if (tally) tallyExp(tally, got, exp - got, why);
     }
   }
 
@@ -1490,20 +1491,26 @@ export class Sim {
   private autoExp(p: Player, n: number): number {
     // The cards' "EXP %" first (card plan 5.1), on kills and party shares alike.
     if (p.cardFx.expPct > 0) n = Math.floor(n * (1 + p.cardFx.expPct / 100));
-    const auto = p.autoOn ? Math.floor(n * AUTO_EXP_MULT) : n;
+    // At least 1 EXP while Auto is on (owner 2026-11-28): a 1-EXP kill used to halve down to 0.
+    const auto = p.autoOn && n > 0 ? Math.max(1, Math.floor(n * AUTO_EXP_MULT)) : n;
     const scroll = p.buffs.exp_scroll ? auto * BUFF_MULT : auto;
     // A shrine's EXP buff (docs/systems/chests-shrines.md) on top of the scroll, before the VIP bonus.
     const shrine = p.shrinePct('exp');
     return vipExp(shrine > 0 ? Math.floor(scroll * (1 + shrine / 100)) : scroll, p.vip);
   }
 
-  private addExp(p: Player, n: number): void {
-    if (p.level >= MAX_LEVEL) return;
+  /** Adds EXP (levelling up); returns how much really counted, and why the rest was lost (level cap / boss gate). */
+  private addExp(p: Player, n: number): { got: number; why: ExpBlock | null } {
+    if (p.level >= MAX_LEVEL) return { got: 0, why: n > 0 ? 'max' : null };
+    let lost = 0;
+    let why: ExpBlock | null = null;
     p.exp += n;
     while (p.level < MAX_LEVEL && p.exp >= expToNext(p.level)) {
       const gate = blockingGate(p.level, p.bossKills);
       if (gate) {
         // Full bar, the rest is lost, until the boss is killed.
+        lost = p.exp - expToNext(p.level);
+        why = `gate:${gate.nameTh}`;
         p.exp = expToNext(p.level);
         if (p.gateHintedAt !== p.level) {
           p.gateHintedAt = p.level;
@@ -1523,6 +1530,7 @@ export class Sim {
       this.log(`✨ เลเวลอัพ! ตอนนี้ Lv.${p.level}`, '#ffd34a', p.id);
       this.events.push({ t: 'save', to: p.id });
     }
+    return { got: n - lost, why: lost > 0 ? why : null };
   }
 
   // ------------------------------------------------------------ The Seeker's key quests
@@ -1839,6 +1847,12 @@ export class Sim {
   private grantCard(p: Player, id: CardId): void {
     const name = cardName(id);
     const rarity = cardDef(id)?.rarity ?? 'rare';
+    // Cards go straight to the bag (no loot on the ground): the away summary counts them here (mailed ones too).
+    const tally = this.autoTally(p);
+    if (tally) {
+      tally.stones++;
+      addGot(tally, stoneKey(id), 1);
+    }
     if (p.addStones(id, 1)) {
       this.text(p.x, p.topY, p.z, `+${name}`, 'lvl', 1.2, p.id);
       this.log(`ได้รับ ${name}!`, STONE_COLOR[id], p.id);
@@ -1942,20 +1956,26 @@ export class Sim {
       this.sfx('pickup_gold', p.x, p.z, p.id);
     } else if (k.type === 'potion') {
       if (!p.addPotions(k.pot, k.size, k.count)) return false;
-      if (tally) tally.potGot += k.count;
+      if (tally) {
+        tally.potGot += k.count;
+        addGot(tally, potKey(k.pot, k.size), k.count);
+      }
       this.text(p.x, p.topY, p.z, `+${potionName(k.pot, k.size)}${k.count > 1 ? ` ×${k.count}` : ''}`, k.pot === 'hp' ? 'heal' : 'mana', 0.7, p.id);
       this.sfx('pickup_potion', p.x, p.z, p.id);
       this.inventoryChanged(p);
     } else if (k.type === 'stone') {
       if (!p.addStones(k.stone, k.count)) return false;
-      if (tally) tally.stones += k.count;
+      if (tally) {
+        tally.stones += k.count;
+        addGot(tally, stoneKey(k.stone), k.count);
+      }
       this.text(p.x, p.topY, p.z, `+${STONE_NAME[k.stone]}${k.count > 1 ? ` ×${k.count}` : ''}`, 'lvl', 0.9, p.id);
       this.log(`ได้รับ ${STONE_NAME[k.stone]}${k.count > 1 ? ` ×${k.count}` : ''}`, STONE_COLOR[k.stone], p.id);
       this.sfx('pickup_item', p.x, p.z, p.id);
       this.afterChange(p);
     } else {
       if (!p.addToBag(k.item)) return false;
-      if (tally) addItem(tally, k.item.rarity);
+      if (tally) addItem(tally, k.item, currentBalance().auto.summaryGear);
       this.events.push({ t: 'item', to: p.id, item: k.item });
       this.sfx('pickup_item', p.x, p.z, p.id);
     }

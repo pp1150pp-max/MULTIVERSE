@@ -1,7 +1,7 @@
 // WebSocket messages between the browser and the game server (JSON). The server runs the
 // simulation; clients send their input and get snapshots of what is near them plus SimEvents.
 import type { SellPick } from '../sim/Sim';
-import type { AutoTally } from '../sim/autoTally';
+import type { AutoTally, GearPick } from '../sim/autoTally';
 import type { SkillSlot, WearSlot } from '../data/classes';
 import type { WaveSnap } from '../waveGame';
 import type { ShrineSnap } from '../treasure';
@@ -370,6 +370,8 @@ export interface PrivateSnap {
   gearDone?: string[];
   /** What the running Auto Play has earned (src/shared/sim/autoTally.ts), for the away summary; missing = keep yours. */
   at?: AutoTally;
+  /** The away summary's gear pictures of that Auto run (AutoTally.gear): sent only when it changes; missing = keep yours. */
+  ag?: GearPick[];
   /** The account's tutorial quests (sent when they change). */
   tut?: TutorialData;
   /** The account's card album: registered card ids (sent when it changes). */

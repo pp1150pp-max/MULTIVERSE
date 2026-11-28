@@ -161,6 +161,8 @@ interface Session {
   lastTut: string;
   /** The card album the last snapshot sent (ids joined). */
   lastAlbum: string;
+  /** The away summary's gear list the last snapshot sent ("<run id>:<gearN>", see PrivateSnap.ag). */
+  lastAg: string;
   /** Cosmetic ids the account owns (guests: none), and what the last snapshot sent of it. */
   cosOwned: string[];
   lastCosOwned: string;
@@ -842,7 +844,7 @@ export class GameWorld {
     const s: Session = {
       ws, accountId: acc.id, username: acc.username, guest: acc.guest, charId: pv ? -(charId + 1) : charId, sim, player,
       preview: !!pv, move: null, aim: { x: player.x, z: player.z }, basic: false, skills: [], dash: false, potion: null, recall: false,
-      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', lastAlbum: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), tally: this.keptTally(charId), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
+      auto: null, lastInputAt: 0, walkTo: null, walkEpoch: 0, serverWalk: false, walkAnchor: { x: 0, z: 0 }, walkAnchorAt: 0, pendingPos: null, lastPosAt: performance.now(), lastSeq: 0, epoch: 0, lastInv: '', lastStash: '', lastTut: '', lastAlbum: '-', lastAg: '-', cosOwned: acc.guest ? [] : this.db.cosmeticsOwned(acc.id), lastCosOwned: '-', delta, lastMe: new Map(), tally: this.keptTally(charId), seenP: new Map(), seenM: new Map(), outbox: [], lastChatAt: 0, lastMarketAt: -Infinity, lastMailAt: -Infinity, lastCashAt: -Infinity, lastTopupAt: -Infinity, saveDue: null,
       ip, edge, lastPingAt: -Infinity, rttSum: 0, rttCount: 0, fpsSum: 0, fpsCount: 0, maxFrame: 0, maxWait: 0, skipped: 0, deflate: ws.extensions.includes('permessage-deflate'), staff: !acc.guest && ['owner', 'gm'].includes(this.db.adminRole(acc.id) ?? ''), pongAt: null, slowSnapAt: -Infinity,
       hidden: false, warnAt: -Infinity, gpuLogged: false, lastRtt: null, lastFps: null, gpu: null, joinedAt: Date.now(),
       totRtt: 0, totRttN: 0, totFps: 0, totFpsN: 0, playRow: -1, blockInvites: false, lastPartySearchAt: -Infinity, blockTrades: false,
@@ -2599,11 +2601,13 @@ export class GameWorld {
     const delta = this.snapDelta && s.delta;
     if (!delta) forgetSent(s);
     const st = this.deltaStats;
+    const summaryTally = currentBalance().auto.summary ? s.auto?.tally ?? s.tally ?? null : null;
     const statics: Pick<PrivateSnap, StaticMeKey> = {
       potSel: p.potSel, lootFilter: p.lootFilter, autoSettings: p.autoSettings, stats: p.stats, buffBonus: p.buffBonus, skills: p.skillBook,
       bossKills: p.bossKills, unlocks: p.unlocks, quests: p.quests, gearQuests: p.gearQuests, gearDone: p.gearDone,
       // The "while you were away" summary's numbers (owner 2026-11-27): only while Auto runs and the switch is on.
-      at: currentBalance().auto.summary ? s.auto?.tally ?? s.tally ?? undefined : undefined,
+      // The gear list is left out (it goes apart as `ag` below, only when it changes), so a gold pickup stays small.
+      at: summaryTally ? { ...summaryTally, gear: undefined } : undefined,
     };
     for (const k of STATIC_ME) {
       if (!delta) {
@@ -2644,6 +2648,12 @@ export class GameWorld {
     if (stash !== s.lastStash) {
       s.lastStash = stash;
       me.stash = p.stash;
+    }
+    // The away summary's gear pictures (owner 2026-11-28): only when a piece was picked up or a new Auto run began.
+    const ag = summaryTally ? `${summaryTally.id}:${summaryTally.gearN ?? 0}` : '';
+    if (ag !== s.lastAg) {
+      s.lastAg = ag;
+      if (summaryTally) me.ag = summaryTally.gear ?? [];
     }
     const album = p.album.join(',');
     if (album !== s.lastAlbum) {

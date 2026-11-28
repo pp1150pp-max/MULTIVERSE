@@ -3,6 +3,7 @@
 // zone change (owner 2026-11-10). Art: art_templates/loading/PROMPTS.md.
 import type { ClassId } from '../shared/types';
 import { imgUrl } from './img';
+import { keyHint } from './keybinds';
 
 const DIR = '/assets/sprites/ui/loading/';
 const CLASS_ART: Record<ClassId, string> = { sword: 'sword', mage: 'mage', gunslinger: 'gunslinger' };
@@ -21,17 +22,17 @@ const ZONE_FADE = 300;
 const ART_WAIT = 2500;
 
 const TIPS = [
-  'กด T ใกล้น้ำพุหรือกองไฟ เพื่อฟื้น HP และ MP',
-  'กด F เปิด Auto Play แล้วตัวละครจะฟาร์มต่อแม้สลับแท็บไปทำอย่างอื่น',
-  'กด 1 หรือ 2 เพื่อดื่มยา HP หรือ MP คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้',
-  'กด Space เพื่อพุ่งหลบการโจมตี',
-  'กด M ดูแผนที่ กด I หรือ B เปิดกระเป๋า กด H ดูวิธีเล่น',
+  'กด {talk} ใกล้น้ำพุหรือกองไฟ เพื่อฟื้น HP และ MP',
+  'กด {auto} เปิด Auto Play แล้วตัวละครจะฟาร์มต่อแม้สลับแท็บไปทำอย่างอื่น',
+  'กด {hp} หรือ {mp} เพื่อดื่มยา HP หรือ MP คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้',
+  'กด {dash} เพื่อพุ่งหลบการโจมตี',
+  'กด {map} ดูแผนที่ กด {bag} เปิดกระเป๋า กด {help} ดูวิธีเล่น',
   'คลังเก็บของในเมืองใช้ร่วมกันได้ทุกตัวละครในบัญชีเดียวกัน',
   'นำของไปฝากขายในตลาด ให้ผู้เล่นคนอื่นซื้อได้',
   'EXP แบ่งตามดาเมจที่ทำ คนที่ทำดาเมจมากที่สุดได้สิทธิ์เก็บของก่อน 10 วินาที',
   'พ่อค้ามีปุ่มขายของทั้งหมดตามระดับความหายาก โดยไม่ขายของที่ตีบวกแล้ว',
   'ยิ่งคนช่วยกันตีมาก บอสก็ยิ่งเลือดเยอะ',
-  'กด Enter เพื่อพิมพ์แชท',
+  'กด {chat} เพื่อพิมพ์แชท',
   'ประตูเมืองพาไปป่ามรกต หนองน้ำหมอก ดินแดนหิมะ และเกาะภูเขาไฟ',
 ];
 
@@ -83,7 +84,7 @@ export function showLoading(classId: ClassId | null, label = 'กำลังโ
   root.innerHTML =
     `<div class="load-box"><div>${label} <span class="load-pct">0%</span></div>` +
     '<div class="load-bar"><i></i></div><p class="load-tip"></p></div>';
-  root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS)}`;
+  root.querySelector('.load-tip')!.textContent = `เคล็ดลับ: ${pick(TIPS).replace(/\{(\w+)\}/g, (_, id: string) => keyHint(id))}`;
   // The picture first (owner 2026-11-23: it showed up late behind the game's own downloads, the screen stayed blank).
   // Floor 2 swaps between its own pictures (FLOOR2_PLAN.md 10).
   let url = imgUrl(artUrl(classId, floor));

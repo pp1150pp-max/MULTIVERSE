@@ -8,7 +8,7 @@ import { placeLabel } from '../shared/channels';
 import type { Game } from './Game';
 import { NPC_USE_RANGE, type NpcId } from '../shared/data/npcs';
 import { LEARNABLE_SKILLS, type SkillSlot } from '../shared/data/classes';
-import { keyLabel, keyOf, onKeysChange } from './keybinds';
+import { applyKeyHints, keyHint, keyLabel, keyOf, onKeysChange } from './keybinds';
 import { reachRadius, reachText } from '../shared/data/skillRanges';
 import { rankedDmg, skillParamLines, skillReach } from '../shared/skillBook';
 import { effectiveStats, enhanceBonus, itemName, plusOf, sellValue } from '../shared/data/enhance';
@@ -99,7 +99,7 @@ const SEEKER_LINES = [
   'ข้าคือ The Seeker ผู้ตามหาความจริงเบื้องหลังการล่มสลายของมิติทั้งหลาย ตั้งแต่ The Shattering แยก The First Cosmos ออกเป็นเสี่ยง ๆ',
   'แสงสีทองขาวที่พาเจ้ามาที่นี่… ข้าเคยเห็นมันในบันทึกโบราณที่เรียกว่า The Origin',
   'ที่นี่คือเมืองศูนย์กลางมิติ จุดเชื่อมของเศษเสี้ยวมิติที่ยังรอด สี่มุมของเกาะมีประตูสู่ดินแดนต่าง ๆ แต่สัตว์ในนั้นเริ่มคลุ้มคลั่งจากพลังที่รั่วไหล',
-  'เหนื่อยเมื่อไหร่ ให้มาดื่มน้ำจากน้ำพุกลางเมือง หรือนั่งพักข้างกองไฟในแคมป์ของแต่ละดินแดน กด T เมื่ออยู่ใกล้ เลือดและมานาจะกลับมาเต็ม',
+  'เหนื่อยเมื่อไหร่ ให้มาดื่มน้ำจากน้ำพุกลางเมือง หรือนั่งพักข้างกองไฟในแคมป์ของแต่ละดินแดน กด {talk} เมื่ออยู่ใกล้ เลือดและมานาจะกลับมาเต็ม',
   'จงเริ่มฝึกฝนที่ป่ามรกต ผ่านประตูมุมบนของเมือง ลึกเข้าไปในป่ามีหมีใหญ่ที่ถูกพลังนั้นครอบงำ หากเจ้าปราบมันได้ เราจะได้เบาะแสแรกของ The Origin',
 ];
 
@@ -205,7 +205,11 @@ export class Hud {
     // The guest's "บันทึกตัวละคร" (accountUi.ts): the system menu builds it (it knows whether Google is on).
     $('btn-hud-guest-save').onclick = () => g.sysMenu.openGuestSave();
     this.buildSkillbar();
-    onKeysChange(() => this.buildSkillbar());
+    onKeysChange(() => {
+      this.buildSkillbar();
+      applyKeyHints();
+    });
+    applyKeyHints();
 
     $('btn-auto').onclick = () => g.toggleAuto();
     $('btn-bag').onclick = () => this.toggleBag();
@@ -395,7 +399,7 @@ export class Hud {
       }
       if (isPotion(item)) this.showPotionTip(item, e, `คลิกซ้าย: ใช้กับปุ่มด่วน · คลิกขวา: ${right}${split}`);
       else if (isStone(item) && item.stone === 'mystery_box' && !this.stash.isOpen && !this.market.isOpen && !this.shop.isOpen) this.showStoneTip(item, e, `คลิกซ้าย: เปิด 1 กล่อง · คลิกขวา: เปิดทั้งกอง${split}`);
-      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? 'คลิกซ้าย / ปุ่ม G: ใช้ · ' : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : isCardStone(item.stone) ? 'คลิกซ้าย: ดูการ์ด · ' : ''}คลิกขวา: ${right}${split}`);
+      else if (isStone(item)) this.showStoneTip(item, e, `${item.stone === 'return_scroll' ? `คลิกซ้าย / ปุ่ม ${keyHint('scroll')}: ใช้ · ` : isBuffScroll(item.stone) || item.stone === 'megaphone' || item.stone === 'mystery_box' || isOrbStone(item.stone) ? 'คลิกซ้าย: ใช้ · ' : isCardStone(item.stone) ? 'คลิกซ้าย: ดูการ์ด · ' : ''}คลิกขวา: ${right}${split}`);
       else if (item) {
         const both = item.slot === 'ring' && g.player.equipment.ring && g.player.equipment.ring2;
         const sock = socketCount(item) > 0 ? ' · Shift+คลิก: ดู/ถอดการ์ด' : '';
@@ -546,7 +550,7 @@ export class Hud {
       });
     }
 
-    this.log(`ยินดีต้อนรับสู่ ${g.zone.name} — กด H เพื่อดูวิธีควบคุม`, '#cfe8ff');
+    this.log(`ยินดีต้อนรับสู่ ${g.zone.name} — กด ${keyHint('help')} เพื่อดูวิธีควบคุม`, '#cfe8ff');
   }
 
   private showZoneName(): void {
@@ -695,9 +699,9 @@ export class Hud {
         const kind: PotionKind = quick.classList.contains('skill-hp') ? 'hp' : 'mp';
         if (isPotion(item) && item.potion === kind) {
           g.backend.equip(d.i);
-          this.log(`ปุ่ม ${kind === 'hp' ? 1 : 2} จะใช้${potionName(item.potion, item.size)}`, '#9fd8ff');
+          this.log(`ปุ่ม ${keyHint(kind)} จะใช้${potionName(item.potion, item.size)}`, '#9fd8ff');
         } else {
-          this.log('ลากยา HP ไปที่ปุ่ม 1 · ยา MP ไปที่ปุ่ม 2', '#ff8a6a');
+          this.log(`ลากยา HP ไปที่ปุ่ม ${keyHint('hp')} · ยา MP ไปที่ปุ่ม ${keyHint('mp')}`, '#ff8a6a');
         }
       } else if (target === g.renderer.domElement) {
         // Dropping destroys the item for good (owner 2026-11-23): always ask first.
@@ -831,7 +835,7 @@ export class Hud {
     }
     const sk = p.skill(kind);
     if (!sk) {
-      tip.innerHTML = `<div class="tt-name">ช่อง ${key} ว่าง</div><div class="tt-hint">กด K เปิดหน้าต่างสกิลเพื่อเรียนและใส่สกิล</div>`;
+      tip.innerHTML = `<div class="tt-name">ช่อง ${key} ว่าง</div><div class="tt-hint">กด ${keyHint('skills')} เปิดหน้าต่างสกิลเพื่อเรียนและใส่สกิล</div>`;
       this.placeTip(tip, e);
       return;
     }
@@ -909,7 +913,7 @@ export class Hud {
     $('hud-level').textContent = `Lv.${p.level} ${p.cls.name}`;
     $('hud-gold').textContent = `${p.gold.toLocaleString()} G`;
     if (this.g.backend.online) {
-      $('hud-online').textContent = `🌐 ในแมพนี้ ${this.g.backend.hereCount} คน${isTouchMode() ? '' : ' · กด Enter เพื่อแชท'}`;
+      $('hud-online').textContent = `🌐 ในแมพนี้ ${this.g.backend.hereCount} คน${isTouchMode() ? '' : ` · กด ${keyHint('chat')} เพื่อแชท`}`;
       // The whole server's count: the server sends it to owner and GM only.
       const all = this.g.backend.onlineCount;
       $('hud-online-all').classList.toggle('hidden', all === null);
@@ -1721,7 +1725,7 @@ export class Hud {
         // Reroll stones also drop (rarely) from ordinary monsters: MONSTER_STONES.
         : MONSTER_STONES.includes(s.stone) ? `วัตถุดิบช่างตีเหล็ก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอส และมอนสเตอร์ทั่วไป (หายาก)`
         : `วัตถุดิบตีบวก · ${s.count} / ${STONE_STACK} ก้อน · ดรอปจากบอสเท่านั้น`}${s.bound ? ' · ผูกกับตัวละคร (รางวัลภารกิจ)' : ''}</div>` +
-      `<div class="tt-stats"><div>${STONE_DESC[s.stone]}</div></div>` +
+      `<div class="tt-stats"><div>${STONE_DESC[s.stone].replace('ปุ่ม G', `ปุ่ม ${keyHint('scroll')}`)}</div></div>` +
       `<div class="tt-hint">${hint}</div><div class="tt-val">${isBound(s) ? 'ขาย ทิ้ง ฝากคลัง หรือเทรดไม่ได้' : `ขายให้พ่อค้าได้${stoneUnit(s.stone)}ละ ${stoneSellPrice(s.stone).toLocaleString()} G`}</div>`;
     this.placeTip(tip, e);
   }
@@ -2067,7 +2071,7 @@ export class Hud {
   }
 
   private renderDialog(): void {
-    $('dialog-text').textContent = SEEKER_LINES[this.dialogIdx];
+    $('dialog-text').textContent = SEEKER_LINES[this.dialogIdx].replace('{talk}', keyHint('talk'));
     $('dialog-next').textContent = this.dialogIdx < SEEKER_LINES.length - 1 ? 'คลิกเพื่ออ่านต่อ ▸' : 'คลิกเพื่อออกเดินทาง ▸';
   }
 

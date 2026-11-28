@@ -143,6 +143,26 @@ export function onKeysChange(fn: () => void): void {
   listeners.add(fn);
 }
 
+/** The key an action is on now, as shown in hints (owner 2026-11-28: hints follow the player's keys). */
+export function keyHint(id: string): string {
+  const c = keyOf(id);
+  return c ? keyLabel(c) : 'ไม่มีปุ่ม';
+}
+
+/**
+ * Writes the player's keys into the page's fixed hints: the help table (`data-keys` = action ids, joined by ` / ` or
+ * `data-sep`, then `data-tail`), `data-hint` texts and `data-title-hint` tooltips with `{action}` in them.
+ */
+export function applyKeyHints(root: ParentNode = document): void {
+  const fill = (t: string): string => t.replace(/\{(\w+)\}/g, (_, id: string) => keyHint(id));
+  root.querySelectorAll<HTMLElement>('[data-keys]').forEach((el) => {
+    const ids = el.dataset.keys!.split(',');
+    el.textContent = ids.map(keyHint).join(el.dataset.sep ?? ' / ') + (el.dataset.tail ?? '');
+  });
+  root.querySelectorAll<HTMLElement>('[data-hint]').forEach((el) => { el.textContent = fill(el.dataset.hint!); });
+  root.querySelectorAll<HTMLElement>('[data-title-hint]').forEach((el) => { el.title = fill(el.dataset.titleHint!); });
+}
+
 /** How a key is shown: 'KeyQ' → 'Q', 'Digit1' → '1', 'Space' → 'SPACE', '' → '—'. */
 export function keyLabel(code: string): string {
   if (!code) return '—';
