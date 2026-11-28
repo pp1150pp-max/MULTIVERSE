@@ -36,6 +36,7 @@ import {
   type AutoSettings, type CharacterData, type LootFilter, type SortKey,
 } from './Player';
 import { Monster } from './Monster';
+import { captainYell } from './peglegCaptain';
 import { withExtras } from './extraEffects';
 import { dropHexSeeds, noteHexHit, tickHexSeeds, type HexSeed } from './hexSeed';
 import { EnemyShot, Projectile, type ProjOpts } from './Projectile';
@@ -799,6 +800,8 @@ export class Sim {
     if (!m.def.fx?.enrage) this.sfx('boss_arrive', m.x, m.z);
     if (m.def.fx?.enrage) this.fx('effect', m.def.fx.enrage, m.x, m.z, 0, Math.max(2.5, m.radius * 2.5));
     if (m.def.summon && !m.def.summon.vanish) this.summonMinions(m, m.def.summon.monster, m.def.summon.count);
+    // His crew call, over the ENRAGED! word.
+    if (m.def.brain === 'pegleg_captain') captainYell(this, m, 'captain.crew', 1.4);
   }
 
   /** Below half HP: the boss jumps off the map until its minions are dead. */

@@ -33,6 +33,7 @@ import { ITEM_ONLY_STATS, RARITIES, RARITY_LABEL, SLOT_LABEL, STAT_KEYS, STAT_LA
 import { FLOOR_GATE_LEVEL_MAX, FLOOR_GATE_LEVEL_MIN } from '../shared/floorGate';
 import { GEAR_KILLS_MAX, GEAR_KILLS_MIN, gearFloors, gearMaps } from '../shared/gearTuning';
 import { NPC_INFO, type NpcId } from '../shared/data/npcs';
+import { SHOUT_LEN, SHOUT_MOVES } from '../shared/bossShout';
 import { PANE_LINES, TALK_LINE_LEN, TALK_LINES_MAX, TALK_NPCS, TALK_NUM_KEYS, TALK_NUMS, type PanePart, type TalkNumKey } from '../shared/npcTalk';
 import { TUT_ACCEPT_GOLD, TUT_COUNT_MAX, TUT_GOLD_MAX, TUT_LINES_MAX, TUT_REWARD_KEYS, TUT_REWARD_NAME, TUT_STONES, tutRewardText, type TutRewardKey } from '../shared/tutorial';
 import type { MailAttachItem } from '../shared/mail';
@@ -1076,6 +1077,32 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- words bosses shout (src/shared/bossShout.ts)
+  const shoutCard = h('div', { class: 'card' });
+  const drawShout = (): void => {
+    const s = draft.bossShout;
+    const cs = code.bossShout;
+    shoutCard.replaceChildren(
+      h('h2', {}, 'บอสตะโกน'),
+      h('div', { class: 'muted' }, `บอสพูดเป็นข้อความลอยตัวใหญ่เหนือหัวตอนออกท่า ทุกคนที่อยู่ใกล้เห็น · ช่องว่าง = ท่านั้นไม่ตะโกน · ไม่เกิน ${SHOUT_LEN} ตัวอักษร · ข้อความที่แก้เองไม่มีคำแปลภาษาอังกฤษ (โหมด English แสดงภาษาไทย) · มีผลทันทีหลังบันทึก`),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: `ค่าในโค้ด: ${cs.on ? 'เปิด' : 'ปิด'}`, class: s.on !== cs.on ? 'bal-changed' : '' },
+          h('input', { type: 'checkbox', checked: s.on, onchange: (e: Event) => { s.on = (e.target as HTMLInputElement).checked; updateSummary(); drawShout(); } }),
+          ' ให้บอสตะโกนเป็นข้อความ')),
+      ...SHOUT_MOVES.map((m) => {
+        const input = h('input', { type: 'text', maxlength: String(SHOUT_LEN), style: 'width:20em;font:inherit' }) as HTMLInputElement;
+        input.value = s.text[m.id];
+        input.classList.toggle('bal-changed', s.text[m.id] !== m.code);
+        input.addEventListener('input', () => {
+          s.text[m.id] = input.value;
+          input.classList.toggle('bal-changed', input.value !== m.code);
+          updateSummary();
+        });
+        return h('div', { class: 'row bal-line' }, h('label', {}, `${m.label} `, input), h('span', { class: 'muted' }, ` ค่าในโค้ด "${m.code}"`));
+      }),
+    );
+  };
+
   // ---------------------------------------------------------- bag tabs + buying slots (src/shared/bagTabs.ts)
   const bagCard = h('div', { class: 'card' });
   const drawBag = (): void => {
@@ -1836,6 +1863,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawFloor();
     drawGear();
     drawMoves();
+    drawShout();
     drawLang();
     drawAuto();
     drawPet();
@@ -1900,7 +1928,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
   const CATS: { name: string; cards: HTMLElement[] }[] = [
     { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard, dodgeCard] },
-    { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, hubCard] },
+    { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, shoutCard, hubCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard, petCard] },
     { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, shaderCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },

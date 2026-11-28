@@ -26,6 +26,7 @@ import { checkGearTuning, codeGear, gearChanges, mergeGear, type GearConfig, typ
 import { checkFloorGateTuning, codeFloorGate, floorGateChanges, mergeFloorGate, type FloorGateConfig, type FloorGateTuning } from './floorGate';
 import { bagExpandChanges, checkBagExpand, codeBagExpand, mergeBagExpand, type BagExpandCfg, type BagExpandTuning } from './bagTabs';
 import { checkNpcTalkTuning, codeNpcTalk, mergeNpcTalk, npcTalkChanges, type NpcTalkConfig, type NpcTalkTuning } from './npcTalk';
+import { bossShoutChanges, checkBossShoutTuning, codeBossShout, mergeBossShout, type BossShoutConfig, type BossShoutTuning } from './bossShout';
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
 import { checkPetLootTuning, codePetLoot, mergePetLoot, petLootChanges, type PetLootConfig, type PetLootTuning } from './petLootTuning';
@@ -330,6 +331,8 @@ export interface Balance {
   tutorial: TutorialConfig;
   /** NPC talk window and lines over NPC heads (npcTalk.ts). */
   npcTalk: NpcTalkConfig;
+  /** What bosses shout over their heads (bossShout.ts). */
+  bossShout: BossShoutConfig;
   /** Item sets: server-wide switch and each set's bonus steps (data/sets.ts). */
   sets: SetConfig;
   /** Skill points, ranks, unlock levels, refunds and every learnable skill's numbers (skillTuning.ts). */
@@ -469,6 +472,7 @@ export interface BalanceTuning {
   tutorial?: TutorialTuning;
   /** NPC talk window settings and lines that differ from the code. */
   npcTalk?: NpcTalkTuning;
+  bossShout?: BossShoutTuning;
   /** Item set settings that differ from the code. */
   sets?: SetTuning;
   /** Skill system settings that differ from the code. */
@@ -610,6 +614,7 @@ export function codeBalance(): Balance {
     hudLayout: codeHudLayout(),
     tutorial: codeTutorial(),
     npcTalk: codeNpcTalk(),
+    bossShout: codeBossShout(),
     sets: codeSets(),
     skills: codeSkills(),
     moves: codeMoves(),
@@ -707,6 +712,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.hudLayout = mergeHudLayout(t.hudLayout);
   b.tutorial = mergeTutorial(t.tutorial);
   b.npcTalk = mergeNpcTalk(t.npcTalk);
+  b.bossShout = mergeBossShout(t.bossShout);
   b.sets = mergeSets(t.sets);
   b.skills = mergeSkills(t.skills);
   b.moves = mergeMoves(t.moves);
@@ -853,7 +859,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade', 'bossShout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1507,6 +1513,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.npcTalk = c.tuning;
     return null;
   };
+  const bossShout = (): string | null => {
+    const c = checkBossShoutTuning(o.bossShout, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.bossShout = c.tuning;
+    return null;
+  };
   const menuLayout = (): string | null => {
     const c = checkMenuLayoutTuning(o.menuLayout, strict);
     if ('error' in c) return c.error;
@@ -1596,6 +1608,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     bagExpand() ??
     tutorial() ??
     npcTalk() ??
+    bossShout() ??
     skills() ??
     fxLayer() ??
     rigLook() ??
@@ -1763,6 +1776,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...bagExpandChanges(a.bagExpand, b.bagExpand));
   out.push(...tutorialChanges(a.tutorial, b.tutorial));
   out.push(...npcTalkChanges(a.npcTalk, b.npcTalk));
+  out.push(...bossShoutChanges(a.bossShout, b.bossShout));
   out.push(...skillChanges(a.skills, b.skills));
   out.push(...fxLayerChanges(a.fxLayer, b.fxLayer));
   out.push(...rigLookChanges(a.rigLook, b.rigLook));
