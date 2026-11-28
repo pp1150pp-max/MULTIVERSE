@@ -17,7 +17,7 @@ const EN: Record<string, string> = {
   tag: 'An online action RPG in a cut-paper world · <b>free to play in your browser</b> on PC and mobile',
   'cd.d': 'days', 'cd.h': 'hours', 'cd.m': 'min', 'cd.s': 'sec',
   free: 'Nothing to download · play as a guest right away',
-  'news.h': 'Latest news and updates', 'news.loading': 'Loading news…', 'news.none': 'No news yet', 'news.thai': 'Notes are written in Thai',
+  'news.h': 'Latest news and updates', 'news.loading': 'Loading news…', 'news.none': 'No news yet', 'news.fail': 'News could not be loaded right now. The latest notes are in the game under "What’s new"', 'news.thai': 'Notes are written in Thai',
   'start.h': 'Start playing in a minute', 'start.1': 'Opens in your browser, nothing to install', 'start.2': 'Play as a guest or sign in with Google', 'start.3': 'Everyone shares one server: bring friends and form a party',
   'cls.h': 'Pick one of three classes',
   'cls.sword': 'Swordsman', 'cls.sword.p': 'Close range and tough. Passive "Piercing Slash": dash through monsters and cut every one you pass',
@@ -43,8 +43,8 @@ const EN: Record<string, string> = {
   privacy: 'Privacy policy', terms: 'Terms of use',
 };
 const TEXT = {
-  th: { before: 'Close Beta เริ่มในอีก', open: 'Close Beta เปิดแล้ว! เหลือเวลาอีก', ended: 'Close Beta จบแล้ว ขอบคุณทุกคนที่มาร่วมทดสอบ', zone: 'น. (เวลาไทย)', none: 'ยังไม่มีประกาศ', menuOpen: 'เปิดเมนู', menuClose: 'ปิดเมนู', langBtn: 'Switch to English' },
-  en: { before: 'Close Beta starts in', open: 'Close Beta is live! Time left', ended: 'Close Beta has ended. Thank you for testing', zone: '(Thai time, UTC+7)', none: EN['news.none'], menuOpen: 'Open menu', menuClose: 'Close menu', langBtn: 'เปลี่ยนเป็นภาษาไทย' },
+  th: { before: 'Close Beta เริ่มในอีก', open: 'Close Beta เปิดแล้ว! เหลือเวลาอีก', ended: 'Close Beta จบแล้ว ขอบคุณทุกคนที่มาร่วมทดสอบ', zone: 'น. (เวลาไทย)', none: 'ยังไม่มีประกาศ', fail: 'โหลดข่าวไม่ได้ในตอนนี้ ดูประกาศล่าสุดได้ในเกมที่ปุ่ม "มีอะไรใหม่"', menuOpen: 'เปิดเมนู', menuClose: 'ปิดเมนู', langBtn: 'Switch to English' },
+  en: { before: 'Close Beta starts in', open: 'Close Beta is live! Time left', ended: 'Close Beta has ended. Thank you for testing', zone: '(Thai time, UTC+7)', none: EN['news.none'], fail: EN['news.fail'], menuOpen: 'Open menu', menuClose: 'Close menu', langBtn: 'เปลี่ยนเป็นภาษาไทย' },
 };
 
 function readPref(): Lang {
@@ -61,6 +61,8 @@ function readPref(): Lang {
 let lang: Lang = readPref();
 let view: LandingView = { start: LANDING_DEFAULT.start, end: LANDING_DEFAULT.end, news: [], english: true };
 let newsLoaded = false;
+/** The server answered; false = it could not be reached (say so instead of "no news"). */
+let newsOk = false;
 const thai = new Map<Element, string>();
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -141,7 +143,7 @@ function drawNews(): void {
   if (!view.news.length) {
     const li = document.createElement('li');
     li.className = 'muted';
-    li.textContent = TEXT[lang].none;
+    li.textContent = newsOk ? TEXT[lang].none : TEXT[lang].fail;
     list.replaceChildren(li);
     return;
   }
@@ -172,7 +174,10 @@ async function load(): Promise<void> {
     const r = await fetch(apiUrl(), { headers: { Accept: 'application/json' } });
     if (!r.ok) throw new Error(String(r.status));
     const v = (await r.json()) as LandingView;
-    if (Number.isFinite(v.start) && Number.isFinite(v.end) && Array.isArray(v.news)) view = v;
+    if (Number.isFinite(v.start) && Number.isFinite(v.end) && Array.isArray(v.news)) {
+      view = v;
+      newsOk = true;
+    }
     if (v.english === false) {
       // English is off in /admin: Thai only (the game does the same).
       $('lang').hidden = true;
@@ -205,6 +210,23 @@ const setMenu = (open: boolean) => {
 menu.addEventListener('click', () => setMenu(menu.getAttribute('aria-expanded') !== 'true'));
 links.addEventListener('click', (e) => (e.target as HTMLElement).closest('a') && setMenu(false));
 addEventListener('keydown', (e) => e.key === 'Escape' && setMenu(false));
+
+// The nav marks the section in view (aria-current), checked on scroll.
+const navLinks = [...links.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')];
+const targets = navLinks.map((a) => document.getElementById(a.hash.slice(1))).filter((t): t is HTMLElement => !!t && t.id !== 'top');
+function markCurrent(): void {
+  // A line just under the fixed bar: a short section still counts once its top passes it.
+  const line = 68 + Math.min(160, innerHeight * 0.2);
+  let cur = 'top';
+  for (const t of targets) if (t.getBoundingClientRect().top <= line) cur = t.id;
+  for (const a of navLinks) {
+    if (a.hash === `#${cur}`) a.setAttribute('aria-current', 'true');
+    else a.removeAttribute('aria-current');
+  }
+}
+addEventListener('scroll', markCurrent, { passive: true });
+addEventListener('resize', markCurrent);
+markCurrent();
 
 $('lang').addEventListener('click', () => {
   lang = lang === 'th' ? 'en' : 'th';
