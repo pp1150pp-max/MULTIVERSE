@@ -854,6 +854,8 @@ export class Hud {
       stacks ? `<div>เก็บได้ <span class="tt-val">${held} / ${stacks} ${sk.kind === 'dash' ? 'ครั้ง' : 'อัน'}</span></div>` : '',
       // The mage's class passive Warp turns the dash into a vanish-and-appear (classPassives.ts).
       sk.kind === 'dash' && p.warpOn() ? `<div><span class="tt-val">${CLASS_PASSIVES.mage!.nameTh}: หายตัวไปโผล่ปลายทางทันที</span></div>` : '',
+      // The sword's class passive Dash Slash: the dash slashes what it passes.
+      sk.kind === 'dash' && p.slashOn() ? `<div><span class="tt-val">${CLASS_PASSIVES.sword!.nameTh}: ฟันมอนที่พุ่งผ่าน ${Math.round(currentBalance().skills.classPassive.slash.dmg * 100)}% ATK + ช้าลง</span></div>` : '',
       ...skillParamLines(sk, Math.max(1, rank)).map((l) => `<div><span class="tt-val">${l}</span></div>`),
       reach ? `<div><span class="tt-val">${reachText(reach)}</span></div>` : '',
     ].join('');

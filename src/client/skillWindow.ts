@@ -361,9 +361,12 @@ export class SkillWindow {
         : cp.state === 'off' ? '<span class="sk-cp-off">🔒 ปิดอยู่ชั่วคราว</span>'
           : '<span class="sk-cp-off">🔒 ยังอยู่ระหว่างออกแบบ</span>';
     const warp = cp.def?.id === 'cp_warp' ? currentBalance().skills.classPassive.warp : null;
+    const slash = cp.def?.id === 'cp_slash' ? currentBalance().skills.classPassive.slash : null;
     const vals = warp
       ? `<div class="sk-dval">ค่า: <span class="tt-val">เก็บได้ ${warp.stacks} ครั้ง (คืนทีละครั้ง) · คูลดาวน์ต่อครั้ง ${Math.round(p.dashCooldown() * 100) / 100} วิ · ระยะเท่าแดช</span></div>`
-      : '';
+      : slash
+        ? `<div class="sk-dval">ค่า: <span class="tt-val">ดาเมจ ${Math.round(slash.dmg * 100)}% ATK · ช้าลง ${Math.round(slash.slow * 100)}% ${slash.slowT} วิ · กว้าง ${slash.width} ม.</span></div>`
+        : '';
     this.detail.innerHTML =
       `<div class="sk-dhead"><span class="sk-ico cp">${cp.def ? skillIcon(cp.def.id) : skillIcon('cp_none')}</span><span><b>${cp.nameTh}</b>${cp.def ? ` (${cp.def.name})` : ''}<br>` +
       `<span class="sk-dsub">พาสซีฟประจำอาชีพ${p.cls.nameTh}${cp.def ? ` · ปลด Lv.${cp.level}` : ''}</span></span></div>` +

@@ -150,9 +150,10 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
       h('input', { type: 'color', value: get(), title: `ค่าในโค้ด: ${codeVal}`, oninput: (e: Event) => { set((e.target as HTMLInputElement).value.toLowerCase()); updateSummary(); } });
     const hr = CLASS_PASSIVES.gunslinger!;
     const wp = CLASS_PASSIVES.mage!;
+    const sl = CLASS_PASSIVES.sword!;
     cardCp.replaceChildren(
       h('h2', {}, 'ค่ารวม 5: พาสซีฟประจำอาชีพ'),
-      h('div', { class: 'muted' }, 'ดาวกลางของผังสกิล ติดตัวตลอดเมื่อถึงเลเวล ไม่ใช้แต้ม ไม่มีแรงก์ ไม่ต้องใส่ช่อง (ใช้คู่กับพาสซีฟ 1 ช่องเดิมได้) · นักดาบยังไม่มี (ผังขึ้น "ยังอยู่ระหว่างออกแบบ")'),
+      h('div', { class: 'muted' }, 'ดาวกลางของผังสกิล ติดตัวตลอดเมื่อถึงเลเวล ไม่ใช้แต้ม ไม่มีแรงก์ ไม่ต้องใส่ช่อง (ใช้คู่กับพาสซีฟ 1 ช่องเดิมได้)'),
       h('div', { class: 'skm-sub' }, `มือปืน: ${hr.nameTh} (${hr.name})`),
       setRow('เปิดใช้', hr.desc, sw(() => cp.hitrun.on, (v) => { cp.hitrun.on = v; })),
       setRow('เลเวลปลดล็อก', null, cpNum('hitrun.level', 'เลเวลปลดล็อกยิงแล้ววิ่ง', () => cp.hitrun.level, (n) => { cp.hitrun.level = n; }, ccp.hitrun.level, CP_RANGE.level, 1), 'เลเวล'),
@@ -167,6 +168,13 @@ export async function renderSkills(view: HTMLElement, h: H, api: Api, onSaved: (
         h('div', { class: 'set-multi' },
           color(() => cp.warp.look.color1, (v) => { cp.warp.look.color1 = v; }, ccp.warp.look.color1),
           color(() => cp.warp.look.color2, (v) => { cp.warp.look.color2 = v; }, ccp.warp.look.color2))),
+      h('div', { class: 'skm-sub' }, `นักดาบ: ${sl.nameTh} (${sl.name})`),
+      setRow('เปิดใช้', 'กดแดชแล้วฟันมอนทุกตัวที่พุ่งผ่าน ตัวละ 1 ครั้งต่อแดช ใช้กับบอสด้วย (ไม่มีธาตุ คริได้ ไม่ทะลุกำแพง ในเขตปลอดภัยไม่โดน) จำนวนแดชและคูลดาวน์เท่าเดิม · ปิด = แดชธรรมดา', sw(() => cp.slash.on, (v) => { cp.slash.on = v; })),
+      setRow('เลเวลปลดล็อก', null, cpNum('slash.level', 'เลเวลปลดล็อกฟันทะลวง', () => cp.slash.level, (n) => { cp.slash.level = n; }, ccp.slash.level, CP_RANGE.level, 1), 'เลเวล'),
+      setRow('ดาเมจ', 'ต่อมอน 1 ตัว (0.8 = 80% ของพลังโจมตี)', cpNum('slash.dmg', 'ดาเมจฟันทะลวง', () => cp.slash.dmg, (n) => { cp.slash.dmg = n; }, ccp.slash.dmg, CP_RANGE.dmg, 0.05), '×ATK'),
+      setRow('ทำให้ช้า', '0.3 = ช้าลง 30% · 0 = ไม่ทำให้ช้า', cpNum('slash.slow', 'ช้าลงจากฟันทะลวง', () => cp.slash.slow, (n) => { cp.slash.slow = n; }, ccp.slash.slow, CP_RANGE.slow, 0.05), 'สัดส่วน'),
+      setRow('เวลาช้า', null, cpNum('slash.slowT', 'เวลาช้าจากฟันทะลวง', () => cp.slash.slowT, (n) => { cp.slash.slowT = n; }, ccp.slash.slowT, CP_RANGE.slowT, 0.1), 'วิ'),
+      setRow('ความกว้าง', 'ความกว้างทั้งหมดของแนวฟันตามทางแดช (ข้างละครึ่ง บวกตัวมอน)', cpNum('slash.width', 'ความกว้างฟันทะลวง', () => cp.slash.width, (n) => { cp.slash.width = n; }, ccp.slash.width, CP_RANGE.width, 0.1), 'ม.'),
     );
 
     // The element system (owner 2026-11-27, src/shared/elementTuning.ts).

@@ -726,6 +726,91 @@ export function playWarp(add: DashHost, x1: number, z1: number, x2: number, z2: 
   return true;
 }
 
+// ------------------------------------------------------------------ the sword's Dash Slash (class passive, owner 2026-11-28)
+
+/** Dash Slash colours when no dash cosmetic is worn: a silver-white blade. */
+export const SLASH_PLAIN = { color1: '#ffffff', color2: '#9fd8ff' } as const;
+
+/**
+ * The sword's Dash Slash: a blade streak along the dash path (x1, z1) → (x2, z2) that flashes and thins away, and an X
+ * of two cuts with bits in the worn dash style on every monster hit (`hits`: x, z pairs). Played on top of the dash's
+ * own effect. `style` null = none worn (silver bits). False = the graphics menu leaves nothing to draw.
+ */
+export function playSlash(add: DashHost, x1: number, z1: number, x2: number, z2: number, hits: number[], style: DashStyle | null, look: { size: number; color1: string; color2: string }, opts: { particles: number; extras: boolean }): boolean {
+  if (!opts.extras && opts.particles <= 0) return false;
+  const T = 0.4;
+  const S = Math.max(0.1, look.size);
+  const tex = plainTex();
+  const group = new THREE.Group();
+  const ticks: ((t: number) => void)[] = [];
+  const bit = style === 'fire' ? tex.flame : style === 'leaf' ? tex.leaf : style === 'star' ? tex.star5 : style === 'shadow' ? tex.smoke : tex.spark;
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+  const len = Math.hypot(dx, dz);
+  if (opts.extras && len > 0.2) {
+    // the streak: one flat plane and one upright plane along the path, sharing a material
+    for (const [map, color, w, y] of [[tex.streak, look.color2, 1.1, MID_Y], [tex.streak, look.color1, 0.45, MID_Y]] as const) {
+      const mat = new THREE.MeshBasicMaterial({ map, color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+      const holder = new THREE.Group();
+      holder.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat));
+      holder.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat));
+      holder.rotation.y = Math.atan2(-dz, dx);
+      holder.position.set((x1 + x2) / 2, y * S, (z1 + z2) / 2);
+      group.add(holder);
+      ticks.push((t) => {
+        const q = t / T;
+        holder.scale.set(len * (0.7 + 0.3 * ease(Math.min(1, q * 4))), w * S * (1 - 0.8 * q), w * S * (1 - 0.8 * q));
+        mat.opacity = Math.min(1, q * 10) * (1 - q);
+      });
+    }
+  }
+  for (let h = 0; h + 1 < hits.length; h += 2) {
+    const hx = hits[h];
+    const hz = hits[h + 1];
+    const born = len > 0.2 ? Math.max(0, Math.min(1, ((hx - x1) * dx + (hz - z1) * dz) / (len * len))) * 0.18 : 0;
+    if (opts.extras) {
+      // an X of two cuts, crossing on screen
+      for (const [rot, color, at] of [[0.75, look.color1, 0], [-0.75, look.color2, 0.04]] as const) {
+        const c = sprite(tex.streak, color);
+        c.visible = false;
+        c.material.rotation = rot;
+        c.position.set(hx, MID_Y * S, hz);
+        group.add(c);
+        ticks.push((t) => {
+          const q = (t - born - at) / 0.22;
+          c.visible = q >= 0 && q <= 1;
+          if (!c.visible) return;
+          c.scale.set(1.8 * S * (0.4 + 0.6 * ease(Math.min(1, q * 3))), 0.35 * S * (1 - 0.6 * q), 1);
+          c.material.opacity = Math.min(1, q * 8) * (1 - q);
+        });
+      }
+    }
+    const n = Math.round(6 * opts.particles);
+    for (let i = 0; i < n; i++) {
+      const s = sprite(bit, i % 2 ? look.color1 : look.color2, style !== 'shadow');
+      s.visible = false;
+      group.add(s);
+      const a = rnd(0, TAU);
+      const d = rnd(0.5, 1) * S;
+      const life = rnd(0.18, 0.3);
+      ticks.push((t) => {
+        const q = (t - born) / life;
+        s.visible = q >= 0 && q <= 1;
+        if (!s.visible) return;
+        s.position.set(hx + Math.cos(a) * d * ease(q), (MID_Y + q * 0.4) * S, hz + Math.sin(a) * d * ease(q));
+        s.scale.setScalar((style === 'shadow' ? 0.3 : 0.12) * S * (1 - q * 0.5));
+        s.material.opacity = 1 - q;
+      });
+    }
+  }
+  if (!ticks.length) return false;
+  add(group, T + 0.18, (k) => {
+    const t = k * (T + 0.18);
+    for (const f of ticks) f(t);
+  });
+  return true;
+}
+
 // ------------------------------------------------------------------ card pictures (shop, fashion bag)
 
 const cards = new Map<string, string>();

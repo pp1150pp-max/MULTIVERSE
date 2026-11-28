@@ -3,12 +3,13 @@
 // no ranks, not in ClassDef.skills, and the three worn passives are untouched.
 //   gunslinger — ยิงแล้ววิ่ง (Hit and Run): the basic attack never holds the player still (attackRootTuning.ts)
 //   mage       — ก้าวมิติ (Warp): the dash vanishes and appears at its end at once, 2 charges (Player.warpDash)
-//   sword      — still being designed: a locked slot
+//   sword      — ฟันทะลวง (Dash Slash, owner 2026-11-28): the dash slashes every monster it passes, once each (Player dash)
 // Numbers are tuned on /admin → ระบบสกิล → "พาสซีฟประจำอาชีพ" (classPassiveTuning.ts). No imports of the balance here (no cycle).
 import type { ClassId } from './types';
 import type { ClassPassiveConfig } from './classPassiveTuning';
 
-export type ClassPassiveId = 'cp_hitrun' | 'cp_warp';
+export type ClassPassiveId = 'cp_hitrun' | 'cp_warp' | 'cp_slash';
+export type ClassPassiveKey = 'hitrun' | 'warp' | 'slash';
 
 export interface ClassPassiveDef {
   id: ClassPassiveId;
@@ -27,17 +28,20 @@ export const CLASS_PASSIVES: Readonly<Record<ClassId, ClassPassiveDef | null>> =
     id: 'cp_warp', nameTh: 'ก้าวมิติ', name: 'Warp',
     desc: 'กดแดชแล้วหายตัวไปโผล่ปลายทางทันทีแทนการพุ่ง ระยะเท่าแดช ทะลุกำแพงไม่ได้ เก็บได้หลายครั้ง คืนทีละครั้งตามคูลดาวน์แดช',
   },
-  sword: null,
+  sword: {
+    id: 'cp_slash', nameTh: 'ฟันทะลวง', name: 'Dash Slash',
+    desc: 'กดแดชแล้วฟันมอนทุกตัวที่พุ่งผ่าน ตัวละครั้งต่อแดช ดาเมจตาม ATK และทำให้ช้าลงชั่วครู่ (ใช้กับบอสด้วย) ทะลุกำแพงไม่ได้',
+  },
 };
 
 /** Shown for a class whose passive is still being designed. */
 export const CLASS_PASSIVE_TBD = { nameTh: 'พาสซีฟประจำอาชีพ', desc: 'ยังอยู่ระหว่างออกแบบ' } as const;
 
-/** Which passive of the config belongs to a class (none for the sword yet). */
-export const passiveKey = (cls: ClassId): 'hitrun' | 'warp' | null => (cls === 'gunslinger' ? 'hitrun' : cls === 'mage' ? 'warp' : null);
+/** Which passive of the config belongs to a class. */
+export const passiveKey = (cls: ClassId): ClassPassiveKey | null => (cls === 'gunslinger' ? 'hitrun' : cls === 'mage' ? 'warp' : cls === 'sword' ? 'slash' : null);
 
 /** Whether a character of class `cls` at `level` has its class passive working now. */
-export function classPassiveOn(cfg: ClassPassiveConfig, cls: ClassId, level: number, which: 'hitrun' | 'warp'): boolean {
+export function classPassiveOn(cfg: ClassPassiveConfig, cls: ClassId, level: number, which: ClassPassiveKey): boolean {
   if (passiveKey(cls) !== which) return false;
   const o = cfg[which];
   return o.on && level >= o.level;

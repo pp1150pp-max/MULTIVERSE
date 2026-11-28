@@ -32,7 +32,7 @@ export interface Sound {
 const GROUP_OF: Record<BaseSound, SfxGroup> = {
   slash: 'skill', whirlwind: 'skill', charge: 'skill', earthquake: 'skill',
   bolt: 'skill', fireball: 'skill', frostnova: 'skill', meteor: 'skill',
-  shot: 'skill', rapidfire: 'skill', pierce: 'skill', headshot: 'skill', dash: 'skill', headshot_fire: 'skill', warp: 'skill',
+  shot: 'skill', rapidfire: 'skill', pierce: 'skill', headshot: 'skill', dash: 'skill', headshot_fire: 'skill', warp: 'skill', dashslash: 'skill',
   explosion: 'skill', crater: 'skill', impact: 'skill',
   hit: 'monster', crit: 'monster', monster_die: 'monster',
   boss_die: 'boss', boss_slam: 'boss', boss_arrive: 'boss', boss_appear: 'boss',
@@ -238,6 +238,16 @@ const BASE: Record<BaseSound, Omit<Sound, 'group'>> = {
       s.tone('sine', 520, 1400, 0.12, 0.12);
       s.tone('triangle', 1760, 2350, 0.16, 0.08, 0.1);
       s.tone('sine', 2640, 3520, 0.12, 0.05, 0.13);
+    },
+  },
+  dashslash: {
+    gap: 120,
+    // The sword's Dash Slash: a fast steel swish with a bright ring of the blade at its end.
+    make: (s) => {
+      s.noise(1800, 6200, 0.1, 0.42, 0, 1.6);
+      s.noise(5200, 2400, 0.08, 0.22, 0.05, 2.5);
+      s.tone('triangle', 2100, 2900, 0.18, 0.07, 0.06);
+      s.tone('sine', 3300, 3100, 0.22, 0.04, 0.08);
     },
   },
   crit: {

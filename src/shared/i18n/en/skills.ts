@@ -224,6 +224,10 @@ export const EN_SKILLS: Record<string, string> = {
   '· ปลด Lv.{0}': '· unlocks at Lv.{0}',
   'ต่อ 1 ครั้ง': 'per use',
   '{0}: หายตัวไปโผล่ปลายทางทันที': '{0}: vanish and appear at the end at once',
+  'ฟันทะลวง': 'Dash Slash',
+  'กดแดชแล้วฟันมอนทุกตัวที่พุ่งผ่าน ตัวละครั้งต่อแดช ดาเมจตาม ATK และทำให้ช้าลงชั่วครู่ (ใช้กับบอสด้วย) ทะลุกำแพงไม่ได้': 'The dash slashes every monster you rush past, once each per dash, for ATK-based damage and a short slow (bosses too). Never through walls',
+  'ดาเมจ {0}% ATK · ช้าลง {1}% {2} วิ · กว้าง {3} ม.': '{0}% ATK damage · {1}% slow for {2} s · {3} m wide',
+  '{0}: ฟันมอนที่พุ่งผ่าน {1}% ATK + ช้าลง': '{0}: slashes monsters you rush past, {1}% ATK + slow',
   // The element system (src/shared/elementTuning.ts, sim/elements.ts, client/elementBadge.ts).
   '{0} ธาตุ{1}': '{0} {1}',
   'น้ำ': 'Water',
