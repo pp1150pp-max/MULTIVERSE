@@ -90,6 +90,8 @@ export const EN_REST: Record<string, string> = {
   'ล็อกอินรายวัน {0}': 'Daily login {0}',
   'ชดเชยของรางวัลวันที่ {0}': 'Make-up reward for day {0}',
   'ของรางวัลล็อกอินวันที่ {0}': 'Login reward for day {0}',
+  'โบนัสล็อกอินสะสมครบ {0} วัน': '{0}-day login bonus',
+  'ขอบคุณที่เข้าเกมสม่ำเสมอ กดรับของแนบได้เลย': 'Thanks for playing regularly — collect the attachment',
   '{0} ×{1} กดรับของแนบได้เลย (ผูกกับตัวละครที่กดรับ ถ้าเป็นของใช้)': '{0} ×{1} — collect the attachment (consumables are bound to the character who collects them)',
 
   // ---- top-up

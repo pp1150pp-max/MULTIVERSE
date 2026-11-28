@@ -328,6 +328,14 @@ export class Db {
         key TEXT PRIMARY KEY,
         send_id INTEGER NOT NULL
       );
+      -- Milestone bonuses: one row per account, Thai calendar month and tier (7, 15, 30) it got.
+      CREATE TABLE IF NOT EXISTS daily_bonus_claims (
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        month TEXT NOT NULL,
+        tier INTEGER NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (account_id, month, tier)
+      );
       CREATE TABLE IF NOT EXISTS trade_log (
         id INTEGER PRIMARY KEY,
         at INTEGER NOT NULL,
@@ -1959,6 +1967,18 @@ export class Db {
   dailyMonth(accountId: number, month: string): Map<number, boolean> {
     const rows = this.db.prepare("SELECT day, makeup FROM daily_claims WHERE account_id = ? AND day LIKE ? || '-%'").all(accountId, month) as { day: string; makeup: number }[];
     return new Map(rows.map((r) => [Number(r.day.slice(8)), r.makeup === 1]));
+  }
+
+  /** Marks a bonus tier as got in one month; false when this account already has it. */
+  dailyBonusClaim(accountId: number, month: string, tier: number, at: number): boolean {
+    return Number(this.db.prepare('INSERT OR IGNORE INTO daily_bonus_claims (account_id, month, tier, at) VALUES (?, ?, ?, ?)')
+      .run(accountId, month, tier, at).changes) === 1;
+  }
+
+  /** The bonus tiers this account got in one month ('YYYY-MM'). */
+  dailyBonusGot(accountId: number, month: string): Set<number> {
+    const rows = this.db.prepare('SELECT tier FROM daily_bonus_claims WHERE account_id = ? AND month = ?').all(accountId, month) as { tier: number }[];
+    return new Set(rows.map((r) => r.tier));
   }
 
   /** The mail send kept for this key, if it still exists. */

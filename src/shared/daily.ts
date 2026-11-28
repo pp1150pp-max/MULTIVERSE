@@ -1,7 +1,9 @@
 // Daily login calendar (owner 2026-11-12, rules: docs/systems/daily-login.md). One calendar per month and
 // account: the first time an account is in the game on a day (Thai time, the day turns at 00:00), that day's
 // reward goes to the account's mailbox. A missed day is gone, except for DAILY_MAKEUPS free make-ups a
-// month, which can pick any earlier day of this month. Guests have no calendar. Pure rules, no DOM.
+// month, which can pick any earlier day of this month. Guests have no calendar. On top of that (owner
+// 2026-11-29) a bonus is mailed when the days got this month reach 7, 15 and 30. Pure rules, no DOM.
+import { stoneStackMax } from './data/stones';
 import { BLACKSMITH_STONES, REWARD_ITEMS, type StoneKind } from './types';
 
 /** Thailand is UTC+7 all year (no daylight saving), so the calendar day is just this offset. */
@@ -78,6 +80,59 @@ export function cleanDailyOverrides(raw: unknown): DailyOverrides | string {
 
 export const dailyReward = (day: number, overrides: DailyOverrides): DailyReward => overrides[String(day)] ?? DAILY_DEFAULT[day - 1];
 
+// ------------------------------------------------------------------ milestone bonuses
+
+/** The tiers: days got in one month (make-ups count, a missed day doesn't reset anything). Fixed in code. */
+export const DAILY_BONUS_DAYS = [7, 15, 30] as const;
+/** What a tier can give; each amount is 0 (not given) up to one stack. */
+export const DAILY_BONUS_KINDS = ['exp_scroll', 'drop_scroll', 'mystery_box'] as const;
+export type BonusKind = (typeof DAILY_BONUS_KINDS)[number];
+/** The server setting that holds the owner's bonus settings (nothing stored = BONUS_DEFAULT). */
+export const DAILY_BONUS_SETTING = 'daily_bonus';
+
+export type BonusTier = { on: boolean } & Record<BonusKind, number>;
+/** `on`: the whole bonus. `tiers`: in DAILY_BONUS_DAYS order. */
+export interface BonusConfig { on: boolean; tiers: BonusTier[] }
+
+const tier = (exp_scroll: number, drop_scroll: number, mystery_box: number): BonusTier => ({ on: true, exp_scroll, drop_scroll, mystery_box });
+export const BONUS_DEFAULT: BonusConfig = { on: true, tiers: [tier(1, 1, 1), tier(2, 2, 3), tier(3, 3, 5)] };
+
+/** A clean copy of the bonus settings from /admin or the database, or a Thai error. */
+export function cleanBonus(raw: unknown): BonusConfig | string {
+  const r = raw as { on?: unknown; tiers?: unknown } | null | undefined;
+  if (!r || typeof r.on !== 'boolean' || !Array.isArray(r.tiers) || r.tiers.length !== DAILY_BONUS_DAYS.length) return 'ค่าโบนัสล็อกอินไม่ถูกต้อง';
+  const tiers: BonusTier[] = [];
+  for (const [i, v] of (r.tiers as unknown[]).entries()) {
+    const x = v as Partial<Record<keyof BonusTier, unknown>> | null;
+    if (!x || typeof x.on !== 'boolean') return `ขั้น ${DAILY_BONUS_DAYS[i]} วัน: ค่าไม่ถูกต้อง`;
+    const out: BonusTier = { on: x.on, exp_scroll: 0, drop_scroll: 0, mystery_box: 0 };
+    for (const k of DAILY_BONUS_KINDS) {
+      const n = x[k];
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > stoneStackMax(k)) return `ขั้น ${DAILY_BONUS_DAYS[i]} วัน: จำนวนต้องเป็น 0–${stoneStackMax(k)}`;
+      out[k] = n;
+    }
+    tiers.push(out);
+  }
+  return { on: r.on, tiers };
+}
+
+/** What a tier hands out (empty = switched off or all zero). */
+export const bonusItems = (t: BonusTier): DailyReward[] =>
+  t.on ? DAILY_BONUS_KINDS.filter((k) => t[k] > 0).map((k) => ({ stone: k, count: t[k] })) : [];
+
+/** Days a tier needs in this month: in a month shorter than the tier, every day of it (February's "30"). */
+export const bonusNeed = (days: number, year: number, month: number): number => Math.min(days, daysInMonth(year, month));
+
+/** One bonus box in the window. */
+export interface DailyBonusView {
+  /** The tier (7, 15, 30). */
+  tier: number;
+  /** Days needed this month. */
+  need: number;
+  items: DailyReward[];
+  got: boolean;
+}
+
 /** One calendar cell: got it, missed it (make-up possible while any are left), today, or still to come. */
 export type DailyState = 'got' | 'madeUp' | 'missed' | 'today' | 'future';
 
@@ -90,14 +145,22 @@ export interface DailyView {
   firstWeekday: number;
   days: { reward: DailyReward; state: DailyState }[];
   makeupsLeft: number;
+  /** Days got this month (make-ups included): what the bonus tiers count. */
+  count: number;
+  /** The bonus tiers that give something; empty while the owner has the bonus off. */
+  bonus: DailyBonusView[];
   popup?: boolean;
+  /** Tiers whose bonus was just mailed. */
+  won?: number[];
 }
 
 /**
  * The month's calendar for one account: `claimed` holds the day numbers got this month (and whether each
  * was a make-up). Today is 'today' only while it is still unclaimed (it is claimed on sight, so rarely).
  */
-export function dailyView(now: number, claimed: Map<number, boolean>, overrides: DailyOverrides): DailyView {
+export function dailyView(
+  now: number, claimed: Map<number, boolean>, overrides: DailyOverrides, config: BonusConfig, bonusGot: ReadonlySet<number>,
+): DailyView {
   const t = thaiDate(now);
   const n = daysInMonth(t.year, t.month);
   const makeups = [...claimed.values()].filter(Boolean).length;
@@ -109,7 +172,10 @@ export function dailyView(now: number, claimed: Map<number, boolean>, overrides:
   });
   return {
     year: t.year, month: t.month, today: t.day, firstWeekday: new Date(Date.UTC(t.year, t.month - 1, 1)).getUTCDay(),
-    days, makeupsLeft: Math.max(0, DAILY_MAKEUPS - makeups),
+    days, makeupsLeft: Math.max(0, DAILY_MAKEUPS - makeups), count: claimed.size,
+    bonus: !config.on ? [] : DAILY_BONUS_DAYS.map((d, i) => ({
+      tier: d, need: bonusNeed(d, t.year, t.month), items: bonusItems(config.tiers[i]), got: bonusGot.has(d),
+    })).filter((b) => b.items.length > 0),
   };
 }
 

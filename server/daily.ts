@@ -1,11 +1,13 @@
 // Daily login (rules: docs/systems/daily-login.md, calendar rules: src/shared/daily.ts). The first time an
 // account is in the game on a Thai calendar day, that day's reward is mailed to the account. Make-ups mail
 // an earlier day of this month, DAILY_MAKEUPS a month. The claim row and the mail go in one transaction,
-// and the claim row's key (account, day) makes a second delivery impossible.
+// and the claim row's key (account, day) makes a second delivery impossible. The milestone bonuses work the
+// same way, with one claim row per (account, month, tier).
 import type { Db } from './db';
 import {
-  cleanDailyOverrides, dailyReward, dailyView, dayKey, DAILY_MAKEUPS, DAILY_SETTING, thaiDate, THAI_MONTHS,
-  type DailyOverrides, type DailyView,
+  BONUS_DEFAULT, bonusItems, bonusNeed, cleanBonus, cleanDailyOverrides, dailyReward, dailyView, dayKey,
+  DAILY_BONUS_DAYS, DAILY_BONUS_SETTING, DAILY_MAKEUPS, DAILY_SETTING, thaiDate, THAI_MONTHS,
+  type BonusConfig, type DailyOverrides, type DailyReward, type DailyView,
 } from '../src/shared/daily';
 import { MAIL_MS, type MailAttach } from '../src/shared/mail';
 import { STONE_NAME } from '../src/shared/data/stones';
@@ -36,11 +38,34 @@ export class Daily {
     return o;
   }
 
+  /** The bonus settings (the code's, unless the owner saved others). */
+  bonusConfig(): BonusConfig {
+    const v = this.db.getSetting(DAILY_BONUS_SETTING);
+    if (!v) return BONUS_DEFAULT;
+    // A broken stored value gives nothing, so a bonus the owner switched off can't come back by itself.
+    const off = { ...BONUS_DEFAULT, on: false };
+    try {
+      const c = cleanBonus(JSON.parse(v));
+      return typeof c === 'string' ? off : c;
+    } catch {
+      return off;
+    }
+  }
+
+  /** Saves the bonus settings; returns the clean copy or a Thai error. */
+  setBonus(raw: unknown): BonusConfig | string {
+    const c = cleanBonus(raw);
+    if (typeof c === 'string') return c;
+    const json = JSON.stringify(c);
+    this.db.setSetting(DAILY_BONUS_SETTING, json === JSON.stringify(BONUS_DEFAULT) ? null : json);
+    return c;
+  }
+
   /** This month's calendar for the account. */
   view(accountId: number): DailyView {
     const now = this.now();
-    const t = thaiDate(now);
-    return dailyView(now, this.db.dailyMonth(accountId, t.key.slice(0, 7)), this.overrides());
+    const month = thaiDate(now).key.slice(0, 7);
+    return dailyView(now, this.db.dailyMonth(accountId, month), this.overrides(), this.bonusConfig(), this.db.dailyBonusGot(accountId, month));
   }
 
   /** Today's reward, mailed if the account doesn't have it yet. True = it was just sent. */
@@ -61,29 +86,64 @@ export class Daily {
     return this.give(accountId, day, true, now) ? null : 'วันนี้รับของไปแล้ว';
   }
 
+  /**
+   * Mails every bonus tier this month's days have reached and the account hasn't got (so a tier switched on
+   * later in the month still arrives); returns the tiers just sent.
+   */
+  bonus(accountId: number): number[] {
+    const config = this.bonusConfig();
+    if (!config.on) return [];
+    const now = this.now();
+    const t = thaiDate(now);
+    const month = t.key.slice(0, 7);
+    const count = this.db.dailyMonth(accountId, month).size;
+    return DAILY_BONUS_DAYS.filter((tier, i) => {
+      const items = bonusItems(config.tiers[i]);
+      const need = bonusNeed(tier, t.year, t.month);
+      if (!items.length || count < need) return false;
+      return this.db.transaction(() => {
+        if (!this.db.dailyBonusClaim(accountId, month, tier, now)) return false;
+        const title = `โบนัสล็อกอินสะสมครบ ${need} วัน`;
+        this.mail(accountId, `${t.key}|bonus${tier}`, title, title, 'ขอบคุณที่เข้าเกมสม่ำเสมอ กดรับของแนบได้เลย', items, now);
+        return true;
+      });
+    });
+  }
+
   /** Marks the day and mails its reward in one transaction; false = already had it. */
   private give(accountId: number, day: number, makeup: boolean, now: number): boolean {
     const t = thaiDate(now);
     const reward = dailyReward(day, this.overrides());
-    const attach: MailAttach = { gold: 0, items: [{ kind: 'stone', stone: reward.stone, count: reward.count }] };
-    const attachJson = JSON.stringify(attach);
     return this.db.transaction(() => {
       if (!this.db.dailyClaim(accountId, dayKey(t.year, t.month, day), makeup, now)) return false;
-      // One send per delivery day, reward day and reward: everyone getting the same thing today shares it.
-      const key = `${t.key}|${day}|${makeup ? 'm' : 'd'}|${attachJson}`;
-      let sendId = this.db.dailyMailSend(key);
-      if (sendId === undefined) {
-        const date = `${day} ${THAI_MONTHS[t.month - 1]}`;
-        sendId = this.db.mailSendInsert({
-          senderId: null, senderName: DAILY_SENDER, target: makeup ? `ชดเชยล็อกอินรายวัน ${date}` : `ล็อกอินรายวัน ${date}`,
-          title: makeup ? `ชดเชยของรางวัลวันที่ ${date}` : `ของรางวัลล็อกอินวันที่ ${date}`,
-          body: `${STONE_NAME[reward.stone]} ×${reward.count}\nกดรับของแนบได้เลย (ผูกกับตัวละครที่กดรับ ถ้าเป็นของใช้)`,
-          attach: attachJson, hasAttach: true, at: now, expiresAt: now + MAIL_MS,
-        });
-        this.db.dailyMailKeep(key, sendId);
-      }
-      this.db.mailBoxAdd(sendId, accountId, null);
+      const date = `${day} ${THAI_MONTHS[t.month - 1]}`;
+      this.mail(
+        accountId, `${t.key}|${day}|${makeup ? 'm' : 'd'}`,
+        makeup ? `ชดเชยล็อกอินรายวัน ${date}` : `ล็อกอินรายวัน ${date}`,
+        makeup ? `ชดเชยของรางวัลวันที่ ${date}` : `ของรางวัลล็อกอินวันที่ ${date}`,
+        `${STONE_NAME[reward.stone]} ×${reward.count}\nกดรับของแนบได้เลย (ผูกกับตัวละครที่กดรับ ถ้าเป็นของใช้)`,
+        [reward], now,
+      );
       return true;
     });
+  }
+
+  /**
+   * Mails the rewards to the account. One send per key and rewards: everyone getting the same thing today
+   * shares it. Call inside the transaction that writes the claim row.
+   */
+  private mail(accountId: number, base: string, target: string, title: string, body: string, rewards: DailyReward[], now: number): void {
+    const attach: MailAttach = { gold: 0, items: rewards.map((r) => ({ kind: 'stone' as const, stone: r.stone, count: r.count })) };
+    const attachJson = JSON.stringify(attach);
+    const key = `${base}|${attachJson}`;
+    let sendId = this.db.dailyMailSend(key);
+    if (sendId === undefined) {
+      sendId = this.db.mailSendInsert({
+        senderId: null, senderName: DAILY_SENDER, target, title, body,
+        attach: attachJson, hasAttach: true, at: now, expiresAt: now + MAIL_MS,
+      });
+      this.db.dailyMailKeep(key, sendId);
+    }
+    this.db.mailBoxAdd(sendId, accountId, null);
   }
 }

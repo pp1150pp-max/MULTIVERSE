@@ -1110,21 +1110,23 @@ export class GameWorld {
     return to.length;
   }
 
-  /** Today's daily login reward for this account, mailed the first time today; then the calendar pops up. */
+  /** Today's daily login reward (and any bonus reached) for this account, mailed once; then the calendar pops up. */
   private dailyCheck(s: Session): void {
     if (s.guest) return;
     try {
-      if (!this.daily.deliver(s.accountId)) return;
-      this.sendDaily(s, true);
+      const sent = this.daily.deliver(s.accountId);
+      const won = this.daily.bonus(s.accountId);
+      if (!sent && !won.length) return;
+      this.sendDaily(s, sent, won);
       for (const o of this.sessions) if (o.accountId === s.accountId) this.mailNote(o);
     } catch (e) {
       console.error('[daily] delivery failed', e);
     }
   }
 
-  private sendDaily(s: Session, popup: boolean): void {
+  private sendDaily(s: Session, popup: boolean, won: number[] = []): void {
     try {
-      this.send(s.ws, { t: 'daily', view: { ...this.daily.view(s.accountId), ...(popup ? { popup: true } : {}) } });
+      this.send(s.ws, { t: 'daily', view: { ...this.daily.view(s.accountId), ...(popup ? { popup: true } : {}), ...(won.length ? { won } : {}) } });
     } catch (e) {
       console.error('[daily] view failed', e);
     }
@@ -1133,15 +1135,17 @@ export class GameWorld {
   private dailyMakeup(s: Session, day: unknown): void {
     if (s.guest) return this.send(s.ws, { t: 'chat', name: '', text: DAILY_GUEST_MSG });
     let err: string | null;
+    let won: number[] = [];
     try {
       err = this.daily.makeup(s.accountId, day);
+      if (!err) won = this.daily.bonus(s.accountId);
     } catch (e) {
       console.error('[daily] make-up failed', e);
       err = 'ชดเชยไม่สำเร็จ ลองใหม่อีกครั้ง';
     }
     if (err) this.send(s.ws, { t: 'chat', name: '', text: err });
     else for (const o of this.sessions) if (o.accountId === s.accountId) this.mailNote(o);
-    this.sendDaily(s, false);
+    this.sendDaily(s, false, won);
   }
 
   /** Midnight (Thai time) with players online: each account online gets the new day's reward. */

@@ -39,7 +39,7 @@ import { upgradeItem } from '../src/shared/data/items';
 import { searchStats } from '../src/shared/sim/market';
 import type { Item, StoneStack } from '../src/shared/types';
 import type { AdminBalance, AdminHudLayout, AdminMenuLayout } from '../src/shared/admin';
-import { DAILY_DEFAULT } from '../src/shared/daily';
+import { BONUS_DEFAULT, bonusItems, DAILY_BONUS_DAYS, DAILY_DEFAULT } from '../src/shared/daily';
 import { STONE_NAME } from '../src/shared/data/stones';
 import { boxChanges, boxConfig, boxOrbs, cleanBoxOverrides, type AdminBox } from '../src/shared/mysteryBox';
 import { albumBonus } from '../src/shared/cardAlbum';
@@ -635,7 +635,21 @@ export async function ownerToolsApi(
   // ---------------------------------------------------------- daily login rewards (server/daily.ts)
   if (method === 'GET' && path === '/api/admin/daily') {
     requireFeature(req, db, 'daily');
-    send(res, 200, { defaults: DAILY_DEFAULT, overrides: world.daily.overrides() });
+    send(res, 200, { defaults: DAILY_DEFAULT, overrides: world.daily.overrides(), bonus: world.daily.bonusConfig(), bonusDefault: BONUS_DEFAULT });
+    return true;
+  }
+
+  if (method === 'POST' && path === '/api/admin/daily-bonus') {
+    const a = requireFeature(req, db, 'daily');
+    const body = await readJson(req);
+    const before = world.daily.bonusConfig();
+    const c = world.daily.setBonus(body.bonus);
+    if (typeof c === 'string') throw new HttpError(400, c);
+    if (JSON.stringify(before) !== JSON.stringify(c)) {
+      const tiers = c.tiers.map((t, i) => `${DAILY_BONUS_DAYS[i]} วัน: ${bonusItems(t).map((r) => `${STONE_NAME[r.stone]} ×${r.count}`).join(' + ') || 'ปิด'}`);
+      log(db, a, 'daily', 'โบนัสล็อกอินสะสม', `${c.on ? 'เปิด' : 'ปิดทั้งหมด'} · ${tiers.join(', ')}`);
+    }
+    send(res, 200, { bonus: c });
     return true;
   }
 
@@ -649,7 +663,7 @@ export async function ownerToolsApi(
     if (changed.length) {
       log(db, a, 'daily', 'ล็อกอินรายวัน', changed.map((d) => { const r = o[d] ?? DAILY_DEFAULT[d - 1]; return `วันที่ ${d}: ${STONE_NAME[r.stone]} ×${r.count}`; }).join(', '));
     }
-    send(res, 200, { defaults: DAILY_DEFAULT, overrides: o });
+    send(res, 200, { defaults: DAILY_DEFAULT, overrides: o, bonus: world.daily.bonusConfig(), bonusDefault: BONUS_DEFAULT });
     return true;
   }
 

@@ -1,12 +1,20 @@
 // The daily login calendar window (rules: src/shared/daily.ts). The server mails each day's reward the first
 // time the account is in the game that day and then pops this up; the HUD button opens it any time. A missed
-// day can be made up (DAILY_MAKEUPS a month): click it, then the make-up button. Everything is checked by the server.
+// day can be made up (DAILY_MAKEUPS a month): click it, then the make-up button. Under the grid are the bonus
+// boxes (7, 15 and 30 days got this month). Everything is checked by the server.
 import type { Game } from './Game';
 import { DAILY_MAKEUPS, THAI_MONTHS, type DailyView } from '../shared/daily';
 import { STONE_COLOR, STONE_NAME } from '../shared/data/stones';
 import { stoneIcon } from './icons';
+import { imgUrl } from './img';
 
 const WEEKDAYS = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+/** The bonus boxes' pictures by tier. Placeholders until the owner's three paper chests (art_templates/daily_bonus). */
+const BONUS_ART: Record<number, string> = {
+  7: 'assets/sprites/paper/treasure/chest_closed.png',
+  15: 'assets/sprites/paper/treasure/chest_closed.png',
+  30: 'assets/sprites/paper/treasure/chest_closed.png',
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -20,6 +28,7 @@ export class DailyUI {
   private readonly title: HTMLElement;
   private readonly note: HTMLElement;
   private readonly grid: HTMLElement;
+  private readonly bonus: HTMLElement;
   private readonly foot: HTMLElement;
   private readonly makeBtn: HTMLButtonElement;
   private view: DailyView | null = null;
@@ -36,6 +45,7 @@ export class DailyUI {
     head.append(this.title, close);
     this.note = el('div', 'daily-note');
     this.grid = el('div', 'daily-grid');
+    this.bonus = el('div', 'daily-bonus');
     this.foot = el('div', 'daily-foot');
     this.makeBtn = el('button', 'primary');
     this.makeBtn.onclick = () => {
@@ -49,7 +59,7 @@ export class DailyUI {
     };
     const btns = el('div', 'daily-btns');
     btns.append(this.makeBtn, mailBtn);
-    this.win.append(head, this.note, this.grid, this.foot, btns);
+    this.win.append(head, this.note, this.grid, this.bonus, this.foot, btns);
     this.grid.addEventListener('click', (e) => {
       const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-day]');
       const day = Number(cell?.dataset.day);
@@ -72,7 +82,7 @@ export class DailyUI {
     this.g.backend.dailyOpen();
   }
 
-  /** A calendar from the server. With `popup` it opens by itself (today's reward was just mailed). */
+  /** A calendar from the server. With `popup` / `won` it opens by itself (a reward or a bonus was just mailed). */
   show(v: DailyView): void {
     this.view = v;
     if (this.pick && v.days[this.pick - 1]?.state !== 'missed') this.pick = 0;
@@ -81,6 +91,9 @@ export class DailyUI {
     if (v.popup) {
       const r = v.days[v.today - 1].reward;
       this.g.hud.log(`🎁 ล็อกอินรายวัน: ได้${STONE_NAME[r.stone]} ×${r.count} — ส่งเข้ากล่องจดหมายแล้ว`, '#ffd34a');
+    }
+    for (const b of v.bonus) {
+      if (v.won?.includes(b.tier)) this.g.hud.log(`🎉 โบนัสล็อกอินสะสมครบ ${b.need} วัน — ส่งเข้ากล่องจดหมายแล้ว`, '#ffd34a');
     }
   }
 
@@ -105,6 +118,15 @@ export class DailyUI {
       );
     });
     this.grid.innerHTML = cells.join('');
+    this.bonus.classList.toggle('hidden', !v.bonus.length);
+    this.bonus.innerHTML = !v.bonus.length ? '' : `<div class="daily-bonus-head">โบนัสสะสมเดือนนี้ · ได้แล้ว ${v.count} วัน</div>` + v.bonus.map((b) => {
+      const tip = b.items.map((r) => `${STONE_NAME[r.stone]} ×${r.count}`).join(' · ');
+      const items = b.items.map((r) => `<span class="daily-bonus-item">${stoneIcon(r.stone)}×${r.count}</span>`).join('');
+      const state = b.got ? '✓ ได้แล้ว' : `${Math.min(v.count, b.need)} / ${b.need}`;
+      return `<div class="daily-bonus-box${b.got ? ' got' : ''}${v.won?.includes(b.tier) ? ' won' : ''}" title="${tip}">` +
+        `<img class="daily-bonus-art" src="${imgUrl(BONUS_ART[b.tier])}" alt="" draggable="false">` +
+        `<div class="daily-bonus-info"><b>ครบ ${b.need} วัน</b><div class="daily-bonus-items">${items}</div><span class="daily-bonus-state">${state}</span></div></div>`;
+    }).join('');
     this.foot.textContent = `ชดเชยวันที่พลาดได้อีก ${v.makeupsLeft} / ${DAILY_MAKEUPS} ครั้งในเดือนนี้ · ของทุกวันส่งเข้ากล่องจดหมายของบัญชี`;
     this.makeBtn.disabled = !this.pick || v.makeupsLeft < 1;
     this.makeBtn.textContent = this.pick ? `ชดเชยวันที่ ${this.pick}` : v.makeupsLeft ? 'เลือกวันที่พลาดเพื่อชดเชย' : 'ชดเชยครบแล้วเดือนนี้';
