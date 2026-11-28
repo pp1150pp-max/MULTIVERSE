@@ -27,6 +27,7 @@ h1, h2, h3 { text-wrap: balance; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .muted { color: var(--muted); }
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
+::selection { background: var(--gold); color: #2a1a05; }
 .btn:focus-visible { outline-color: #fff; outline-offset: 4px; }
 
 .skip { position: fixed; left: 16px; top: -60px; z-index: 50; background: var(--gold); color: #2a1a05; padding: 10px 16px; border-radius: 8px; font-weight: 600; text-decoration: none; }
@@ -96,8 +97,7 @@ h1, h2, h3 { text-wrap: balance; }
 
 /* ---- sections */
 .s { padding: 104px 0; }
-.eyebrow { margin: 0; font: 600 13px/1 'Cinzel', serif; letter-spacing: .2em; color: var(--gold-deep); text-transform: uppercase; }
-h2 { font-size: clamp(26px, 3.4vw, 38px); line-height: 1.25; margin: 10px 0 30px; }
+h2 { font-size: clamp(26px, 3.4vw, 38px); line-height: 1.25; margin: 0 0 30px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; }
 .two { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; align-items: start; }
 .news ul { margin: 0; padding: 0; list-style: none; }
@@ -174,7 +174,9 @@ h2 { font-size: clamp(26px, 3.4vw, 38px); line-height: 1.25; margin: 10px 0 30px
   .bosses { grid-template-columns: repeat(2, 1fr); }
   .sys { grid-template-columns: 1fr; }
 }
+/* Reduced motion: nothing moves or scales; colour and brightness changes stay as feedback. */
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  [data-enter] .hero-bg, [data-enter] .hero-in > * { animation: none; }
+  .btn, .cls img, .boss img { transition-property: filter, box-shadow, color, background-color; }
+  .btn:hover, .btn:active, .cls:hover img, .boss:hover img { transform: none; }
 }

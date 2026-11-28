@@ -104,6 +104,12 @@ function tick(): void {
   $('cd-h').textContent = pad(Math.floor(s / 3600) % 24);
   $('cd-m').textContent = pad(Math.floor(s / 60) % 60);
   $('cd-s').textContent = pad(s % 60);
+  // Screen readers: the time left in words, refreshed once a minute (the ticking digits are hidden from them).
+  const sr = state === 'ended' ? '' : lang === 'th'
+    ? `${Math.floor(s / 86400)} วัน ${Math.floor(s / 3600) % 24} ชั่วโมง ${Math.floor(s / 60) % 60} นาที`
+    : `${Math.floor(s / 86400)} days ${Math.floor(s / 3600) % 24} hours ${Math.floor(s / 60) % 60} minutes`;
+  const srEl = $('cd-sr');
+  if (srEl.textContent !== sr) srEl.textContent = sr;
   // The label is the live region: it changes only with the state, so screen readers aren't told every second.
   const label = TEXT[lang][state];
   if (lastState !== state + lang) {
