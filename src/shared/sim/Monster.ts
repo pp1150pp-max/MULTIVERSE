@@ -150,7 +150,10 @@ export class Monster extends Unit {
   private fleeFast = false;
   /** The Peg-Leg Captain's moves and his parrot (def.brain). Made on first use, so only the server has them. */
   captain: PeglegCaptainBrain | null = null;
-  /** Ship prisoner: has thrown its ball and broken its chain (sim/coveMoves.ts). */
+  /**
+   * Ship prisoner: has thrown its ball and broken its chain; powder-keg prisoner: the runner on its last run (sim/coveMoves.ts).
+   * The client walks it with another sheet move (views.ts: run, charge).
+   */
   freed = false;
   /** Cutlass pirate: the cut of its combo coming next (0, 1, 2). */
   private comboStep = 0;
