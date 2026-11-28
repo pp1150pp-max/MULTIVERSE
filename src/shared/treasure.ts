@@ -63,6 +63,8 @@ export interface TreasureConfig {
   aura: boolean;
   /** A chest comes up at a new random spot every time (off: where the map editor put it). */
   randomSpots: boolean;
+  /** A server restart keeps each chest where it stood and the opened ones go on counting (off: all back, at new spots). */
+  keepOnRestart: boolean;
   /** World units a random spot keeps from other chests (and its last spot), the camp, doors and warp circles, the boss summoner. */
   spotGap: number;
   campGap: number;
@@ -90,10 +92,10 @@ export interface TreasureConfig {
   rows: ChestRow[];
 }
 
-type FlagKey = 'chests' | 'shrines' | 'aura' | 'randomSpots';
-const FLAG_KEYS: readonly FlagKey[] = ['chests', 'shrines', 'aura', 'randomSpots'];
+type FlagKey = 'chests' | 'shrines' | 'aura' | 'randomSpots' | 'keepOnRestart';
+const FLAG_KEYS: readonly FlagKey[] = ['chests', 'shrines', 'aura', 'randomSpots', 'keepOnRestart'];
 /** Each switch's name in /admin errors and the audit log. */
-const FLAG_NAME: Record<FlagKey, string> = { chests: 'หีบสมบัติ', shrines: 'ศาลเจ้า', aura: 'ออร่าหีบ/ศาล', randomSpots: 'หีบสุ่มจุดเกิด' };
+const FLAG_NAME: Record<FlagKey, string> = { chests: 'หีบสมบัติ', shrines: 'ศาลเจ้า', aura: 'ออร่าหีบ/ศาล', randomSpots: 'หีบสุ่มจุดเกิด', keepOnRestart: 'จำหีบข้ามการรีสตาร์ท' };
 type NumKey = Exclude<keyof TreasureConfig, FlagKey | 'rows'>;
 /** Each number's name in /admin, its range and the step of its field. */
 export const TREASURE_NUMS: Record<NumKey, { name: string; range: [number, number]; step: number }> = {
@@ -128,7 +130,7 @@ export type TreasureTuning = Partial<Omit<TreasureConfig, 'rows'>> & { rows?: Re
 /** The values in code (owner 2026-11-27). */
 export function codeTreasure(): TreasureConfig {
   return {
-    chests: true, shrines: true, aura: true, randomSpots: true, spotGap: 30, campGap: 25, doorGap: 12, bossGap: 16,
+    chests: true, shrines: true, aura: true, randomSpots: true, keepOnRestart: true, spotGap: 30, campGap: 25, doorGap: 12, bossGap: 16,
     chestRespawn: 600, openSec: 1.5, range: 2.5, goldPerLevel: 50, goldSpread: 30, pieces: 10, epicSure: 1,
     buffSec: 180, shrineCd: 600, atkPct: 15, speedPct: 20, expPct: 30,
     rows: CHEST_ROWS.map((r) => ({ ...r, prize: { ...r.prize }, on: true })),
