@@ -43,6 +43,7 @@ import { STONE_NAME } from '../shared/data/stones';
 import { CODE_SET_STEPS, SET_BONUS_MAX, SET_IDS, SET_MAX_PIECES, SET_NAME, setPieceKinds } from '../shared/data/sets';
 import { MOVE_GROUPS } from '../shared/moveTuning';
 import { PET_LOOT_FLAG_NAME, PET_LOOT_NUM_NAME, PET_LOOT_RANGE, petIds } from '../shared/petLootTuning';
+import { SIM_PERF_FLAG_NAME, SIM_PERF_NUM_NAME, SIM_PERF_RANGE } from '../shared/simPerfTuning';
 import { COSMETICS } from '../shared/data/cosmetics';
 import { BAG_EXPAND_FLAG_NAME, BAG_EXPAND_NUMS, BAG_TAB_START } from '../shared/bagTabs';
 
@@ -1322,6 +1323,29 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     );
   };
 
+  // ---------------------------------------------------------- server load (src/shared/simPerfTuning.ts, owner 2026-11-28)
+  const perfCard = h('div', { class: 'card' });
+  const drawPerf = (): void => {
+    const sp = draft.simPerf;
+    const cs = code.simPerf;
+    const flag = (k: keyof typeof SIM_PERF_FLAG_NAME) =>
+      h('label', { title: `ค่าในโค้ด: ${cs[k] ? 'เปิด' : 'ปิด'}` },
+        h('input', { type: 'checkbox', checked: sp[k], onchange: (e: Event) => { sp[k] = (e.target as HTMLInputElement).checked; updateSummary(); } }),
+        ` ${SIM_PERF_FLAG_NAME[k]}`);
+    const num = (k: keyof typeof SIM_PERF_RANGE) =>
+      h('label', {}, `${SIM_PERF_NUM_NAME[k]} `, numBox(() => sp[k], (n) => { sp[k] = n; }, cs[k], SIM_PERF_RANGE[k][0], SIM_PERF_RANGE[k][1], 1, () => updateSummary()),
+        h('span', { class: 'muted' }, ` ค่าในโค้ด ${cs[k]}`));
+    perfCard.replaceChildren(
+      h('h2', {}, 'ภาระ server (ลดปิงตอนเปิดหลายห้อง)'),
+      h('div', { class: 'muted' },
+        'เช็คชนแบบตาราง: มอน/ผู้เล่นเช็คชนเฉพาะสิ่งกีดขวางและมอนที่อยู่ใกล้ แทนการไล่ทั้งแมพ ผลเหมือนเดิมทุกอย่าง ใช้ CPU น้อยลงมาก · ปิด = ไล่ทั้งแมพแบบเดิม · ' +
+        'มอนไกลผู้เล่นคิดช้าลง: มอนธรรมดาที่ยืน/เดินเล่นอยู่เฉย ๆ และไม่มีผู้เล่นในระยะที่ตั้ง คิดทุก N tick (เดินเล่นและฟื้นเลือดเท่าเดิมรวมแล้ว) ผู้เล่นไม่เห็นเพราะเกินระยะที่ส่งให้จอ (34 ม.) ' +
+        'โดนตี/มีคนเข้าใกล้ = คิดทุก tick ทันที ไม่รวมบอส มอนท่าพิเศษ (ชั้น 2 ส่วนใหญ่) มอนที่บอสเรียก มินิเกม · ปิด = ทุกมอนคิดทุก tick · มีผลทันที'),
+      h('div', { class: 'row bal-line' }, flag('grid'), flag('doze')),
+      h('div', { class: 'row bal-line' }, num('dozeRadius'), num('dozeEvery')),
+    );
+  };
+
   // ---------------------------------------------------------- skill effects' extra layer (src/shared/fxLayerTuning.ts)
   const fxCard = h('div', { class: 'card' });
   // level-up effect (owner 2026-11-25, src/client/levelUpFx.ts); its preview canvas stays across redraws
@@ -1903,6 +1927,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     drawLang();
     drawAuto();
     drawPet();
+    drawPerf();
     drawTut();
     drawTalk();
     drawFx();
@@ -1964,7 +1989,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
   // Category buttons + search box (owner 2026-11-22). Cards are only hidden with CSS (`.cat-hide`), never removed.
   const CATS: { name: string; cards: HTMLElement[] }[] = [
     { name: 'อาชีพ-ต่อสู้', cards: [classCard, regenCard, rootCard, dodgeCard] },
-    { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, shoutCard, hubCard] },
+    { name: 'มอน-บอส-เมือง', cards: [monsterCard, bossCard, moveCard, shoutCard, hubCard, perfCard] },
     { name: 'ไอเทม-ตีบวก', cards: [affixCard, tierCard, previewCard, setCard, potionCard, bagCard, forgeCard] },
     { name: 'Auto Play', cards: [autoCard, petCard] },
     { name: 'หน้าตา-เอฟเฟกต์-เสียง', cards: [uiCard, fxCard, shaderCard, luCard, dashCard, circleCard, audioCard, bossMusicCard, rigCard] },

@@ -2787,7 +2787,7 @@ export class Sim {
     // The Ghost Ship Graveyard's curse rings slow whoever stands in them (sim/graveMoves.ts).
     if (this.hazards.length) tickCurses(this);
 
-    for (const m of this.monsters) m.update(dt, this);
+    this.updateMonsters(dt);
     this.separateMonsters();
     if (this.zone.safe) this.keepOutOfSafe(this.zone.safe);
     // Before dead monsters leave the list: a seed whose host died bursts and jumps.
@@ -2997,46 +2997,127 @@ export class Sim {
     }
   }
 
+  /**
+   * Every monster's update. With the /admin switch on (simPerf.doze), an idle ordinary monster with no player within dozeRadius
+   * only updates every dozeEvery ticks, with the time it skipped (Monster.dozable; nobody sees it: browsers get monsters within
+   * INTEREST_RADIUS only). Spread over the ticks by monster id, so the work does not bunch up on one tick.
+   */
+  private updateMonsters(dt: number): void {
+    const cfg = currentBalance().simPerf;
+    const tick = this.tickNo++;
+    const r2 = cfg.dozeRadius * cfg.dozeRadius;
+    const far = (m: Monster): boolean => {
+      for (const p of this.players) {
+        const dx = p.x - m.x;
+        const dz = p.z - m.z;
+        if (dx * dx + dz * dz < r2) return false;
+      }
+      return true;
+    };
+    for (const m of this.monsters) {
+      if (cfg.doze && m.dozable() && far(m)) {
+        m.dozeDt += dt;
+        if ((m.id + tick) % cfg.dozeEvery !== 0) continue;
+      } else m.dozeDt += dt;
+      const step = m.dozeDt;
+      m.dozeDt = 0;
+      m.update(step, this);
+    }
+  }
+
+  /** Ticks this Sim has run (updateMonsters spreads dozing monsters over them). */
+  private tickNo = 0;
+
   private separateMonsters(): void {
+    if (currentBalance().simPerf.grid) this.separateNear();
+    else this.separateAll();
+  }
+
+  /**
+   * separateAll with the pairs found through a grid of cells built at the start of the tick (cell = the widest pair + 1 m, so a
+   * monster pushed a little this tick still finds its neighbours), in the same order: the same pushes.
+   */
+  private separateNear(): void {
+    const ms = this.monsters;
+    let maxR = 0;
+    for (const m of ms) if (m.radius > maxR) maxR = m.radius;
+    const cell = maxR * 2 + 1;
+    const cells = new Map<number, number[]>();
+    const key = (cx: number, cz: number): number => (cx + 32768) * 65536 + (cz + 32768);
+    for (let i = 0; i < ms.length; i++) {
+      const m = ms[i];
+      if (!m.alive || m.def.move === 'parrot') continue;
+      const k = key(Math.floor(m.x / cell), Math.floor(m.z / cell));
+      let at = cells.get(k);
+      if (!at) cells.set(k, (at = []));
+      at.push(i);
+    }
+    const near: number[] = [];
+    for (let a = 0; a < ms.length; a++) {
+      const m = ms[a];
+      if (!m.alive || m.def.move === 'parrot') continue;
+      near.length = 0;
+      const cx = Math.floor(m.x / cell);
+      const cz = Math.floor(m.z / cell);
+      for (let x = cx - 1; x <= cx + 1; x++) {
+        for (let z = cz - 1; z <= cz + 1; z++) {
+          const at = cells.get(key(x, z));
+          if (at) for (const b of at) if (b > a) near.push(b);
+        }
+      }
+      if (near.length > 1) near.sort((x, y) => x - y);
+      for (const b of near) this.separatePair(m, ms[b]);
+      this.separateFromPlayers(m);
+    }
+  }
+
+  private separateAll(): void {
     const ms = this.monsters;
     for (let a = 0; a < ms.length; a++) {
       const m = ms[a];
       // The captain's parrot flies: it sits on shoulders and heads, pushing nobody (sim/peglegCaptain.ts).
       if (!m.alive || m.def.move === 'parrot') continue;
-      for (let b = a + 1; b < ms.length; b++) {
-        const n = ms[b];
-        if (!n.alive || n.def.move === 'parrot') continue;
-        const dx = n.x - m.x;
-        const dz = n.z - m.z;
-        const min = m.radius + n.radius;
-        if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
-        const d = Math.hypot(dx, dz) || 0.01;
-        if (d < min) {
-          // The kraken and its tentacles never move (MonsterDef.anchored): the other one takes the whole push.
-          const ma = !!m.def.anchored;
-          const na = !!n.def.anchored;
-          if (ma && na) continue;
-          const push = (min - d) / d / (ma || na ? 1 : 2);
-          if (!ma) {
-            m.x -= dx * push;
-            m.z -= dz * push;
-          }
-          if (!na) {
-            n.x += dx * push;
-            n.z += dz * push;
-          }
-        }
+      for (let b = a + 1; b < ms.length; b++) this.separatePair(m, ms[b]);
+      this.separateFromPlayers(m);
+    }
+  }
+
+  /** Two monsters standing in each other: pushed apart (a dead one or the parrot: nothing). */
+  private separatePair(m: Monster, n: Monster): void {
+    if (!n.alive || n.def.move === 'parrot') return;
+    const dx = n.x - m.x;
+    const dz = n.z - m.z;
+    const min = m.radius + n.radius;
+    if (Math.abs(dx) > min || Math.abs(dz) > min) return;
+    const d = Math.hypot(dx, dz) || 0.01;
+    if (d < min) {
+      // The kraken and its tentacles never move (MonsterDef.anchored): the other one takes the whole push.
+      const ma = !!m.def.anchored;
+      const na = !!n.def.anchored;
+      if (ma && na) return;
+      const push = (min - d) / d / (ma || na ? 1 : 2);
+      if (!ma) {
+        m.x -= dx * push;
+        m.z -= dz * push;
       }
-      for (const p of this.players) {
-        if (!p.alive || p.isDashing || m.def.anchored) continue;
-        const dx = m.x - p.x;
-        const dz = m.z - p.z;
-        const min = m.radius + p.radius;
-        const d = Math.hypot(dx, dz) || 0.01;
-        if (d < min) {
-          m.x += (dx / d) * (min - d);
-          m.z += (dz / d) * (min - d);
-        }
+      if (!na) {
+        n.x += dx * push;
+        n.z += dz * push;
+      }
+    }
+  }
+
+  /** A monster standing in a player: pushed out (a dashing player goes through; the kraken never moves). */
+  private separateFromPlayers(m: Monster): void {
+    for (const p of this.players) {
+      if (!p.alive || p.isDashing || m.def.anchored) continue;
+      const dx = m.x - p.x;
+      const dz = m.z - p.z;
+      const min = m.radius + p.radius;
+      const d = Math.hypot(dx, dz) || 0.01;
+      if (d < min) {
+        m.x += (dx / d) * (min - d);
+        m.z += (dz / d) * (min - d);
       }
     }
   }

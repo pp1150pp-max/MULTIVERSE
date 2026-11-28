@@ -335,6 +335,18 @@ export class Monster extends Unit {
   hunter = false;
 
   get isBoss(): boolean { return this.def.behavior === 'boss'; }
+
+  /** Seconds of updates skipped while dozing (Sim.updateMonsters), handed over on its next update. */
+  dozeDt = 0;
+
+  /**
+   * May skip updates while no player is near (owner 2026-11-28, simPerfTuning.ts): an ordinary monster of the plain kind
+   * (no special moves, brain or spells), alive, idle with no target, nothing under way (wind-up, fall, jump, stun).
+   */
+  dozable(): boolean {
+    return this.alive && this.state === 'idle' && !this.target && this.windupT <= 0 && this.stunT <= 0 && this.fallT <= 0 && this.jumpOutT <= 0 &&
+      !this.isBoss && !this.summoned && !this.hunter && !this.keg && !this.def.anchored && !this.def.move && !this.def.brain && !this.def.pattern && !this.def.spells;
+  }
   get isHostile(): boolean {
     return this.alive && (this.state === 'chase' || this.state === 'charge' || this.state === 'leap' || this.windupT > 0);
   }

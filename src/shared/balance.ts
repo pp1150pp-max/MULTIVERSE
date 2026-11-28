@@ -30,6 +30,7 @@ import { bossShoutChanges, checkBossShoutTuning, codeBossShout, mergeBossShout, 
 import { checkTutorialTuning, codeTutorial, mergeTutorial, tutorialChanges, type TutorialConfig, type TutorialTuning } from './tutorial';
 import { checkMoveTuning, codeMoves, mergeMoves, moveChanges, type MoveConfig, type MoveTuning } from './moveTuning';
 import { checkPetLootTuning, codePetLoot, mergePetLoot, petLootChanges, type PetLootConfig, type PetLootTuning } from './petLootTuning';
+import { checkSimPerfTuning, codeSimPerf, mergeSimPerf, simPerfChanges, type SimPerfConfig, type SimPerfTuning } from './simPerfTuning';
 import { checkWaveTuning, codeWaves, mergeWaves, waveChanges, type WaveConfig, type WaveTuning } from './waveGame';
 import { checkTreasureTuning, codeTreasure, mergeTreasure, treasureChanges, type TreasureConfig, type TreasureTuning } from './treasure';
 import { checkForgeTuning, codeForge, forgeChanges, mergeForge, type ForgeConfig, type ForgeTuning } from './forgeTuning';
@@ -349,6 +350,8 @@ export interface Balance {
   moves: MoveConfig;
   /** Pets pick up loot (petLootTuning.ts, owner 2026-11-27). */
   petLoot: PetLootConfig;
+  /** Server load: collision grid, far idle monsters dozing (simPerfTuning.ts, owner 2026-11-28). */
+  simPerf: SimPerfConfig;
 }
 
 /** What is saved: only what differs from the code. Tier arrays are saved whole when any entry differs. */
@@ -493,6 +496,7 @@ export interface BalanceTuning {
   moves?: MoveTuning;
   /** Pet loot settings that differ from the code. */
   petLoot?: PetLootTuning;
+  simPerf?: SimPerfTuning;
 }
 
 /** Highest Lv1 / per-level value of each stat (owner 2026-11-11); the lowest is 0. */
@@ -633,6 +637,7 @@ export function codeBalance(): Balance {
     skills: codeSkills(),
     moves: codeMoves(),
     petLoot: codePetLoot(),
+    simPerf: codeSimPerf(),
   };
 }
 
@@ -733,6 +738,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.skills = mergeSkills(t.skills);
   b.moves = mergeMoves(t.moves);
   b.petLoot = mergePetLoot(t.petLoot);
+  b.simPerf = mergeSimPerf(t.simPerf);
   return b;
 }
 
@@ -875,7 +881,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'loginLook', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'wardrobeMenu', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade', 'bossShout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'loginLook', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'wardrobeMenu', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'simPerf', 'sceneGrade', 'bossShout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1537,6 +1543,12 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (c.tuning) out.petLoot = c.tuning;
     return null;
   };
+  const simPerf = (): string | null => {
+    const c = checkSimPerfTuning(o.simPerf, strict);
+    if ('error' in c) return c.error;
+    if (c.tuning) out.simPerf = c.tuning;
+    return null;
+  };
   const npcTalk = (): string | null => {
     const c = checkNpcTalkTuning(o.npcTalk, strict);
     if ('error' in c) return c.error;
@@ -1652,6 +1664,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     sets() ??
     moves() ??
     petLoot() ??
+    simPerf() ??
     sceneGrade();
   if (err) return { error: err };
   // Fixed key order.
@@ -1821,6 +1834,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   out.push(...setChanges(a.sets, b.sets));
   out.push(...moveChanges(a.moves, b.moves));
   out.push(...petLootChanges(a.petLoot, b.petLoot));
+  out.push(...simPerfChanges(a.simPerf, b.simPerf));
   out.push(...hudLayoutChanges(a.hudLayout, b.hudLayout));
   return out.join(', ');
 }
