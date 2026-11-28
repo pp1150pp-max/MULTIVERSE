@@ -4,7 +4,7 @@
 // moves (arms then head, phases by HP: ink, bursting tentacles, sweep, pull out, grab, wave, sharks, frenzy) and their /admin numbers.
 // On real Sims, no server.
 import { finish, ok } from './check';
-import { BOSS_ROOMS, KRAKEN_SPOT, MAELSTROM_ISLAND, ROOM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, inWhirlpoolCircle, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
+import { BOSS_ROOMS, FARM_SCALE, KRAKEN_SPOT, MAELSTROM_ISLAND, ROOM_ISLAND, ROOM_WHIRLPOOL, WARP_RANGE, ZONES, ZONE_HARBOR, ZONE_HUB, floorOf, hubOf, inWhirlpoolCircle, islandAt, lairExitSpot, whirlpoolAt } from '../src/shared/data/zones';
 import { HARBOR_ID } from '../src/shared/data/harbor';
 import { MONSTERS } from '../src/shared/data/monsters';
 import { BOSS_KEY, BOSS_QUEST_KEY, STONE_DESC, STONE_NAME } from '../src/shared/data/stones';
@@ -88,7 +88,7 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   const far = ['shark_knight', 'seahorse_soldier', 'ghost_pirate_king'].map(away);
   ok(far.every((d, i) => i === 0 || d > far[i - 1]), `the walking kinds get farther from the camp (${far.map(Math.round).join(' < ')})`);
   const rim = SEA.spawns.filter((s) => s.monster === 'kraken_tentacle');
-  ok(rim.length === 10 && rim.every((s) => s.radius === 0 && Math.hypot(s.x - w!.x, s.z - w!.z) < w!.r && w!.r - Math.hypot(s.x - w!.x, s.z - w!.z) < 2), '10 tentacles just inside the whirlpool (owner 2026-11-26)');
+  ok(rim.length === 15 && rim.every((s) => s.radius === 0 && Math.hypot(s.x - w!.x, s.z - w!.z) < w!.r && w!.r - Math.hypot(s.x - w!.x, s.z - w!.z) < 2), '15 tentacles just inside the whirlpool (owner 2026-11-26; 15 since the map grew x1.5, 2026-11-28)');
   ok(SEA.spawns.filter((s) => s.monster !== 'kraken_tentacle').every((s) => Math.hypot(s.x, s.z) > w!.r + 5), 'the others are well off the rim');
   const sim = new Sim(SEA);
   ok(sim.monsters.every((m) => m.level >= 71 && m.level <= 79), 'its monsters are Lv71–79');
@@ -100,7 +100,7 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
   // The browser's scattered ground details (world.ts addDecor) skip the whole circle, island included (owner 2026-11-27).
   ok(inWhirlpoolCircle(SEA, 0, 0) && inWhirlpoolCircle(SEA, w!.r - 0.5, 0) && inWhirlpoolCircle(SEA, w!.r + 0.5, 0, 1) && !inWhirlpoolCircle(SEA, w!.r + 1.5, 0, 1), 'no ground details on the whirlpool, its island or its rim');
   const masts = sim.terrain.props.filter((p) => p.key === 'broken_mast').length;
-  ok(masts > 0 && masts < 70, `far fewer broken masts (${masts}, was 224)`);
+  ok(masts > 0 && masts < 70 * FARM_SCALE ** 2, `far fewer broken masts (${masts}; was 224 before the owner's cut, on a map 1/2.25 the size)`);
   const rs = new Sim(ROOM);
   ok(rs.terrain.props.some((p) => p.key === 'room_kraken_coral') && rs.terrain.props.every((p) => !/^room_kraken_(rune_stone|tree)$/.test(p.key)), 'the room uses the maelstrom\'s own kit');
   const sp = rs.spawnPoint();
@@ -145,7 +145,7 @@ const walkTo = (x: number, z: number) => (p: Player): Intent => {
 {
   const w = SEA.whirlpools![0];
   const isle = w.island!;
-  ok(isle === MAELSTROM_ISLAND && isle >= 6 && isle <= 9, `a small island in the whirlpool's middle (r ${isle})`);
+  ok(isle === MAELSTROM_ISLAND * FARM_SCALE && isle >= 9 && isle <= 12, `a small island in the whirlpool's middle (r ${isle})`);
   ok(SEA.lair!.x === 0 && SEA.lair!.z === 0 && !!islandAt(SEA, 0, 0), "the kraken's summoner stands in the island's middle");
   const sim = new Sim(SEA);
   sim.monsters = [];

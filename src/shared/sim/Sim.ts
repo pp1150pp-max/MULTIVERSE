@@ -9,7 +9,7 @@ import { AUTO_EXP_MULT, expGapMult, expToNext, mitigate, MAX_LEVEL, MISS_GAP, ou
 import { blockingGate, BOSS_GATE_IDS } from '../data/bossGates';
 import { lineRanges, rerollStat, rerollValues, rollItem } from '../data/items';
 import { REROLL_NAME, rerollCost, type RerollKind } from '../data/reroll';
-import { arenaRadius, FARM_IDS, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK, warpPadNear } from '../data/zones';
+import { arenaRadius, FARM_IDS, inWhirlpoolCircle, RIM_CLEAR, inBossArena, lairExitSpot, LAVA_BURN, LAVA_TICK, warpPadNear } from '../data/zones';
 import type { Hazard } from './volcanoHeart';
 import { stealReturn, thornsReflect } from './beachMoves';
 import { kegStart } from './coveMoves';
@@ -250,8 +250,9 @@ export class Sim {
     this.waiting = !!opts.hold && (delay > 0 || waveHold);
     if (opts.waves && zone.waves) this.waveRun = { cfg: { ...opts.waves }, wave: 0, nextAt: waveHold ? null : opts.waves.countdown, ids: new Set(), won: false };
     else {
-      const roam = FARM_IDS.includes(zone.id);
-      zone.spawns.forEach((area, index) => this.spawners.push(roam ? { area: { ...area }, alive: 0, queue: [], boss: false, index, roam, home: area } : { area, alive: 0, queue: [], boss: false, index }));
+      // A spot that never wanders (radius 0: the kraken's tentacles round its whirlpool's rim) stays put on a farm map too.
+      const farm = FARM_IDS.includes(zone.id);
+      zone.spawns.forEach((area, index) => this.spawners.push(farm && area.radius > 0 ? { area: { ...area }, alive: 0, queue: [], boss: false, index, roam: true, home: area } : { area, alive: 0, queue: [], boss: false, index }));
     }
     if (zone.boss) this.spawners.push({ area: zone.boss, alive: 0, queue: [], boss: true, index: -1 });
     if (delay > 0 && !this.waiting) this.bossAt = delay;
@@ -276,7 +277,7 @@ export class Sim {
 
   /** How many monsters this spawner keeps: the code's count, ×the map's pack multiplier (/admin) unless it is a boss. */
   private wanted(sp: Spawner): number {
-    return sp.boss || this.zone.roomOf ? sp.area.count : packCount(this.zone.id, sp.area.count, sp.index);
+    return sp.boss || this.zone.roomOf ? sp.area.count : packCount(this.zone.id, sp.area.count, sp.index, undefined, sp.area.radius === 0);
   }
 
   private newId(): number {
@@ -488,6 +489,8 @@ export class Sim {
       if (this.terrain.distToPath(x, z) < 3.5 || Math.hypot(x - zone.start.x, z - zone.start.z) < 14) continue;
       if (lair && Math.hypot(x - lair.x, z - lair.z) < ring + 5) continue;
       if (pools.some((l) => Math.hypot((x - l.x) / (l.rx + 2.5), (z - l.z) / (l.rz + 2.5)) < 1)) continue;
+      // Clear of a whirlpool's rim, where the kraken's tentacles stand (as scatterZone keeps them).
+      if (inWhirlpoolCircle(zone, x, z, RIM_CLEAR)) continue;
       // Spots switched off in /admin (wanted 0) stand nowhere.
       if (this.spawners.some((o) => o !== sp && !o.boss && this.wanted(o) > 0 && Math.hypot(o.area.x - x, o.area.z - z) < ROAM_APART)) continue;
       put(Math.round(x * 10) / 10, Math.round(z * 10) / 10);

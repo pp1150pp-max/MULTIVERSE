@@ -686,9 +686,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           }, 1, ...BALANCE_RANGE.spawnRadius, 0.1, () => { show(); updateSummary(); });
           return h('tr', {}, h('td', {}, z.nameTh), h('td', {}, box), out);
         })))),
-      h('h3', {}, 'จุดเกิดที่เปิดใช้ (แมพฟาร์มชั้น 1)'),
+      h('h3', {}, 'จุดเกิดที่เปิดใช้ (แมพฟาร์มชั้น 1–2)'),
       h('div', { class: 'muted' },
-        `แมพฟาร์มชั้น 1 มีจุดเกิดเต็มแมพ (เจ้าของ 2026-11-25) ใส่ % ของจุดที่เปิดใช้ ${BALANCE_RANGE.farmSpots[0]}–${BALANCE_RANGE.farmSpots[1]} (100 = ทุกจุด) · จุดที่ปิดกระจายเท่า ๆ กันทั้งแมพและทุกชนิดมอน · ` +
+        `แมพฟาร์มชั้น 1 และ 2 มีจุดเกิดเต็มแมพ (เจ้าของ 2026-11-25, ชั้น 2 2026-11-28; หนวดคราเคนรอบน้ำวนเปิดเสมอ) ใส่ % ของจุดที่เปิดใช้ ${BALANCE_RANGE.farmSpots[0]}–${BALANCE_RANGE.farmSpots[1]} (100 = ทุกจุด) · จุดที่ปิดกระจายเท่า ๆ กันทั้งแมพและทุกชนิดมอน · ` +
         'บันทึกแล้วมีผลทันที: เพิ่ม = มอนทยอยเกิดตามเวลาเกิดใหม่, ลด = มอนของจุดที่ปิดตายแล้วไม่เกิดใหม่ · ใช้คู่กับ "มอนต่อจุด ×" ด้านบนได้'),
       h('div', { class: 'bal-scroll' }, h('table', { class: 'bal-table' },
         h('thead', {}, h('tr', {}, h('th', {}, 'แมพ'), h('th', {}, 'จุดที่เปิด %'), h('th', {}, 'จุด / มอนทั้งแมพ (ต่อ CH)'))),
@@ -696,7 +696,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           const total = h('td', { class: 'bal-out' });
           const spawns = ZONES[id].spawns;
           const sum = (b: Parameters<typeof packCount>[3]) => {
-            const per = spawns.map((a, i) => packCount(id, a.count, i, b));
+            const per = spawns.map((a, i) => packCount(id, a.count, i, b, a.radius === 0));
             return `${per.filter((n) => n > 0).length} จุด / ${per.reduce((t, n) => t + n, 0)} ตัว`;
           };
           const show = (): void => {
@@ -731,7 +731,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
           h('input', { type: 'checkbox', checked: draft.mobRoam, onchange: (e: Event) => { draft.mobRoam = (e.target as HTMLInputElement).checked; updateSummary(); } }),
-          ' มอนแมพฟาร์มชั้น 1 เกิดใหม่สุ่มที่ (จุดที่มอนตายหมดทั้งตัวเดี่ยว/ทั้งกลุ่ม ย้ายไปเกิดที่ใหม่ใกล้จุดเดิมของมันเอง กลุ่มยังเกิดด้วยกัน · ปิด = เกิดที่จุดเดิมเสมอ)'),
+          ' มอนแมพฟาร์ม (ชั้น 1–2) เกิดใหม่สุ่มที่ (จุดที่มอนตายหมดทั้งตัวเดี่ยว/ทั้งกลุ่ม ย้ายไปเกิดที่ใหม่ใกล้จุดเดิมของมันเอง กลุ่มยังเกิดด้วยกัน · ปิด = เกิดที่จุดเดิมเสมอ)'),
       ),
       h('div', { class: 'row bal-line' },
         h('label', {}, 'ระยะที่จุดเกิดย้ายได้จากจุดเดิม (หน่วย, ค่าในโค้ด 8)', numBox(() => draft.mobRoamReach, (n) => { draft.mobRoamReach = n; }, code.mobRoamReach, ...BALANCE_RANGE.mobRoamReach, 1, updateSummary)),
