@@ -11,6 +11,7 @@ import { sellPickKey } from '../../shared/sim/Sim';
 import { COIN_ICON } from '../icons';
 import { potionTotals } from './hudShared';
 import { isTouchMode } from '../touch/device';
+import { makePaneSort, type PaneSort } from './paneSort';
 
 export type BagView = 'worn' | 'gear' | 'use';
 /** How a cell on the right looks and what pointing at it says. */
@@ -65,6 +66,7 @@ export class NpcHostPane {
   private readonly bagTabs: HTMLElement;
   private readonly bagBody: HTMLElement;
   private readonly foot: HTMLElement;
+  private readonly sort: PaneSort;
   private view: BagView;
   private drawn = '';
   /** Where the NPC window lives when it is not in here (put back on close). */
@@ -93,6 +95,8 @@ export class NpcHostPane {
       b.onclick = () => { this.view = v; this.drawn = ''; this.update(); };
       this.bagTabs.append(b);
     }
+    this.sort = makePaneSort(g, () => { this.drawn = ''; });
+    this.bagTabs.append(this.sort.root);
     this.bagBody = el('div', 'ns-body');
     this.foot = el('div', 'ns-foot');
     bag.append(this.bagTabs, this.bagBody, el('div', 'ns-hint', spec.hint(isTouchMode())), this.foot);
@@ -157,6 +161,7 @@ export class NpcHostPane {
       if (host.style.height !== hgt) host.style.height = hgt;
       this.box.classList.toggle('nh-fill', fill);
     }
+    if (this.spec.views.length) this.sort.refresh();
     if (this.spec.pickView) this.view = this.spec.pickView(this.view);
     const p = this.g.player;
     const key = (e: BagEntry | null | undefined) => (!e ? '' : isItem(e) ? `${e.uid}+${e.plus ?? 0}` : `${sellPickKey(e)}x${e.count}`);

@@ -187,6 +187,13 @@
 }
 #npc-talk .ns-tab:hover { color: #f4e6c4; }
 #npc-talk .ns-tab.on { background: linear-gradient(#f2c654, #c99a3a); color: #3a2010; font-weight: 600; border-color: #ffd86a; }
+#npc-talk .ns-sort { margin-left: auto; display: flex; gap: 0.2em; align-items: flex-end; }
+#npc-talk .ns-sort.hidden { display: none; }
+#npc-talk .ns-sort select {
+  padding: 0.2em 0.3em; font-size: max(9px, 0.72em); border: 2px solid #8a6a2c; border-bottom: none; border-radius: 7px 7px 0 0;
+  background: linear-gradient(#3a2414, #2a180c); color: #c8b48a;
+}
+.touch-ui #npc-talk .ns-sort select { min-height: 34px; }
 #npc-talk .ns-tab .n { font-size: 0.85em; opacity: 0.8; }
 #npc-talk .ns-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 0.2em; }
 #npc-talk .ns-note { display: flex; justify-content: space-between; gap: 0.4em; margin-bottom: 0.4em; color: #c8b48a; font-size: max(9px, 0.62em); }

@@ -16,6 +16,7 @@ import { isBound, isItem, isOrbStone, isPotion, isStack, isStone, RARITIES, RARI
 import { COIN_ICON, potionIcon, stoneIcon } from '../icons';
 import { entryColor, POTION_COLOR, potionTotals } from './hudShared';
 import { isTouchMode } from '../touch/device';
+import { makePaneSort, type PaneSort } from './paneSort';
 import { currentBalance } from '../../shared/balance';
 import type { ShopLineKey } from '../../shared/npcTalk';
 
@@ -49,6 +50,7 @@ export class NpcShopPane {
   private readonly foot: HTMLElement;
   private readonly modal: HTMLElement;
   private readonly card: HTMLElement;
+  private readonly sort: PaneSort;
   private tab: MerTab = 'buy';
   private bagTab: BagTab = 'gear';
   /** Bag slot → what was picked there (Sim.sellMany checks it again). */
@@ -84,6 +86,9 @@ export class NpcShopPane {
       b.onclick = () => { this.bagTab = t; this.redraw(); };
       this.bagTabs.append(b);
     }
+    // Sorting moves every slot: the basket (keyed by slot) is emptied.
+    this.sort = makePaneSort(g, () => { this.basket.clear(); this.redraw(); });
+    this.bagTabs.append(this.sort.root);
     this.bagBody = el('div', 'ns-body');
     const hint = el('div', 'ns-hint', isTouchMode()
       ? 'แตะ = ใส่/เอาออกจากตะกร้าขาย · <b>ห้ามสวม/ถอดขณะเปิดร้าน</b>'
@@ -141,6 +146,7 @@ export class NpcShopPane {
   update(): void {
     const p = this.g.player;
     this.prune();
+    this.sort.refresh();
     const bagSig = p.bag.map((e) => (!e ? '' : isItem(e) ? `${e.uid}+${e.plus ?? 0}` : `${sellPickKey(e)}x${e.count}`)).join(',');
     const sig = [this.tab, this.bagTab, p.gold, bagSig, p.buyback.map((b) => b.item.uid).join(','), [...this.basket.keys()].join(',')].join('|');
     if (sig !== this.drawn) this.redraw(sig);
