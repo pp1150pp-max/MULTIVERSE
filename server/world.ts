@@ -1552,7 +1552,7 @@ export class GameWorld {
         const f = m.filter as Partial<LootFilter> | undefined;
         if (!f || !Array.isArray(f.rarities)) break;
         // Sim.setLootFilter runs `pots` through lootPots, which keeps only real sizes.
-        sim.setLootFilter(p, { rarities: RARITIES.filter((r) => f.rarities!.includes(r)), potions: f.potions !== false, pots: f.pots });
+        sim.setLootFilter(p, { rarities: RARITIES.filter((r) => f.rarities!.includes(r)), potions: f.potions !== false, pots: f.pots, pick: f.pick });
         break;
       }
       case 'move': {

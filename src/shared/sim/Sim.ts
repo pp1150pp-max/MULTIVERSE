@@ -26,6 +26,7 @@ import { splitExp } from '../party';
 import { CLASS_IDS, SLOT_KIND, WEAR_SLOTS, type WearSlot } from '../data/classes';
 import { emptySkillBook, learnable, learnBlock, pointsSpent, rankOf, refundPrice, unlearnOne, wear, wearBlock } from '../skillBook';
 import { classBalance, currentBalance, packCount, spawnRadiusMult } from '../balance';
+import { cleanPickup } from '../autoTuning';
 import { vipDropMult, vipExp } from '../vip';
 import { COS_SLOT_NAME, cosById, MOUNT_CALM } from '../data/cosmetics';
 import {
@@ -2178,7 +2179,11 @@ export class Sim {
 
   setLootFilter(p: Player, f: LootFilter): void {
     const pots = lootPots(f);
-    p.lootFilter = { rarities: [...f.rarities], potions: pots.hp.length + pots.mp.length > 0, pots };
+    p.lootFilter = {
+      rarities: [...f.rarities], potions: pots.hp.length + pots.mp.length > 0, pots,
+      // Kept when the client didn't send one (an older page); cleanPickup clamps whatever it sent.
+      pick: f.pick && typeof f.pick === 'object' ? cleanPickup(f.pick) : p.lootFilter.pick,
+    };
     this.events.push({ t: 'save', to: p.id });
   }
 

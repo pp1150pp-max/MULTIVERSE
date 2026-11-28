@@ -1171,9 +1171,14 @@ export class Hud {
       rarities: change.rarities ?? [...cur.rarities],
       potions: pots.hp.length + pots.mp.length > 0,
       pots,
+      pick: change.pick ?? cur.pick,
     });
     syncPots($('loot-filter'), this.g.player.lootFilter);
     syncPots($('aset-pots'), this.g.player.lootFilter);
+    // The gear details in the Auto window show the same rarity ticks.
+    for (const cb of $('aset-gear').querySelectorAll<HTMLInputElement>('[data-rarity]')) {
+      cb.checked = this.g.player.lootFilter.rarities.includes(cb.dataset.rarity as (typeof RARITIES)[number]);
+    }
   }
 
   private setMinimapZoom(i: number): void {
