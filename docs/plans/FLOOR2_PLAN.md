@@ -269,7 +269,7 @@ prompt เมืองอยู่ใน `art_templates/papercraft_maps/FLOOR2_H
 **ทั้งชั้น**
 - ฉากหลังทะเลเมฆ (ชั้น 1 วาดอวกาศด้วยโค้ดใน `paintSpace` ชั้น 2 อาจวาดเมฆ/ทะเลด้วยโค้ดเหมือนกัน หรือใช้ภาพปูซ้ำ)
 - ขอบเกาะ หน้าผา และน้ำตกลงทะเลเมฆ (แบบ `island_cliff_*` ของชั้น 1)
-- ภาพหน้าโหลดชั้น 2 **มีแล้ว 2 ภาพ** (เจ้าของ 2026-11-19): `public/assets/sprites/paper/ui/loading/floor2_1.webp` (เมืองท่าเรือ จากภาพ M0b) และ `floor2_2.webp` (หาดโจรสลัด ภาพดิบ `raw/floor2_maps/L2_loading_beach.png`)
+- ภาพหน้าโหลดชั้น 2 **มีแล้ว 2 ภาพ** (เจ้าของ 2026-11-19): `public/assets/sprites/paper/ui/loading/floor2_1.webp` (เมืองท่าเรือ เจนใหม่ 2026-11-28 ตามผังและตัวละครในเกม prompt `art_templates/loading/FLOOR2_LOADING_CODEX.md` ภาพดิบ `art_templates/loading/raw/loading_floor2_1.png`) และ `floor2_2.webp` (หาดโจรสลัด ภาพดิบ `raw/floor2_maps/L2_loading_beach.png`)
   - **ขึ้นเฉพาะตอนอยู่ชั้น 2** ยังไม่ได้ต่อสาย: ต่อใน PR #3 (`feature/harbor-town`) ที่ `src/client/loadingScreen.ts` ให้ `pickArt` เลือกชุดภาพตามชั้นของแมพที่กำลังเข้า และเพิ่มชื่อใน `PAPER_UI` (`src/client/img.ts`)
 
 **เมืองท่าเรือมิติ**
