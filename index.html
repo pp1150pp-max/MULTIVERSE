@@ -55,8 +55,8 @@
 
         <div id="hud-topright">
           <div id="minimap-wrap">
-            <canvas id="minimap" width="352" height="352" title="คลิกเพื่อเปิดแผนที่ใหญ่ (M)"></canvas>
-            <button id="mm-search" class="mm-btn" title="เปิดแผนที่ใหญ่ (M) — คลิกซ้ายเพื่อเดินไปจุดนั้น คลิกขวาเพื่อปักหมุด">🔍</button>
+            <canvas id="minimap" width="352" height="352" title="คลิกเพื่อเปิดแผนที่ใหญ่ (M)" data-title-hint="คลิกเพื่อเปิดแผนที่ใหญ่ ({map})"></canvas>
+            <button id="mm-search" class="mm-btn" title="เปิดแผนที่ใหญ่ (M) — คลิกซ้ายเพื่อเดินไปจุดนั้น คลิกขวาเพื่อปักหมุด" data-title-hint="เปิดแผนที่ใหญ่ ({map}) — คลิกซ้ายเพื่อเดินไปจุดนั้น คลิกขวาเพื่อปักหมุด">🔍</button>
             <button id="mm-plus" class="mm-btn" title="ซูมเข้า — ดูรอบตัวละเอียดขึ้น">+</button>
             <button id="mm-minus" class="mm-btn" title="ซูมออก — ดูพื้นที่กว้างขึ้น">−</button>
           </div>
@@ -322,7 +322,7 @@
             <span><img src="assets/sprites/icons/map_fight.png" alt="">กำลังสู้</span>
             <span><img src="assets/sprites/icons/map_boss.png" alt="">บอส</span>
             <span><img src="assets/sprites/icons/map_portal.png" alt="">จุดวาป</span>
-            <span><img src="assets/sprites/icons/map_camp.png" alt="">จุดพักฟื้น (กด T)</span>
+            <span><img src="assets/sprites/icons/map_camp.png" alt=""><span data-hint="จุดพักฟื้น (กด {talk})">จุดพักฟื้น (กด T)</span></span>
             <span><img src="assets/sprites/icons/map_merchant.png" alt="">พ่อค้า</span>
             <span><img src="assets/sprites/icons/map_blacksmith.png" alt="">ช่างตีเหล็ก</span>
             <span><img src="assets/sprites/icons/map_keeper.png" alt="">ผู้ดูแลคลัง</span>
@@ -337,20 +337,20 @@
         <div id="help" class="panel hidden">
           <div class="panel-head"><span>วิธีควบคุม</span><button id="help-close">✕</button></div>
           <table>
-            <tr><td>WASD / ลูกศร</td><td>เดิน</td></tr>
+            <tr><td data-keys="up,left,down,right" data-sep="" data-tail=" / ลูกศร">WASD / ลูกศร</td><td>เดิน</td></tr>
             <tr><td>คลิกขวา (ค้าง)</td><td>เดินไปยังจุดที่คลิก</td></tr>
             <tr><td>คลิกซ้าย (ค้าง)</td><td>โจมตีไปทางเมาส์ (ชี้ที่มอนสเตอร์เพื่อล็อกเป้า)</td></tr>
-            <tr><td>Q / E / R</td><td>สกิลที่ใส่ไว้ (เล็งด้วยเมาส์) · Q/E สกิลธรรมดา · R สกิลอัลติ</td></tr>
-            <tr><td>Space</td><td>Dash (ไม่รับดาเมจระหว่างพุ่ง)</td></tr>
-            <tr><td>1 / 2</td><td>ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)</td></tr>
-            <tr><td>G</td><td>ใช้ม้วนคัมภีร์กลับเมือง (ร่าย 3 วิ แล้ววาร์ปกลับกลางเมือง · ซื้อที่พ่อค้า)</td></tr>
-            <tr><td>Z</td><td>ขึ้น / ลงสัตว์ขี่ (ต้องสวมสัตว์ขี่จากหน้าต่าง แต่งตัว ในเมนู)</td></tr>
-            <tr><td>F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
-            <tr><td>I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
-            <tr><td>K</td><td>หน้าต่างสกิล: เรียน/อัปแรงก์ด้วยแต้มสกิล (ได้เลเวลละ 1 แต้ม) และเลือกสกิลใส่ Q/E/R กับพาสซีฟ</td></tr>
-            <tr><td>T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก · ผู้ดูแลคลัง ที่แคมป์)</td></tr>
-            <tr><td>T</td><td>พักฟื้นที่น้ำพุกลางเมือง หรือกองไฟในแคมป์ เมื่ออยู่ใกล้: HP และ MP เต็ม (ใช้ได้ทุก 30 วิ)</td></tr>
-            <tr><td>M</td><td>แผนที่ทั้งโซน (หรือคลิกแผนที่ย่อ)</td></tr>
+            <tr><td data-keys="q,e,r">Q / E / R</td><td>สกิลที่ใส่ไว้ (เล็งด้วยเมาส์) · Q/E สกิลธรรมดา · R สกิลอัลติ</td></tr>
+            <tr><td data-keys="dash">Space</td><td>Dash (ไม่รับดาเมจระหว่างพุ่ง)</td></tr>
+            <tr><td data-keys="hp,mp">1 / 2</td><td>ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)</td></tr>
+            <tr><td data-keys="scroll">G</td><td>ใช้ม้วนคัมภีร์กลับเมือง (ร่าย 3 วิ แล้ววาร์ปกลับกลางเมือง · ซื้อที่พ่อค้า)</td></tr>
+            <tr><td data-keys="mount">Z</td><td>ขึ้น / ลงสัตว์ขี่ (ต้องสวมสัตว์ขี่จากหน้าต่าง แต่งตัว ในเมนู)</td></tr>
+            <tr><td data-keys="auto">F</td><td>เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)</td></tr>
+            <tr><td data-keys="bag" data-tail=" หรือ B">I หรือ B</td><td>กระเป๋า &amp; ตัวละคร</td></tr>
+            <tr><td data-keys="skills">K</td><td>หน้าต่างสกิล: เรียน/อัปแรงก์ด้วยแต้มสกิล (ได้เลเวลละ 1 แต้ม) และเลือกสกิลใส่ Q/E/R กับพาสซีฟ</td></tr>
+            <tr><td data-keys="talk">T</td><td>คุยกับ NPC เมื่ออยู่ใกล้ (The Seeker · พ่อค้า · ช่างตีเหล็ก · ผู้ดูแลคลัง ที่แคมป์)</td></tr>
+            <tr><td data-keys="talk">T</td><td>พักฟื้นที่น้ำพุกลางเมือง หรือกองไฟในแคมป์ เมื่ออยู่ใกล้: HP และ MP เต็ม (ใช้ได้ทุก 30 วิ)</td></tr>
+            <tr><td data-keys="map">M</td><td>แผนที่ทั้งโซน (หรือคลิกแผนที่ย่อ)</td></tr>
             <tr><td>ล้อเมาส์</td><td>ซูมกล้อง</td></tr>
             <tr><td>Esc</td><td>ปิดหน้าต่าง</td></tr>
             <tr><td>ลากแถบหัวหน้าต่าง</td><td>ย้ายหน้าต่าง (ดับเบิลคลิกแถบหัว หรือปิดแล้วเปิดใหม่ = กลับที่เดิม)</td></tr>

@@ -231,6 +231,6 @@ export const EN_PANELS: Record<string, string> = {
 
   // ---- map window
   'แผนที่ — {0} (Lv.{1}-{2})': 'Map — {0} (Lv.{1}-{2})',
-  'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว': 'Left-click to walk there · right-click to drop a pin (right-click a pin to remove it) · M or Esc to close · online you only see nearby monsters / players',
-  'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด M หรือ Esc เพื่อปิด': 'Left-click to walk there · right-click to drop a pin (right-click a pin to remove it) · M or Esc to close',
+  'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด {0} หรือ Esc เพื่อปิด · ออนไลน์จะเห็นจุดมอน/ผู้เล่นเฉพาะที่อยู่ใกล้ตัว': 'Left-click to walk there · right-click to drop a pin (right-click a pin to remove it) · {0} or Esc to close · online you only see nearby monsters / players',
+  'คลิกซ้ายเพื่อเดินไป · คลิกขวาเพื่อปักหมุด (คลิกขวาที่หมุดเพื่อลบ) · กด {0} หรือ Esc เพื่อปิด': 'Left-click to walk there · right-click to drop a pin (right-click a pin to remove it) · {0} or Esc to close',
 };
