@@ -16,6 +16,7 @@ import { cashCatalogNow, cashVersion } from './cashData';
 import { levelUpCard, levelUpLookOf } from './levelUpFx';
 import { dashCard, dashLookOf } from './dashFx';
 import { cosTune } from './cosTune';
+import { keyHint } from './keybinds';
 
 type Tab = 'shop' | 'mine';
 
@@ -279,7 +280,7 @@ export class CosmeticsUI {
     if (this.slot === 'orb') notes.push(el('div', 'cos-note', 'ลูกแก้วตีบวก: เปลี่ยนหน้าตาลูกแก้วของคุณ ลูกแก้วมีเมื่อสวมของที่ตีบวก +7 ขึ้นไป (1 ชิ้น = 1 ลูก) ไม่มีของ +7 จะไม่เห็นลูกแก้ว'));
     if (this.slot === 'dash') notes.push(el('div', 'cos-note', 'เอฟเฟกต์แดช: เล่นตอนกดแดช (ไม่รวมสกิลที่พุ่งตัว) คนรอบ ๆ เห็นด้วย ไม่ได้สวม = แดชแบบเดิม · ลองสวมแล้วจะเล่นให้ดูบนตัวคุณ 1 ครั้ง และกดแดชดูเองได้ขณะลองสวม'));
     if (this.slot === 'levelup') notes.push(el('div', 'cos-note', 'เอฟเฟกต์เลเวลอัป: เล่นตอนตัวละครเลเวลอัป คนรอบ ๆ เห็นด้วย ไม่ได้สวม = เสาแสงสีทองแบบเดิม · ลองสวมแล้วจะเล่นให้ดูบนตัวคุณ 1 ครั้ง'));
-    if (this.slot === 'mount') notes.push(el('div', 'cos-note', 'สัตว์ขี่: เดินเร็วขึ้น 30% กด Z เพื่อขึ้น/ลง โจมตี ใช้สกิล หรือโดนตีจะลงเอง ขึ้นใหม่ได้หลังเลิกสู้ 3 วิ ขี่ในห้องบอสไม่ได้'));
+    if (this.slot === 'mount') notes.push(el('div', 'cos-note', `สัตว์ขี่: เดินเร็วขึ้น 30% กด ${keyHint('mount')} เพื่อขึ้น/ลง โจมตี ใช้สกิล หรือโดนตีจะลงเอง ขึ้นใหม่ได้หลังเลิกสู้ 3 วิ ขี่ในห้องบอสไม่ได้`));
     this.body.replaceChildren(...notes, el('div', 'cos-grid'));
     this.body.lastElementChild!.append(...cards);
   }

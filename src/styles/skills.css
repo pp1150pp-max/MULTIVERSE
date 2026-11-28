@@ -94,3 +94,53 @@
 /* A skill's element (src/client/elementBadge.ts). */
 .el-badge { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; font-weight: bold; text-shadow: 0 0 2px #000; vertical-align: middle; }
 .el-badge img { width: 18px; height: 18px; }
+
+/* The element chart over the map (owner 2026-11-28, src/client/elementChart.ts): a 5×5 paper grid, details, marks. */
+#skills-win .sk-elbtn { padding: 4px 10px; font-size: 12px; font-weight: bold; color: var(--gold-hi); background: linear-gradient(#5a4528, #3a2c18); border: 1px solid var(--gold); border-radius: 3px; cursor: pointer; }
+#skills-win .sk-elbtn:hover { filter: brightness(1.2); }
+#skills-win .el-badge[data-elem] { cursor: pointer; }
+#skills-win .sk-elchart { position: absolute; inset: 0; z-index: 2; overflow: auto; padding: 10px; border: 1px solid var(--gold); border-radius: 4px; background: #1d1710 linear-gradient(rgba(255, 235, 190, 0.05), rgba(0, 0, 0, 0.15)); }
+#skills-win .sk-elchart.hidden { display: none; }
+#skills-win .ec-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+#skills-win .ec-top b { font-size: 15px; color: var(--gold-hi); }
+#skills-win .ec-close { padding: 3px 10px; font-size: 11px; cursor: pointer; }
+#skills-win .ec-rule { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-bottom: 8px; color: var(--ink-dim); font-size: 11px; }
+#skills-win .ec-rule span::before { content: '• '; color: var(--gold); }
+#skills-win .ec-grid { display: grid; grid-template-columns: 52px repeat(5, minmax(0, 1fr)); gap: 4px; }
+#skills-win .ec-h { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; font-size: 11px; font-weight: bold; color: var(--ec); text-shadow: 0 0 2px #000; border-radius: 3px; }
+#skills-win .ec-h.hi { background: rgba(242, 213, 138, 0.18); }
+#skills-win .ec-ico { width: 24px; height: 24px; }
+#skills-win .ec-c {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 54px; padding: 4px 2px;
+  font: inherit; color: var(--ink); text-align: center; background: linear-gradient(#3b2f20, #2b2217);
+  border: 1px solid #5a4a30; border-radius: 3px; box-shadow: 1px 2px 0 rgba(0, 0, 0, 0.45); cursor: pointer;
+}
+#skills-win button.ec-c:hover { border-color: var(--gold); filter: brightness(1.15); }
+#skills-win .ec-c.hi { border-color: var(--gold); }
+#skills-win .ec-c.sel { border-color: var(--gold-hi); background: linear-gradient(#6a5130, #47361f); box-shadow: 0 0 0 1px var(--gold-hi), 1px 2px 0 rgba(0, 0, 0, 0.45); }
+#skills-win .ec-c.same { cursor: default; opacity: 0.45; box-shadow: none; border-style: dashed; }
+#skills-win .ec-c.off { opacity: 0.5; }
+#skills-win .ec-c.off .ec-n { text-decoration: line-through; }
+#skills-win .ec-pair { display: inline-flex; }
+#skills-win .ec-pair .ec-ico + .ec-ico { margin-left: -7px; }
+#skills-win .ec-n { font-size: 11px; font-weight: bold; line-height: 1.15; }
+#skills-win .ec-detail { margin: 8px 0; padding: 8px; min-height: 52px; border: 1px solid #5a4a30; border-radius: 3px; background: rgba(10, 8, 5, 0.6); }
+#skills-win .ec-dhead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#skills-win .ec-dhead b { font-size: 14px; color: var(--gold-hi); }
+#skills-win .ec-big { width: 34px; height: 34px; }
+#skills-win .ec-pair .ec-big + .ec-big { margin-left: -10px; }
+#skills-win .ec-sub { color: var(--ink-dim); font-size: 11px; }
+#skills-win .ec-fx { display: flex; flex-wrap: wrap; gap: 4px; }
+#skills-win .ec-fx span { padding: 2px 7px; font-size: 12px; color: #2a1a08; background: #e6d6b0; border-radius: 2px; box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5); }
+#skills-win .ec-empty { color: var(--ink-dim); text-align: center; padding: 10px 4px; font-size: 11px; }
+#skills-win .ec-mtitle { margin-bottom: 4px; font-weight: bold; color: var(--gold-hi); }
+#skills-win .ec-marks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+#skills-win .ec-mark { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border: 1px solid #5a4a30; border-left: 3px solid var(--ec); border-radius: 3px; background: rgba(10, 8, 5, 0.5); font-size: 11px; }
+#skills-win .ec-mark b { display: block; color: var(--ec); text-shadow: 0 0 2px #000; }
+@media (max-width: 560px) {
+  #skills-win .ec-grid { grid-template-columns: 34px repeat(5, minmax(0, 1fr)); gap: 3px; }
+  #skills-win .ec-h { font-size: 10px; }
+  #skills-win .ec-ico { width: 18px; height: 18px; }
+  #skills-win .ec-c { min-height: 48px; padding: 3px 1px; }
+  #skills-win .ec-n { font-size: 10px; }
+}

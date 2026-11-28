@@ -246,6 +246,6 @@
 - ตัวเลขทุกตัว (เส้นเฟส 50%/30%, 20% หัวโผล่, คูลดาวน์/ดาเมจ/เตือน/ระยะทุกท่า, ขนาดภาพหนวดและคราเคน, ระยะฟาดและความกว้างหนวด, ระยะหนวดจากขอบพื้น, คลั่ง) อยู่ในกลุ่ม `kraken` ของ `src/shared/moveTuning.ts` การ์ด "คราเคน (บอส)" ใน /admin · ค่า `kraken.headSec` (หัวโผล่ 12 วิ) เลิกใช้
 - แรงดึง/ลากเป็นโค้ดร่วม (`suctionStep`) ตัวละครของเบราว์เซอร์เดินตามเอง หนวดรัดลากเฉพาะคนที่โดน (`SuctionHazard.pid`) server เผื่อระยะตรวจตำแหน่งเฉพาะคนนั้น
 - บอสตาย = หนวด ฉลาม หมึก แรงดึงหายหมด · ทั้งทีมล้ม = รอเหมือนบอสอื่น (`bossWipeKeepHp`) · ไม่มีใครในห้อง = รีเซ็ตกลับเฟสแรก
-- ภาพ: ระหว่างรอภาพใหม่ใช้ภาพเดิมขยายขนาด · prompt ภาพคราเคนโผล่จากมุมและหนวดยักษ์อยู่ใน `art_templates/papercraft_maps/FLOOR2_M4_KRAKEN_ROOM.md` (เจ้าของเจนเองใน GPT)
+- ภาพ (เจ้าของเจนใน GPT, ตัดเข้าเกม 2026-11-28): คราเคนโผล่จากมุม `paper/monsters/kraken.png` (idle / arm_slam = กวาดพัด+คลื่น / arm_cut = หัวโผล่ / ink / dive) · หนวดยักษ์ในห้อง `paper/monsters/kraken_arm.png` แยกจากหนวดในแมพ (idle / slam_tentacle / grab = ม้วนรัดค้างไว้ตลอดที่ลาก) · ท่าเล่นตาม `src/client/paperMoves.ts` · prompt ใน `art_templates/papercraft_maps/FLOOR2_M4_KRAKEN_ROOM.md` · ขนาดภาพยังปรับได้ใน /admin
 - กุญแจ: ตาคราเคน `key_kraken` (ดรอปจากมอนแมพนี้ 0.3%) + กุญแจเควส `qkey_kraken` จากนักเดินเรือ (ล่า 30 ตัว) · ประตู Lv80 บล็อกแล้ว
 - ภาพบอส: `paper/monsters/kraken.png` (ท่า idle / arm_slam / arm_cut / ink / dive · ท่าที่ 3+ ยังใช้ภาพ arm_slam) · ไอคอนกุญแจ `stone_key_kraken.png`

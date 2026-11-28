@@ -35,6 +35,8 @@ export interface HostPaneSpec {
   hint: (touch: boolean) => string;
   /** The width (px) the NPC window's layout was made for; a narrower panel zooms it down. */
   designW: number;
+  /** The NPC window fills the panel's height too (it scrolls inside itself, not the panel): the cash shop's new layout. */
+  fill?(): boolean;
   /** `index` = its bag slot, or its place in EQUIP_SLOTS on the worn tab. */
   cell(e: BagEntry, view: BagView, index: number): CellInfo;
   /** A click (tap) on a cell: `index` = its bag slot, or its place in EQUIP_SLOTS on the worn tab. */
@@ -119,6 +121,7 @@ export class NpcHostPane {
     const host = document.getElementById(this.spec.hostId);
     if (host && this.home) {
       host.style.zoom = '';
+      host.style.height = '';
       this.home.parent.insertBefore(host, this.home.next);
     }
     this.home = null;
@@ -145,8 +148,14 @@ export class NpcHostPane {
     const w = this.box.clientWidth;
     const host = document.getElementById(this.spec.hostId);
     if (w > 0 && host) {
-      const z = String(Math.min(1, w / this.spec.designW));
+      const zn = Math.min(1, w / this.spec.designW);
+      const z = String(zn);
       if (host.style.zoom !== z) host.style.zoom = z;
+      // Zoom scales its lengths too: the panel's height ÷ zoom shows as the panel's height.
+      const fill = this.spec.fill?.() ?? false;
+      const hgt = fill ? `${Math.floor(this.box.clientHeight / zn)}px` : '';
+      if (host.style.height !== hgt) host.style.height = hgt;
+      this.box.classList.toggle('nh-fill', fill);
     }
     if (this.spec.pickView) this.view = this.spec.pickView(this.view);
     const p = this.g.player;

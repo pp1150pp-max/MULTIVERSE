@@ -1,5 +1,5 @@
 import { Unit } from './Unit';
-import type { AutoTally } from './autoTally';
+import type { AutoTally, GearPick } from './autoTally';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import { suctionStep } from './kraken';
@@ -514,6 +514,8 @@ export class Player extends Unit {
   petLootCd = 0;
   /** What the running Auto Play has earned (the server's AutoPlay keeps it; the browser's copy comes from the snapshot). Never saved. */
   autoTally: AutoTally | null = null;
+  /** Browser only: the away summary's gear pictures of that run (PrivateSnap.ag, sent apart from autoTally). */
+  autoGear: GearPick[] = [];
   /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */
   vip = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
@@ -586,6 +588,8 @@ export class Player extends Unit {
   cardFx: CardFxTotals = noCardFx();
   /** Timed stat buffs from skills (Gunslinger Sniper Focus, Quick Reload, Overdrive...), added after the class multipliers. Never saved; death ends them. */
   statBuffs: { id: string; until: number; mods: Partial<Stats> }[] = [];
+  /** What skill and shrine buffs add to `stats` right now (the bag shows it in green, owner 2026-11-28). */
+  buffBonus: Partial<Stats> = {};
   /** Gunslinger Rapid Fire line: what the basic shot does while its buffs run. Never saved. */
   gun: GunBuffs = emptyGunBuffs();
   // Timed statuses from skills (shared by every class; not saved, death ends them). Each lasts until its sim time;
@@ -888,11 +892,18 @@ export class Player extends Unit {
     s.def *= 1 + ab.defPct / 100;
     // The worn passive and skill buffs, flat in Stats units ("+40% attack speed" is +40 atkSpeed).
     passiveStats(this, s);
+    const before = { ...s };
     for (const b of this.statBuffs) addInto(s, b.mods);
     // Shrine buffs: attack in % of the whole, move speed in % points outside the gear's cap (like a skill buff).
     const sb = this.shrineBuffs;
     if (sb.atk) s.atk *= 1 + sb.atk.pct / 100;
     if (sb.speed) s.moveSpeed += sb.speed.pct;
+    const bonus: Partial<Stats> = {};
+    for (const k of Object.keys(s) as (keyof Stats)[]) {
+      const d = (s[k] ?? 0) - (before[k] ?? 0);
+      if (Math.abs(d) > 1e-6) bonus[k] = d;
+    }
+    this.buffBonus = bonus;
     // Crit rate tops out at the cap (owner 2026-11-25, /admin "อัตราคริสูงสุด %").
     s.crit = Math.min(s.crit, currentBalance().critCap);
     this.stats = s;

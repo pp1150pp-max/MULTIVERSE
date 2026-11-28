@@ -88,6 +88,8 @@ export interface KegRun { left: number; fuse: number }
 /** Set up a freshly made runner (Sim.kegGetUp makes it where the prisoner fell, summoned: no rewards, can't be hit). */
 export function kegStart(sim: Sim, m: Monster, dead: Monster): void {
   m.noHit = true;
+  // Sent to the client (snapshot `fr`): it runs with the lit keg (sheet move charge) instead of walking.
+  m.freed = true;
   m.keg = { left: mv('keg.run'), fuse: -1 };
   m.hp = 1;
   m.state = 'chase';

@@ -26,8 +26,8 @@ const TABS: [Tab, string][] = [['featured', 'แนะนำ'], ['cos', 'ขอ�
 const USE_GROUPS: [string, string, string[]][] = [['scroll', 'ใบคูณ', ['exp_scroll', 'drop_scroll']], ['mega', 'โทรโข่ง', ['megaphone']]];
 const BOUND_KINDS = new Set(['exp_scroll', 'drop_scroll', 'megaphone']);
 
-/** The crystal mark (art_templates/cashshop/raw/crystal.png, cut by tools/cut_cashshop.cjs). */
-export const CRYSTAL_ICON = `<img class="cry-ico" src="${imgUrl('assets/sprites/ui/crystal.png')}" alt="" draggable="false">`;
+/** The crystal mark (paper UI, tools/cut_paper_ui.cjs). Built while this module loads, before usePaperUi, so it names the paper file itself. */
+export const CRYSTAL_ICON = `<img class="cry-ico" src="${imgUrl('assets/sprites/paper/ui/crystal.png')}" alt="" draggable="false">`;
 /** Package pictures, small heap to treasure chest (ui/cash_pack_1..4). */
 const packPic = (tier: number) => `<img class="cash-pack-pic" src="${imgUrl(`assets/sprites/ui/cash_pack_${tier}.png`)}" alt="" draggable="false">`;
 
@@ -117,6 +117,12 @@ export class CashShopUI {
   private readonly modal: HTMLElement;
   /** Shown instead of the window while trying a cosmetic on, so the character can be seen. */
   private readonly peekBar: HTMLElement;
+  /** The new layout's top row (owner 2026-11-28 "แบบ A"): the tabs and the crystals side by side. */
+  private readonly head: HTMLElement;
+  private readonly headRight: HTMLElement;
+  private readonly closeBtn: HTMLElement;
+  private readonly top: HTMLElement;
+  private layoutNew: boolean | null = null;
   private tab: Tab = 'featured';
   private sub: Record<'cos' | 'use', string> = { cos: 'wings', use: 'scroll' };
   private drawn = '';
@@ -142,8 +148,12 @@ export class CashShopUI {
     plus.title = `เติม${CURRENCY}`;
     this.vipBadge = el('span', 'cash-vip-badge hidden');
     right.append(this.vipBadge, this.balance, plus);
-    head.append(el('span', '', 'แคชช็อป'), right, button('✕', () => this.toggle(false)));
+    this.closeBtn = button('✕', () => this.toggle(false));
+    head.append(el('span', '', 'แคชช็อป'), right, this.closeBtn);
+    this.head = head;
+    this.headRight = right;
     this.tabsEl = el('div', 'ui-tabs');
+    this.top = el('div', 'cash-top');
     this.banner = el('div', 'cash-banner', 'ร้านยังไม่เปิดขาย ดูสินค้าได้อย่างเดียว');
     const body = el('div', 'cash-body');
     this.side = el('div', 'cash-side');
@@ -238,6 +248,7 @@ export class CashShopUI {
     const cat = cashCatalogNow();
     const st = cashStateNow();
     const now = Date.now();
+    this.setLayout(!cat.oldLayout);
     const owned = new Set(this.g.backend.cosOwned);
     this.balance.innerHTML = `${CRYSTAL_ICON}<b>${fmt(st.crystals)}</b>`;
     this.balance.title = CURRENCY;
@@ -286,6 +297,25 @@ export class CashShopUI {
       this.grid.append(el('div', 'cash-empty', this.tab === 'featured' ? 'ยังไม่มีสินค้าแนะนำ' : 'ยังไม่มีสินค้าในหมวดนี้'));
     }
     this.drawModal(owned, now);
+  }
+
+  /**
+   * The new layout (/admin แคชช็อป "หน้าต่างแบบใหม่", owner 2026-11-28 "แบบ A"): the tabs and the VIP badge / crystals / "+"
+   * on one row at the top, and the window fitted to the screen so only the item list (and a long side list) scrolls.
+   * Off = the old layout: crystals in the title row, tabs under it.
+   */
+  private setLayout(neo: boolean): void {
+    if (neo === this.layoutNew) return;
+    this.layoutNew = neo;
+    this.win.classList.toggle('cash-a', neo);
+    if (neo) {
+      this.top.append(this.tabsEl, this.headRight);
+      this.win.insertBefore(this.top, this.banner);
+    } else {
+      this.head.insertBefore(this.headRight, this.closeBtn);
+      this.win.insertBefore(this.tabsEl, this.banner);
+      this.top.remove();
+    }
   }
 
   /** The VIP tab: what it gives, the time left, and a button per package (owner 2026-11-23, src/shared/vip.ts). */

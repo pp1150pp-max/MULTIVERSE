@@ -61,6 +61,8 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
     const rows: Row[] = [];
     const open = h('input', { type: 'checkbox', disabled: ro }) as HTMLInputElement;
     open.checked = st.cfg.open;
+    const newLayout = h('input', { type: 'checkbox', disabled: ro }) as HTMLInputElement;
+    newLayout.checked = !st.cfg.oldLayout;
 
     const num = (v: number | undefined, max: number, placeholder = '') =>
       h('input', { type: 'number', min: '1', max: String(max), value: v === undefined ? '' : String(v), placeholder, style: 'width:76px', disabled: ro }) as HTMLInputElement;
@@ -135,7 +137,7 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
     drawVips();
 
     const collect = (): { cfg: CashShopCfg; cosPrices: Record<string, number | null> } | string => {
-      const cfg: CashShopCfg = { open: open.checked, items: {}, packages: packs.map(({ first, ...p }) => ({ ...p, ...(first ? { first } : {}) })), vip: vips.map((p) => ({ ...p })) };
+      const cfg: CashShopCfg = { open: open.checked, items: {}, packages: packs.map(({ first, ...p }) => ({ ...p, ...(first ? { first } : {}) })), vip: vips.map((p) => ({ ...p })), ...(newLayout.checked ? {} : { oldLayout: true as const }) };
       const cosPrices: Record<string, number | null> = {};
       const int = (inp: HTMLInputElement): number | undefined | string => {
         if (inp.value.trim() === '') return undefined;
@@ -183,6 +185,7 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
       if (typeof c === 'string') return say(c, false);
       const lines: string[] = [];
       if (c.cfg.open !== st.cfg.open) lines.push(c.cfg.open ? '⚠ เปิดขาย: ผู้เล่นซื้อได้ทันที' : 'ปิดขาย: ผู้เล่นดูได้อย่างเดียว');
+      if (!!c.cfg.oldLayout !== !!st.cfg.oldLayout) lines.push(c.cfg.oldLayout ? 'หน้าต่างแคชช็อป: กลับเป็นแบบเดิม' : 'หน้าต่างแคชช็อป: ใช้แบบใหม่');
       const n = Object.keys(c.cosPrices).length;
       if (n) lines.push(`ราคาของแต่งตัวเปลี่ยน ${n} ชิ้น (ใช้กับแท็บ "จัดการของแต่งตัว" ด้วย)`);
       if (!confirm(`บันทึกแคชช็อป ใช้กับผู้เล่นทุกคนทันที?${lines.length ? `\n\n${lines.join('\n')}` : ''}`)) return;
@@ -213,6 +216,7 @@ export async function renderCashShop(view: HTMLElement, h: H, api: Api): Promise
         h('h2', {}, 'แคชช็อป'),
         h('div', { class: 'muted' }, `ซื้อด้วย${CURRENCY} (เก็บต่อบัญชี) · ผู้เล่นได้${CURRENCY}จากการเติมผ่านพร้อมเพย์ (แท็บ "เติมเงิน") หรือ owner เสกให้ · ของแต่งตัวเข้าบัญชีทันที ใบคูณ/โทรโข่ง/หินส่งเข้าจดหมาย (หินไม่ผูก ใบคูณ/โทรโข่งผูกตัวละครที่กดรับ) · ช่องราคาของแต่งตัวคือราคาเดียวกับแท็บ "จัดการของแต่งตัว" เว้นว่าง = ไม่ขาย · ราคาลดต้องต่ำกว่าราคาเต็ม ป้าย "ลดราคา" ขึ้นเอง · เวลาเว้นว่าง = ไม่จำกัด`),
         h('label', { class: 'cash-open' }, open, 'เปิดขาย (ปิด = ผู้เล่นดูสินค้าได้แต่ซื้อไม่ได้)'),
+        h('label', { class: 'cash-open' }, newLayout, 'หน้าต่างแบบใหม่ (แท็บ + คริสตัลแถวเดียวบนสุด หน้าต่างพอดีจอ เลื่อนเฉพาะช่องสินค้า · ปิด = แบบเดิม)'),
         h('div', { style: 'overflow-x:auto' }, table),
         h('h3', {}, 'แพ็ก VIP (ผูกบัญชี · ซื้อซ้ำ = บวกวันเพิ่ม · โบนัส EXP/ดรอป ตั้งในแท็บปรับสมดุล · เทรดไม่จำกัด)'), vipBox,
         h('h3', {}, 'แพ็กเกจเติมคริสตัล (กดเติมได้เมื่อเปิดการเติมในแท็บ "เติมเงิน" ไม่งั้นแสดง "เร็วๆ นี้")'), packBox,

@@ -409,10 +409,18 @@ export class MonsterView {
     this.update(0, null);
   }
 
+  /** A Sim 'anim' event (paperMoves.ts): a powder-keg runner's fuse ('attack') holds the lit keg (owner 2026-11-28). */
+  onAnim(name: string, duration?: number): void {
+    const fuse = name === 'attack' && this.m.def.move === 'keg' && this.m.freed;
+    this.actor.play(fuse ? 'fuse' : name, { duration });
+  }
+
   update(dt: number, fx: Effects | null): void {
     const m = this.m;
     // A ship prisoner that threw its ball runs free (sheet move 'run': no ball at the leg, owner 2026-11-25).
     if (m.def.move === 'chainball') this.actor.setWalkMove(m.freed ? 'run' : 'walk');
+    // A powder-keg prisoner's last run: running with the lit keg (sheet move 'charge').
+    if (m.def.move === 'keg') this.actor.setWalkMove(m.freed ? 'charge' : 'walk');
     if (fx) this.debuffFx.update(dt, m, fx);
     this.circle.set(m.alive ? debuffCircle(m.debuffs, m.debuffSkill) : null);
     this.circle.update(dt);

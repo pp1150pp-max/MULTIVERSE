@@ -1226,8 +1226,9 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.summary, onchange: (e: Event) => { a.summary = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_SUMMARY_NAME}`),
         num('summaryMin', 1),
+        num('summaryGear', 10),
       ),
-      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: เปิด Auto แล้วไม่แตะเกม (ไม่กดคีย์ ไม่คลิก ไม่แตะจอ ไม่หมุนล้อ) ครบเวลานี้ = ขึ้นหน้าสรุป EXP เลเวล ทอง มอนที่ล่า ไอเทมแยกความหายาก หิน ยา ตาย ตั้งแต่แตะเกมครั้งล่าสุด · ตัวเลขนับต่อเรื่อย ๆ ไม่หยุด จนผู้เล่นกด ✕ หรือดับเบิลคลิก · ใช้ได้ทั้งตอนสลับแท็บและตอนหลุดแล้ว Auto ฟาร์มต่อ · ปิดสวิตช์ = ไม่ขึ้น (server ไม่ส่งตัวเลข)'),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-27: เปิด Auto แล้วไม่แตะเกม (ไม่กดคีย์ ไม่คลิก ไม่แตะจอ ไม่หมุนล้อ) ครบเวลานี้ = ขึ้นหน้าสรุป EXP เลเวล ทอง มอนที่ล่า ไอเทมแยกความหายาก หิน ยา ตาย ตั้งแต่แตะเกมครั้งล่าสุด · ไอเทมแสดงเป็นรูปทีละชนิด (ยา หิน กุญแจ การ์ด กล่อง นับจำนวน · อุปกรณ์เก็บรูปทีละชิ้นได้ไม่เกินค่าที่ตั้ง เกินแสดงเป็น +N) · ตัวเลขนับต่อเรื่อย ๆ ไม่หยุด จนผู้เล่นกด ✕ หรือดับเบิลคลิก · ใช้ได้ทั้งตอนสลับแท็บและตอนหลุดแล้ว Auto ฟาร์มต่อ · ปิดสวิตช์ = ไม่ขึ้น (server ไม่ส่งตัวเลข)'),
       h('h3', {}, 'เดินต่อเมื่อสลับแท็บ (ไม่ใช่ Auto)'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' },
@@ -1399,6 +1400,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
     const fallsOn = h('input', { type: 'checkbox', checked: a.harborFalls, onchange: (e: Event) => { a.harborFalls = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const postOn = h('input', { type: 'checkbox', checked: a.shPost, onchange: (e: Event) => { a.shPost = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     const shaftsOn = h('input', { type: 'checkbox', checked: a.shShafts, onchange: (e: Event) => { a.shShafts = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
+    const windOn = h('input', { type: 'checkbox', checked: a.shWind, onchange: (e: Event) => { a.shWind = (e.target as HTMLInputElement).checked; refresh(); drawFx(); } });
     // Each map's tone, mist and shafts (sceneGrade.ts): the draft keeps only what differs from the code.
     const setGrade = <K extends keyof SceneGrade>(id: string, k: K, v: SceneGrade[K]): void => {
       const g: Partial<SceneGrade> = { ...draft.sceneGrade[id], [k]: v };
@@ -1434,6 +1436,11 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'บ่อน้ำ ลาวา และน้ำวน'),
       h('div', { class: 'row bal-line' }, num('lavaWave', 0.1), num('whirlTwist', 0.1), num('whirlGlow', 0.1)),
       h('div', { class: 'muted' }, 'บ่อน้ำและลาวากระเพื่อมเฉพาะระดับสูง (บ่อน้ำแข็งนิ่งเสมอ แรงคลื่นใช้ค่า "แรงคลื่น" ด้านบน) · น้ำวน: ต่ำ = แถบสว่างหมุนเข้ากลาง สูง = + เกลียวบิดและกลางวนมืดเต้นช้า ๆ · คลื่นฟองรอบน้ำวนในห้องคราเคนโยกเบา ๆ ทั้งต่ำและสูง'),
+      h('h3', {}, 'ลม: ต้นไม้ หญ้า และเรือ'),
+      h('div', { class: 'row bal-line' }, flag(windOn, a.shWind !== ca.shWind, ' ลม (ปิด = ต้นไม้ หญ้า และเรือนิ่งแบบเดิม)')),
+      h('div', { class: 'row bal-line' }, num('windK', 0.1), num('windSpeed', 0.1), num('windDir', 15)),
+      h('div', { class: 'row bal-line' }, num('swayTree', 0.1), num('swayGrass', 0.1), num('swayShip', 0.1)),
+      h('div', { class: 'muted' }, 'ต่ำ: ต้นไม้ พุ่ม เฟิร์น กก ปาล์ม และสาหร่ายบนหินโยกจากโคน · สูง: + หญ้าและดอกไม้บนพื้นไหว เรือใหญ่ในท่าเรือโคลงทั้งลำ · ธงและใบเรือยังนิ่ง (รอภาพที่แยกผ้ากับเสา) · แรงลมคูณกับทั้ง 3 อย่าง · ภาพแผนที่และเงาใต้ของไม่ไหว · มีผลทันที'),
       h('h3', {}, 'แสงทั้งจอ'),
       h('div', { class: 'row bal-line' }, flag(postOn, a.shPost !== ca.shPost, ' แสงทั้งจอ (ปิด = ไม่มีขอบมืด โทนสี ลำแสง และหมอกไหล)'), flag(shaftsOn, a.shShafts !== ca.shShafts, ' ลำแสงแดด')),
       h('div', { class: 'row bal-line' }, num('vignette', 0.01), num('bossRoomPostK', 0.05), num('mistFlow', 0.1)),

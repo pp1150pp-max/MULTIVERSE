@@ -43,9 +43,12 @@ const shellBarrage: Timeline = (pic, d) => {
   return steps;
 };
 
+/** Going under (fading, burrowing, sinking) over `d`, held on the third picture: it stays hidden after the event. */
+const goUnder = (move: string): Timeline => (pic, d) => [pic(move, 0, d / 3), pic(move, 1, d / 3), pic(move, 2, d / 3 + TAIL)];
+
 /**
- * The floor 2 bosses' own moves, by paper sheet name then Sim event name (sim/cannonCrab.ts, peglegCaptain.ts,
- * ghostCaptain.ts). Other sheets only play 'attack', their second move.
+ * The floor 2 bosses' own moves, and a few field monsters', by paper sheet name then Sim event name (sim/cannonCrab.ts,
+ * peglegCaptain.ts, ghostCaptain.ts, kraken.ts, graveMoves.ts, maelstromMoves.ts). Other sheets only play 'attack', their second move.
  */
 const BOSS_MOVES: Record<string, Record<string, Timeline>> = {
   giant_crab: {
@@ -73,6 +76,26 @@ const BOSS_MOVES: Record<string, Record<string, Timeline>> = {
       return [pic('vanish', 0, each), pic('vanish', 1, each), pic('vanish', 2, d - 2 * each + TAIL)];
     },
   },
+  // The Kraken in its room's corner (owner 2026-11-28 pictures): a side arm sweeping, its head surfacing, ink, sinking.
+  kraken: {
+    arm_slam: strike('arm_slam'),
+    arm_cut: release('arm_cut', 0.25, 0.3),
+    ink: release('ink', 0.15, 0.2),
+    // Down over the time it takes; it stays faded under the water afterwards (its rise is the next arm_cut).
+    dive: goUnder('dive'),
+  },
+  // Its giant arms round the floor: the slam is 'attack' (their second move); a grab coils and holds while it drags.
+  kraken_arm: {
+    grab: (pic, d) => {
+      const reach = Math.min(0.5, d / 2);
+      return [pic('grab', 0, reach * 0.3), pic('grab', 1, reach * 0.3), pic('grab', 2, reach * 0.4), pic('grab', 3, Math.max(0, d - reach) + TAIL)];
+    },
+  },
+  // Floor 2 field monsters closing the gap unseen (sim/graveMoves.ts phase, maelstromMoves.ts dive): it stays hidden after.
+  ghost_sailor: { fade: goUnder('fade') },
+  // A powder-keg runner (views.ts) runs with the lit keg (its walk = charge); standing on its fuse, it holds it up until the blast.
+  keg_prisoner: { fuse: (pic, d) => [pic('charge', 0, d + TAIL)] },
+  shark_knight: { dive: goUnder('dive') },
 };
 
 /**
