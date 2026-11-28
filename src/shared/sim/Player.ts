@@ -1,5 +1,5 @@
 import { Unit } from './Unit';
-import type { AutoTally } from './autoTally';
+import type { AutoTally, GearPick } from './autoTally';
 import type { Sim } from './Sim';
 import type { Monster } from './Monster';
 import { suctionStep } from './kraken';
@@ -514,6 +514,8 @@ export class Player extends Unit {
   petLootCd = 0;
   /** What the running Auto Play has earned (the server's AutoPlay keeps it; the browser's copy comes from the snapshot). Never saved. */
   autoTally: AutoTally | null = null;
+  /** Browser only: the away summary's gear pictures of that run (PrivateSnap.ag, sent apart from autoTally). */
+  autoGear: GearPick[] = [];
   /** The account's VIP is running (src/shared/vip.ts; set by the server, kept per account, never saved here). */
   vip = false;
   /** Told once per stuck level that a boss gate is holding the EXP bar. Never saved. */
