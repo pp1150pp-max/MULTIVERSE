@@ -5,6 +5,7 @@
 // Player-written text (names, chat, mail, megaphone) is marked translate="no" and never touched.
 import { fill, hasThai, LANG_CONFIG_PATH, Translator, type Lang, type LangConfigResponse } from '../shared/i18n/translator';
 import { englishDict } from '../shared/i18n/dict';
+import { setLoginLook } from './loginLook';
 
 const PREF_KEY = 'multiverse-lang';
 /** The /admin switch as last heard from the server ('0' = English off), so the first frame already knows. */
@@ -147,6 +148,8 @@ export function startTranslator(): void {
 export async function checkLangAllowed(inGame: () => boolean): Promise<void> {
   try {
     const r = (await (await fetch(`api${LANG_CONFIG_PATH}`)).json()) as LangConfigResponse;
+    // The same answer carries the "หน้า login แบบใหม่" switch (src/client/loginLook.ts).
+    setLoginLook(r?.loginLook);
     if (typeof r?.english !== 'boolean') return;
     const was = englishAllowed();
     write(ALLOWED_KEY, r.english ? '1' : '0');

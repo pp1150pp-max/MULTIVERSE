@@ -1,0 +1,121 @@
+/* ---------------------------------------------------------------- title / login: the landing page's look
+   (docs/systems/world-and-ui.md "หน้า login แบบใหม่"). Every rule is under #menu.login-new, which src/client/loginLook.ts
+   sets from the /admin switch Balance.loginLook; without the class the screen is exactly the old one.
+   Colours and the gold button match landing.html (src/landing/landing.css). */
+
+#menu.login-new {
+  --ln-bg: #14121c;
+  --ln-panel: #1f1b2bf2;
+  --ln-line: #3a3350;
+  --ln-ink: #ece6d6;
+  --ln-muted: #c4bba7;
+  --ln-gold: #f2d58a;
+  /* the shared panel colours, so every box on the title screens takes the new look */
+  --panel: var(--ln-panel);
+  --panel-edge: var(--ln-line);
+  --ink: var(--ln-ink);
+  --ink-dim: var(--ln-muted);
+  background:
+    radial-gradient(ellipse at 50% 40%, #14121c66, #14121cd9 75%),
+    #14121c url(/assets/sprites/ui/login_bg.png) center bottom / cover no-repeat;
+  image-rendering: auto;
+  font-family: 'Kanit', 'Leelawadee UI', Tahoma, sans-serif;
+}
+#menu.login-new .menu-inner { padding-top: 40px; }
+#menu.login-new .subtitle { color: var(--ln-gold); }
+
+/* boxes */
+#menu.login-new .online-box,
+#menu.login-new #guest-panel {
+  background: var(--ln-panel);
+  border: 1px solid var(--ln-line);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px #000a;
+  backdrop-filter: blur(6px);
+}
+#menu.login-new .logon-box { border-width: 1px; }
+#menu.login-new .logon-head {
+  background: none;
+  border-bottom: 1px solid var(--ln-line);
+  color: var(--ln-gold);
+  font-size: 22px;
+  letter-spacing: .08em;
+  text-shadow: none;
+  padding: 16px 16px 12px;
+}
+#menu.login-new .logon-head span { color: var(--ln-gold); opacity: .7; }
+#menu.login-new .logon-body { padding: 20px 26px 24px; }
+#menu.login-new .online-box h2 { color: var(--ln-ink); }
+#menu.login-new .online-box h3 { color: var(--ln-gold); }
+#menu.login-new .logon-or::before,
+#menu.login-new .logon-or::after { border-top: 1px solid var(--ln-line); }
+
+/* fields */
+#menu.login-new .form-row input,
+#menu.login-new .name-row input,
+#menu.login-new .online-box .name-row input {
+  min-height: 44px;
+  padding: 9px 12px;
+  background: #14121c;
+  border: 1px solid var(--ln-line);
+  border-radius: 10px;
+  color: var(--ln-ink);
+  transition: border-color .15s, box-shadow .15s;
+}
+#menu.login-new .form-row input:focus,
+#menu.login-new .name-row input:focus {
+  border-color: var(--ln-gold);
+  box-shadow: 0 0 0 3px #f2d58a33;
+}
+#menu.login-new .pass-wrap input { padding-right: 42px; }
+
+/* buttons: the landing page's dark and gold pair */
+#menu.login-new button {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--ln-line);
+  background: #2a2538;
+  box-shadow: none;
+  color: var(--ln-ink);
+  transition: transform .15s, filter .15s, border-color .15s, box-shadow .15s;
+}
+#menu.login-new button:hover { border-color: var(--ln-gold); color: #fff; }
+#menu.login-new button.primary {
+  border: 0;
+  background: linear-gradient(#ffe7a6, #e0b45a 55%, #b98a32);
+  color: #2a1a05;
+  font-weight: 600;
+  box-shadow: 0 2px 0 #7a5718, 0 8px 22px #f2d58a2e;
+}
+#menu.login-new button.primary:hover { color: #2a1a05; filter: brightness(1.06); transform: translateY(-1px); }
+#menu.login-new button.primary:active { transform: translateY(1px); box-shadow: 0 1px 0 #7a5718; }
+#menu.login-new button:focus-visible { outline: 3px solid var(--ln-gold); outline-offset: 3px; }
+#menu.login-new button.primary:focus-visible { outline-color: #fff; }
+/* Google's own colours stay (its brand rules); the guest button joins the dark set. */
+#menu.login-new .logon-google,
+#menu.login-new .logon-google:hover { background: #fff; color: #1f1f1f; border-color: #dadce0; }
+#menu.login-new .logon-google:hover { background: #f1f3f4; }
+#menu.login-new .logon-guest { background: #2a2538; border-color: var(--ln-line); }
+#menu.login-new .logon-guest:hover { border-color: var(--ln-gold); }
+#menu.login-new .logon-guest[aria-disabled="true"],
+#menu.login-new .logon-guest[aria-disabled="true"]:hover { background: #2a2538; border-color: var(--ln-line); }
+/* small text buttons keep no box */
+#menu.login-new .pass-eye,
+#menu.login-new .logon-forgot,
+#menu.login-new .btn-back { min-height: 0; border: 0 !important; background: none !important; box-shadow: none; }
+#menu.login-new .logon-forgot { color: var(--ln-muted); }
+#menu.login-new .logon-forgot:hover { color: var(--ln-gold); }
+
+/* class cards (guest / new character) */
+#menu.login-new .class-card { background: #1a1725; border: 1px solid var(--ln-line); border-radius: 14px; }
+#menu.login-new .class-card:hover { border-color: #5a4f7a; }
+#menu.login-new .class-card.selected { border-color: var(--ln-gold); box-shadow: 0 0 0 1px var(--ln-gold), 0 10px 30px #f2d58a22; }
+#menu.login-new .class-card canvas { background: #14121c; border-radius: 10px; }
+#menu.login-new .class-card h3 { color: var(--ln-gold); }
+
+#menu.login-new .menu-foot { color: #8c8399; }
+
+@media (prefers-reduced-motion: reduce) {
+  #menu.login-new button.primary:hover,
+  #menu.login-new button.primary:active { transform: none; }
+}
