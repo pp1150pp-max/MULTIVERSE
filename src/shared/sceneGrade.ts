@@ -15,6 +15,9 @@ export interface SceneGrade {
   mist: number;
   /** × the sun shafts' strength (0 = none). */
   shaft: number;
+  /** × the cloud shadows drifting over the ground (high level, 0 = none) and × the fire light's flicker (0 = none). */
+  cloud: number;
+  flicker: number;
 }
 
 export type SceneGradeKey = Exclude<keyof SceneGrade, 'tint'>;
@@ -24,6 +27,8 @@ export const SCENE_GRADE_RANGE: Record<SceneGradeKey, [number, number]> = {
   brightness: [0.7, 1.2],
   mist: [0, 2],
   shaft: [0, 2],
+  cloud: [0, 2],
+  flicker: [0, 2],
 };
 export const SCENE_GRADE_NAME: Record<keyof SceneGrade, string> = {
   tint: 'สีย้อม',
@@ -32,21 +37,27 @@ export const SCENE_GRADE_NAME: Record<keyof SceneGrade, string> = {
   brightness: '× ความสว่าง',
   mist: '× หมอก',
   shaft: '× ลำแสง',
+  cloud: '× เงาเมฆ',
+  flicker: '× แสงไฟกะพริบ',
 };
 const NUM_KEYS = Object.keys(SCENE_GRADE_RANGE) as SceneGradeKey[];
 
 /** Per map, only what differs from the code. */
 export type SceneGradeTuning = Record<string, Partial<SceneGrade>>;
 
-const NEUTRAL: SceneGrade = { tint: '#ffe2a8', tintK: 0, saturation: 1, brightness: 1, mist: 1, shaft: 0 };
-/** The warm daytime maps (owner 2026-11-27, the soft set). Every other map, boss rooms and custom maps start neutral. */
+const NEUTRAL: SceneGrade = { tint: '#ffe2a8', tintK: 0, saturation: 1, brightness: 1, mist: 1, shaft: 0, cloud: 0, flicker: 0 };
+/**
+ * The warm daytime maps (owner 2026-11-27, the soft set) and their cloud shadows (2026-11-28); the volcano island's fire
+ * light flickers. Every other map, boss rooms and custom maps start neutral.
+ */
 const CODE: Record<string, Partial<SceneGrade>> = {
-  emerald_forest: { tint: '#ffe59a', tintK: 0.07, shaft: 1 },
-  nexus_city: { tint: '#ffe2b8', tintK: 0.04, shaft: 0.5 },
-  harbor_town: { tint: '#ffe2b8', tintK: 0.04, shaft: 0.5 },
-  shipwreck_beach: { tint: '#ffd36b', tintK: 0.08, shaft: 1 },
+  emerald_forest: { tint: '#ffe59a', tintK: 0.07, shaft: 1, cloud: 1 },
+  nexus_city: { tint: '#ffe2b8', tintK: 0.04, shaft: 0.5, cloud: 1 },
+  harbor_town: { tint: '#ffe2b8', tintK: 0.04, shaft: 0.5, cloud: 1 },
+  shipwreck_beach: { tint: '#ffd36b', tintK: 0.08, shaft: 1, cloud: 1 },
   // Evening, orange-pink (FLOOR2_SKY.md).
-  smugglers_cove: { tint: '#ff8f73', tintK: 0.16, shaft: 1 },
+  smugglers_cove: { tint: '#ff8f73', tintK: 0.16, shaft: 1, cloud: 1 },
+  ashen_isle: { flicker: 1 },
 };
 
 export const codeSceneGrade = (zoneId: string): SceneGrade => ({ ...NEUTRAL, ...CODE[zoneId] });
@@ -126,9 +137,24 @@ export interface PostLook {
   brightness: number;
   /** The picture on screen has to be copied and redrawn (colour strength or brightness changed). */
   read: boolean;
+  /**
+   * How the light moves (owner 2026-11-28, all 0 = still as before): × the shafts' sway (low and high) and shimmer
+   * (high, where the streaks are), the share the tone swings up and down, and the opacity of the cloud shadows (high) and
+   * of the fire flicker at their strongest.
+   */
+  sway: number;
+  shimmer: number;
+  toneSwing: number;
+  cloud: number;
+  flicker: number;
 }
 
-type PostCfg = Pick<FxLayerConfig, 'vignette' | 'shShafts' | 'shaftK' | 'bossRoomPostK'>;
+/** At ×1: the tone swings ±25%, cloud shadows darken the ground by up to 12%, the fire light reaches 7% (owner 2026-11-28, "gentle"). */
+export const TONE_SWING = 0.25;
+export const CLOUD_PEAK = 0.12;
+export const FLICKER_PEAK = 0.07;
+
+type PostCfg = Pick<FxLayerConfig, 'vignette' | 'shShafts' | 'shaftK' | 'bossRoomPostK' | 'shLightMove' | 'lmShaft' | 'lmCloud' | 'lmFlicker' | 'lmTone' | 'lmShaftK' | 'lmCloudK' | 'lmFlickerK' | 'lmToneK'>;
 
 /** The light layer at a level (1 low, 2 high); `room` = a boss room, where everything is weaker. Null = nothing to draw. */
 export function postLook(level: Exclude<ShaderLevel, 0>, cfg: PostCfg, grade: SceneGrade, room: boolean): PostLook | null {
@@ -144,8 +170,21 @@ export function postLook(level: Exclude<ShaderLevel, 0>, cfg: PostCfg, grade: Sc
     saturation,
     brightness,
     read: saturation !== 1 || brightness !== 1,
+    sway: 0,
+    shimmer: 0,
+    toneSwing: 0,
+    cloud: 0,
+    flicker: 0,
   };
-  return look.vignette > 0 || look.tintK > 0 || look.shaft > 0 || look.read ? look : null;
+  if (cfg.shLightMove) {
+    const shaftMove = cfg.lmShaft && look.shaft > 0 ? cfg.lmShaftK : 0;
+    look.sway = shaftMove;
+    look.shimmer = level === 2 ? shaftMove : 0;
+    look.toneSwing = cfg.lmTone && look.tintK > 0 ? Math.min(0.9, TONE_SWING * cfg.lmToneK) : 0;
+    look.cloud = cfg.lmCloud && level === 2 ? Math.min(0.4, CLOUD_PEAK * cfg.lmCloudK * grade.cloud * k) : 0;
+    look.flicker = cfg.lmFlicker ? Math.min(0.4, FLICKER_PEAK * cfg.lmFlickerK * grade.flicker * k) : 0;
+  }
+  return look.vignette > 0 || look.tintK > 0 || look.shaft > 0 || look.read || look.cloud > 0 || look.flicker > 0 ? look : null;
 }
 
 /**

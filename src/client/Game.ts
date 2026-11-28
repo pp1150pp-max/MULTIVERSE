@@ -193,6 +193,9 @@ export class Game {
   private frames = 0;
   /** The corner shade, map tone and sun shafts over the finished picture (docs/systems/shaders.md). */
   private readonly postFx = new PostFx();
+  /** Scratch for the light layer: the screen's right and up in the world, and where the camera looks along them. */
+  private readonly screenAxis = new THREE.Vector3();
+  private readonly postGround = new THREE.Vector2();
 
   constructor(container: HTMLElement, readonly backend: Backend) {
     this.zone = backend.zone;
@@ -305,7 +308,13 @@ export class Game {
     // The rest screen covers everything in black: the world keeps up with the server, but nothing is drawn (battery).
     if (!this.restScreen || this.frames < 3) {
       this.renderer.render(this.scene, this.camera);
-      this.postFx.draw(this.renderer, this.zone, dt, (this.camTarget.x - this.camTarget.z) * S);
+      // Where the camera looks, in screen heights along the screen's right and up (the cloud shadows stay on the ground).
+      const ax = this.screenAxis;
+      this.postGround.set(
+        this.camTarget.dot(ax.set(1, 0, 0).applyQuaternion(this.camera.quaternion)) / this.viewSize,
+        this.camTarget.dot(ax.set(0, 1, 0).applyQuaternion(this.camera.quaternion)) / this.viewSize,
+      );
+      this.postFx.draw(this.renderer, this.zone, dt, (this.camTarget.x - this.camTarget.z) * S, this.postGround);
     }
     if (this.frames < 3) {
       this.frames++;

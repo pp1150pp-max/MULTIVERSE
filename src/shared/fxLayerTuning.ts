@@ -214,6 +214,25 @@ export interface FxLayerConfig extends Record<QuarksKey, boolean> {
   swayTree: number;
   swayGrass: number;
   swayShip: number;
+  /**
+   * The light moves (owner 2026-11-28, docs/systems/shaders.md): `shLightMove` = all of it (off = the light as before);
+   * then each part on/off with × its strength and × its speed: the sun shafts sway and shimmer (`lmShaft`), cloud shadows
+   * drift over the ground (`lmCloud`, high level), the fire light flickers (`lmFlicker`) and the map's tone breathes
+   * (`lmTone`). Which maps get clouds and flicker: sceneGrade.ts.
+   */
+  shLightMove: boolean;
+  lmShaft: boolean;
+  lmCloud: boolean;
+  lmFlicker: boolean;
+  lmTone: boolean;
+  lmShaftK: number;
+  lmShaftSpeed: number;
+  lmCloudK: number;
+  lmCloudSpeed: number;
+  lmFlickerK: number;
+  lmFlickerSpeed: number;
+  lmToneK: number;
+  lmToneSpeed: number;
 }
 
 /** One skill's magic circle and code effects, as set on /admin. Missing = on / ×1. */
@@ -344,6 +363,14 @@ export const FX_LAYER_RANGE = {
   swayTree: [0, 3],
   swayGrass: [0, 3],
   swayShip: [0, 3],
+  lmShaftK: [0, 3],
+  lmShaftSpeed: [0, 4],
+  lmCloudK: [0, 3],
+  lmCloudSpeed: [0, 4],
+  lmFlickerK: [0, 3],
+  lmFlickerSpeed: [0, 4],
+  lmToneK: [0, 3],
+  lmToneSpeed: [0, 4],
 } as const satisfies Record<string, readonly [number, number]>;
 export type FxLayerNum = keyof typeof FX_LAYER_RANGE;
 export const FX_LAYER_NUMS = Object.keys(FX_LAYER_RANGE) as FxLayerNum[];
@@ -419,9 +446,17 @@ export const FX_LAYER_NAME: Record<FxLayerNum, string> = {
   swayTree: '× ต้นไม้และพุ่มไหว',
   swayGrass: '× หญ้าไหว',
   swayShip: '× เรือโคลง (1 = ±0.5°)',
+  lmShaftK: '× ลำแสงส่ายและระยิบ',
+  lmShaftSpeed: '× ความเร็วลำแสงส่าย',
+  lmCloudK: '× ความเข้มเงาเมฆ',
+  lmCloudSpeed: '× ความเร็วเงาเมฆ',
+  lmFlickerK: '× ความแรงแสงกะพริบ',
+  lmFlickerSpeed: '× ความเร็วแสงกะพริบ',
+  lmToneK: '× โทนสีขึ้นลง',
+  lmToneSpeed: '× ความเร็วโทนสี',
 };
 
-const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew', 'shader', 'shWater', 'harborFalls', 'shPost', 'shShafts', 'shWind'] as const;
+const BASE_BOOLS = ['enabled', 'debuffs', 'guardGlow', 'buffIcons', 'barBuffIcons', 'mergeNums', 'ownNumsOnly', 'smoothShots', 'droneFollow', 'circles', 'zoneCircles', 'quarks', 'gfxMenu', 'keyRebind', 'settingsTabs', 'orbsNearBar', 'extras', 'bossFx', 'bossExtras', 'enhAuraSmooth', 'enhOrbGlowFront', 'luNew', 'dashNew', 'shader', 'shWater', 'harborFalls', 'shPost', 'shShafts', 'shWind', 'shLightMove', 'lmShaft', 'lmCloud', 'lmFlicker', 'lmTone'] as const;
 type FxLayerBool = (typeof BASE_BOOLS)[number] | QuarksKey;
 const FX_LAYER_BOOLS: readonly FxLayerBool[] = [...BASE_BOOLS, ...QUARKS_KEYS];
 const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
@@ -455,6 +490,11 @@ const FX_LAYER_BOOL_NAME: Record<FxLayerBool, string> = {
   shPost: 'แสงทั้งจอ: ขอบมืด โทนสีแมพ ลำแสง หมอกไหล (shader)',
   shShafts: 'ลำแสงแดด (shader)',
   shWind: 'ลม: ต้นไม้ หญ้า ไหว และเรือโคลง (shader)',
+  shLightMove: 'แสงขยับ (shader)',
+  lmShaft: 'แสงขยับ: ลำแสงส่ายและระยิบ',
+  lmCloud: 'แสงขยับ: เงาเมฆผ่านพื้น',
+  lmFlicker: 'แสงขยับ: แสงไฟกะพริบ',
+  lmTone: 'แสงขยับ: โทนสีขึ้นลงช้า ๆ',
 };
 
 
@@ -475,6 +515,8 @@ export function codeFxLayer(): FxLayerConfig {
     harborFalls: true, harborFallDepth: 5, harborDeckHeight: 1.3,
     shPost: true, shShafts: true, vignette: 0.22, bossRoomPostK: 0.5, shaftK: 1.7, shaftSpeed: 1, shaftAngle: 28, mistFlow: 0.5,
     shWind: true, windK: 1, windSpeed: 1, windDir: 0, swayTree: 1, swayGrass: 1, swayShip: 1,
+    shLightMove: true, lmShaft: true, lmCloud: true, lmFlicker: true, lmTone: true,
+    lmShaftK: 1, lmShaftSpeed: 1, lmCloudK: 1, lmCloudSpeed: 1, lmFlickerK: 1, lmFlickerSpeed: 1, lmToneK: 1, lmToneSpeed: 1,
   };
 }
 const CODE = codeFxLayer();
