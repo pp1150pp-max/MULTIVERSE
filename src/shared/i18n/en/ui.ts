@@ -138,7 +138,7 @@ export const EN_UI: Record<string, string> = {
   'Dash (ไม่รับดาเมจระหว่างพุ่ง)': 'Dash (no damage taken while dashing)',
   'ยา HP / ยา MP (คลิกยาในกระเป๋าเพื่อเลือกขนาดที่จะใช้)': 'HP / MP potion (click a potion in the bag to choose the size used)',
   'ใช้ม้วนคัมภีร์กลับเมือง (ร่าย 3 วิ แล้ววาร์ปกลับกลางเมือง · ซื้อที่พ่อค้า)': 'Use a Return Scroll (3 s cast, then warp to the town centre · sold by the merchant)',
-  'ขึ้น / ลงสัตว์ขี่ (ต้องสวมสัตว์ขี่จากหน้าต่าง แต่งตัว ในเมนู)': 'Mount / dismount (equip a mount in the Wardrobe window from the menu)',
+  'ขึ้น / ลงสัตว์ขี่ (ต้องสวมสัตว์ขี่จากกระเป๋า แท็บแฟชั่น)': 'Mount / dismount (equip a mount from the Fashion tab of your bag)',
   'เปิด/ปิด Auto Play (เฉพาะ Open World · เดินเองแล้ว Auto จะปิด)': 'Toggle Auto Play (Open World only · moving yourself turns Auto off)',
   '{0} หรือ B': '{0} or B',
   'กระเป๋า & ตัวละคร': 'Bag & Character',

@@ -88,6 +88,8 @@ export const CODE_CONFIRM_KEYS = true;
 export const CODE_LOGIN_LOOK = true;
 /** Trying cosmetics on (cash shop, dress window) only in a town / safe area (owner 2026-11-25). Browser side only. */
 export const CODE_TRY_ON_TOWN_ONLY = true;
+/** The "แต่งตัว" window and its menu button (owner 2026-11-28: off). The fashion bag is not affected. Browser side only. */
+export const CODE_WARDROBE_MENU = false;
 /** Item links in chat: Ctrl+click an item to put a clickable [name] into a message (owner 2026-11-23: on). */
 export const CODE_CHAT_LINKS = true;
 /** The hub town split into channels like the farm maps (owner 2026-11-22); off = one room as before. */
@@ -277,6 +279,8 @@ export interface Balance {
   loginLook: boolean;
   /** Trying cosmetics on only in a town / safe area; stepping out takes the try-on off (src/client/cosLook.ts). Browser side only. */
   tryOnTownOnly: boolean;
+  /** The "แต่งตัว" window and every button that opens it; off = hidden (the fashion bag still wears pieces). Browser side only. */
+  wardrobeMenu: boolean;
   /** Item links in chat and the megaphone (src/shared/chatLinks.ts); off = the server sends no links, Ctrl+click does nothing. */
   chatLinks: boolean;
   /** The hub town (nexus_city) split into channels CH 1–10 like the farm maps; off = one room (CH 1). Used on the next entry into town. */
@@ -426,6 +430,8 @@ export interface BalanceTuning {
   loginLook?: boolean;
   /** Try-on in town only, when not the code's (on). */
   tryOnTownOnly?: boolean;
+  /** The "แต่งตัว" menu button, when not the code's (off). */
+  wardrobeMenu?: boolean;
   /** Item links in chat, when not the code's (on). */
   chatLinks?: boolean;
   /** Hub split into channels, when not the code's (on). */
@@ -589,6 +595,7 @@ export function codeBalance(): Balance {
     confirmKeys: CODE_CONFIRM_KEYS,
     loginLook: CODE_LOGIN_LOOK,
     tryOnTownOnly: CODE_TRY_ON_TOWN_ONLY,
+    wardrobeMenu: CODE_WARDROBE_MENU,
     chatLinks: CODE_CHAT_LINKS,
     hubChannels: CODE_HUB_CHANNELS,
     bossWipeKeepHp: CODE_BOSS_WIPE_KEEP_HP,
@@ -705,6 +712,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   if (t.confirmKeys !== undefined) b.confirmKeys = t.confirmKeys;
   if (t.loginLook !== undefined) b.loginLook = t.loginLook;
   if (t.tryOnTownOnly !== undefined) b.tryOnTownOnly = t.tryOnTownOnly;
+  if (t.wardrobeMenu !== undefined) b.wardrobeMenu = t.wardrobeMenu;
   if (t.chatLinks !== undefined) b.chatLinks = t.chatLinks;
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
   b.auto = mergeAuto(t.auto);
@@ -867,7 +875,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'loginLook', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade', 'bossShout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'loginLook', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'wardrobeMenu', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade', 'bossShout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1048,6 +1056,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์ลองสวมได้เฉพาะในเมืองต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.tryOnTownOnly) out.tryOnTownOnly = x;
+    return null;
+  };
+  const wardrobeMenu = (): string | null => {
+    const x = o.wardrobeMenu;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์หน้าต่างแต่งตัวต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.wardrobeMenu) out.wardrobeMenu = x;
     return null;
   };
   const chatLinks = (): string | null => {
@@ -1600,6 +1615,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     confirmKeys() ??
     loginLook() ??
     tryOnTown() ??
+    wardrobeMenu() ??
     chatLinks() ??
     hubChannels() ??
     wipeKeep() ??
@@ -1772,6 +1788,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.forgeAuto !== b.forgeAuto) out.push(`ตีบวก Auto ${a.forgeAuto ? 'เปิด' : 'ปิด'} → ${b.forgeAuto ? 'เปิด' : 'ปิด'}`);
   if (a.hubChannels !== b.hubChannels) out.push(`แบ่งห้องเมืองกลาง ${a.hubChannels ? 'เปิด' : 'ปิด'} → ${b.hubChannels ? 'เปิด' : 'ปิด'}`);
   if (a.tryOnTownOnly !== b.tryOnTownOnly) out.push(`ลองสวมของแต่งตัวได้เฉพาะในเมือง ${a.tryOnTownOnly ? 'เปิด' : 'ปิด'} → ${b.tryOnTownOnly ? 'เปิด' : 'ปิด'}`);
+  if (a.wardrobeMenu !== b.wardrobeMenu) out.push(`หน้าต่างแต่งตัว (ปุ่มในเมนู) ${a.wardrobeMenu ? 'เปิด' : 'ปิด'} → ${b.wardrobeMenu ? 'เปิด' : 'ปิด'}`);
   if (a.shopNoEquip !== b.shopNoEquip) out.push(`ห้ามถอด/สวมขณะเปิดร้าน ${a.shopNoEquip ? 'เปิด' : 'ปิด'} → ${b.shopNoEquip ? 'เปิด' : 'ปิด'}`);
   if (a.loginLook !== b.loginLook) out.push(`หน้า login แบบใหม่ ${a.loginLook ? 'เปิด' : 'ปิด'} → ${b.loginLook ? 'เปิด' : 'ปิด'}`);
   if (a.confirmKeys !== b.confirmKeys) out.push(`Enter/Esc ในหน้าต่างยืนยัน ${a.confirmKeys ? 'เปิด' : 'ปิด'} → ${b.confirmKeys ? 'เปิด' : 'ปิด'}`);

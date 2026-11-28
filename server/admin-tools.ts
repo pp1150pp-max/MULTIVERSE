@@ -233,7 +233,7 @@ export async function ownerToolsApi(
         const r = world.mail.send({ id: a.acc.id, name: a.acc.username }, {
           target: { kind: 'account', username: row.username },
           title: `ได้รับ Cosmetics: ${c.name}`,
-          body: `คุณได้รับ ${COS_SLOT_NAME[c.slot]} "${c.name}" แล้ว เปิดหน้าต่าง แต่งตัว จากเมนู แล้วไปที่แท็บ ของฉัน เพื่อสวมใส่ ทุกตัวละครในบัญชีใช้ได้`,
+          body: `คุณได้รับ ${COS_SLOT_NAME[c.slot]} "${c.name}" แล้ว เปิดกระเป๋า แท็บ แฟชั่น เพื่อสวมใส่ ทุกตัวละครในบัญชีใช้ได้`,
           attach: undefined,
         });
         if (typeof r === 'string') mailNote = ` (ส่งจดหมายแจ้งไม่ได้: ${r})`;

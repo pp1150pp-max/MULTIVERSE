@@ -112,7 +112,7 @@ export class CashShop {
       throw x;
     }
     const name = e.kind === 'cos' ? cosById(e.ref)?.name ?? e.ref : `${STONE_NAME[e.ref as keyof typeof STONE_NAME]} ×${qty}`;
-    const where = e.kind === 'cos' ? 'ใช้ได้เลยในหน้าต่าง "แต่งตัว"' : 'ของอยู่ในจดหมาย';
+    const where = e.kind === 'cos' ? 'ใช้ได้เลยที่กระเป๋า แท็บแฟชั่น' : 'ของอยู่ในจดหมาย';
     return { ok: true, kind: e.kind, msg: `ซื้อ ${name} แล้ว (−${cost.toLocaleString('en-US')} ${CURRENCY}) ${where}` };
   }
 }
