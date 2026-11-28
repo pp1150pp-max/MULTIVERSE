@@ -275,7 +275,7 @@ body:has(.auto-sum-back:not(.hidden)) #tooltip { z-index: 901; }
 /* "พักหน้าจอ" from the settings: all black behind the summary (the game is not drawn either). */
 .auto-sum-back.rest { background: #000; }
 /* Pickup filter (owner 2026-11-28): category ticks with a small paper icon, the gear detail box. */
-#aset-cats .chk-opts { grid-template-columns: repeat(auto-fill, minmax(6.2em, 1fr)); }
+#aset-cats .chk-opts label { min-width: 6.2em; }
 #aset-cats .aset-cat .gi { width: 18px; height: 18px; flex: none; }
 #auto-settings .aset-more { margin-top: 6px; width: 100%; font-size: 12px; }
 #aset-gear { margin-top: 4px; padding: 4px 6px; background: rgba(12, 10, 8, 0.5); border: 1px solid var(--panel-edge); border-radius: 3px; }

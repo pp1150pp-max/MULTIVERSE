@@ -127,7 +127,9 @@
 #npc-talk.shop .nt-answers { opacity: 0; transform: translateX(3em); pointer-events: none; }
 #npc-talk.shop .nt-box { opacity: 0; transform: translateY(2em); pointer-events: none; }
 #npc-talk .nt-back {
-  position: absolute; right: 3.6em; top: 0.75em; z-index: 6; height: 1.9em; padding: 0 0.8em; border-radius: 6px; font-size: 0.85em;
+  /* Same height and top as ✕ (2.4em of the window), 0.7em gap to its left. */
+  position: absolute; right: calc(1.2% + 3.65em); top: 1.8%; z-index: 6; height: 2.82em; padding: 0 1em; border-radius: 6px; font-size: 0.85em;
+  display: flex; align-items: center; gap: 0.3em;
   background: #3a2414; border: 2px solid #c99a3a; color: #f2d58a; opacity: 0; pointer-events: none; transition: opacity 0.3s 0.25s;
 }
 #npc-talk.shop .nt-back { opacity: 1; pointer-events: auto; }
@@ -141,6 +143,9 @@
 #npc-talk .ns > * { opacity: 0; transition: opacity 0.35s, transform 0.45s cubic-bezier(.2, .8, .2, 1); }
 #npc-talk.shop .ns > * { opacity: 1; }
 #npc-talk .ns > .hidden { display: none; }
+/* `#hud button { pointer-events: auto }` (hud.css) beats the `none` above on buttons, so the see-through tabs of an
+   unopened pane (and the faded answers while one is open) still caught clicks over the NPC's answers. */
+#npc-talk:not(.shop) .ns *, #npc-talk .ns:not(.on) *, #npc-talk.shop .nt-answers *, #npc-talk.shop .nt-box * { pointer-events: none; }
 
 /* Medallion: the portrait's head in a round gold frame, top left. */
 #npc-talk .ns-medal {
@@ -159,7 +164,7 @@
 #npc-talk .ns-medal img[src*="portrait_navigator"] { left: -4.8em; top: -2.6em; }
 /* Speech bubble beside it. */
 #npc-talk .ns-bubble {
-  position: absolute; left: 7em; top: 1.1em; width: 23.5em; min-height: 3.5em; padding: 0.5em 0.8em; border-radius: 12px;
+  position: absolute; left: 8.8em; top: 1.1em; width: 23.5em; min-height: 3.5em; padding: 0.5em 0.8em; border-radius: 12px;
   background: #f4e6c4; color: #3a2614; border: 2px solid #b8862e; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); font-size: 0.82em; line-height: 1.45;
   transition-delay: 0.25s;
 }
@@ -191,6 +196,7 @@
 #npc-talk .ns-tab.on { background: linear-gradient(#f2c654, #c99a3a); color: #3a2010; font-weight: 600; border-color: #ffd86a; }
 #npc-talk .ns-sort { margin-left: auto; display: flex; gap: 0.2em; align-items: flex-end; }
 #npc-talk .ns-sort.hidden { display: none; }
+#npc-talk .ns-tab { white-space: nowrap; }
 #npc-talk .ns-sort select {
   padding: 0.2em 0.3em; font-size: max(9px, 0.72em); border: 2px solid #8a6a2c; border-bottom: none; border-radius: 7px 7px 0 0;
   background: linear-gradient(#3a2414, #2a180c); color: #c8b48a;
@@ -284,8 +290,8 @@
    window (forge.ts) or the stash (stash.ts) moved in as it is on the left (zoomed to fit by the pane), the bag on the
    right. Only the pane that is open (.on) shows while the window is grown. ---------- */
 #npc-talk.shop .ns:not(.on) { display: none; }
-#npc-talk .nh-host { left: 0.7em; width: 39.6em; transition-delay: 0.2s; padding: 1.1em 0.5em 0.5em; }
-#npc-talk .nh-bag { left: 41.2em; width: 20.1em; transition-delay: 0.3s; }
+#npc-talk .nh-host { left: 0.7em; width: 29.9em; transition-delay: 0.2s; padding: 1.1em 0.5em 0.5em; }
+#npc-talk .nh-bag { left: 31.3em; width: 30em; transition-delay: 0.3s; }
 #npc-talk .nh-box { flex: 1; min-height: 0; overflow: auto; }
 #npc-talk .nh-box > .panel {
   position: relative; left: auto; top: auto; right: auto; transform: none; width: auto; max-width: none; max-height: none; margin: 0;
@@ -293,7 +299,10 @@
 }
 #npc-talk .nh-box > .panel::before, #npc-talk .nh-box > .panel::after { display: none; }
 #npc-talk .nh-box > .panel > .panel-head, #npc-talk .nh-box > #stash > .npc-line { display: none; }
-#npc-talk .nh-grid { grid-template-columns: repeat(5, 1fr); }
+#npc-talk .nh-grid { grid-template-columns: repeat(6, 1fr); width: 78%; margin: 0 auto; }
+/* The stash: ten slots a row (one bought row = one row), as in its own window. */
+#npc-talk .nh-box #stash-grid { grid-template-columns: repeat(10, 1fr); }
+#npc-talk .nh-box #stash-grid .cell { width: auto; height: auto; aspect-ratio: 1; }
 /* No right side (the cash shop, owner 2026-11-28): the NPC window takes the whole width. */
 #npc-talk .nh-wide .nh-host { width: 60.6em; }
 #npc-talk .nh-box > #cash-win { border: 0; border-image: none; filter: none; padding: 0.4em 0.2em 0; font-size: 13px; }

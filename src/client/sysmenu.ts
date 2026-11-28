@@ -176,7 +176,7 @@ export class SystemMenu {
       if (this.tab === 'general') this.drawTab();
     });
     this.panel.addEventListener('click', (e) => {
-      const tab = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]')?.dataset.tab;
+      const tab = (e.target as HTMLElement).closest<HTMLElement>('.set-tab[data-tab]')?.dataset.tab;
       if (tab) return this.selectTab(tab as SetTab);
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
       if (act) this.onAct(act);

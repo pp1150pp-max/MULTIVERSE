@@ -167,7 +167,7 @@ export class NpcHostPane {
     const sig = [this.view, this.spec.sig(), p.gold, p.bag.map(key).join(','), EQUIP_SLOTS.map((s) => key(p.equipment[s])).join(',')].join('|');
     if (sig === this.drawn || !this.spec.views.length) return;
     this.drawn = sig;
-    for (const b of this.bagTabs.querySelectorAll<HTMLElement>('.ns-tab')) b.classList.toggle('on', b.dataset.v === this.view);
+    for (const b of this.bagTabs.querySelectorAll<HTMLElement>(':scope > .ns-tab')) b.classList.toggle('on', b.dataset.v === this.view);
     this.foot.innerHTML = `<span class="g">${COIN_ICON} ${p.gold.toLocaleString()} G</span><span class="pots">${potionTotals(p)}</span>`;
     this.drawBag();
   }

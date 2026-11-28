@@ -187,8 +187,9 @@ html.paper-ui .eq-ring2 { left: 61.5%; top: 37.2%; width: 6.6%; height: 4.4%; }
 .chk-row { display: grid; grid-template-columns: 3.6em minmax(0, 1fr); align-items: start; column-gap: 6px; }
 .chk-row.no-head { grid-template-columns: minmax(0, 1fr); }
 .chk-head { padding-top: 1px; white-space: nowrap; }
-.chk-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.6em, 1fr)); gap: 4px 6px; }
-.chk-opts label { display: flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; min-width: 0; }
+/* Wraps instead of a fixed-width grid: a long name (มหากาพย์, English words) used to spill over the next tick. */
+.chk-opts { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.chk-opts label { display: flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; min-width: 4.6em; }
 .chk-opts input { margin: 0; flex: none; accent-color: var(--gold-hi); }
 .cell .gi { width: 82%; height: 82%; vertical-align: baseline; }
 .cell.pot .gi { width: 72%; height: 72%; }
