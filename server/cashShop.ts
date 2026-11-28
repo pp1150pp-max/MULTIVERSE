@@ -38,7 +38,7 @@ export class CashShop {
 
   /** Saves settings already checked strictly (all defaults = no row). */
   setCfg(cfg: CashShopCfg): void {
-    const empty = !cfg.open && !Object.keys(cfg.items).length && !cfg.packages.length && !cfg.vip.length;
+    const empty = !cfg.open && !cfg.oldLayout && !Object.keys(cfg.items).length && !cfg.packages.length && !cfg.vip.length;
     this.db.setSetting(CASH_SETTING, empty ? null : JSON.stringify(cfg));
   }
 
