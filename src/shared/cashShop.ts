@@ -84,6 +84,9 @@ export interface CashShopCfg {
   packages: CashPackage[];
   /** VIP packages, shortest first (empty = VIP not sold). */
   vip: VipPackage[];
+  /** The window's old layout (owner 2026-11-28: the new one, "แบบ A", puts tabs and crystals on one row and fits the
+   *  window to the screen so only the item list scrolls). Left out = the new layout. */
+  oldLayout?: true;
 }
 
 export const emptyCashShop = (): CashShopCfg => ({ open: false, items: {}, packages: [], vip: [] });
@@ -127,13 +130,18 @@ export function checkCashShop(v: unknown, strict: boolean, cosShop: CosShop): Ch
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าแคชช็อปไม่ถูกต้อง' } : { value: out };
   const o = v as Record<string, unknown>;
   if (strict) {
-    const extra = Object.keys(o).find((k) => !['open', 'items', 'packages', 'vip'].includes(k));
+    const extra = Object.keys(o).find((k) => !['open', 'items', 'packages', 'vip', 'oldLayout'].includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
   }
   if (o.open !== undefined) {
     if (typeof o.open !== 'boolean') {
       if (strict) return { error: 'เปิดขายต้องเป็น true/false' };
     } else out.open = o.open;
+  }
+  if (o.oldLayout !== undefined) {
+    if (typeof o.oldLayout !== 'boolean') {
+      if (strict) return { error: 'หน้าตาแบบเดิมต้องเป็น true/false' };
+    } else if (o.oldLayout) out.oldLayout = true;
   }
   const items = o.items && typeof o.items === 'object' && !Array.isArray(o.items) ? (o.items as Record<string, unknown>) : {};
   if (strict && o.items !== undefined && items !== o.items) return { error: 'รายการสินค้าไม่ถูกต้อง' };
@@ -269,7 +277,7 @@ export interface CashEntry {
 }
 
 /** What players are sent: the items on sale or coming (not ended), the top-up packages and the VIP packages. */
-export interface CashCatalog { open: boolean; items: CashEntry[]; packages: CashPackage[]; vip: VipPackage[] }
+export interface CashCatalog { open: boolean; items: CashEntry[]; packages: CashPackage[]; vip: VipPackage[]; oldLayout?: true }
 
 /**
  * The catalogue at time `now`: switched-off items, ended ones, and cosmetics that are hidden, gone or have
@@ -303,7 +311,7 @@ export function cashCatalog(cfg: CashShopCfg, cosShop: CosShop, now: number, orb
       ...(c.end !== undefined ? { end: c.end } : {}), ...(c.badge ? { badge: c.badge } : {}), featured: !!c.featured,
     });
   }
-  return { open: cfg.open, items, packages: cfg.packages.map((p) => ({ ...p })), vip: cfg.vip.map((p) => ({ ...p })) };
+  return { open: cfg.open, items, packages: cfg.packages.map((p) => ({ ...p })), vip: cfg.vip.map((p) => ({ ...p })), ...(cfg.oldLayout ? { oldLayout: true as const } : {}) };
 }
 
 /** The badge on an item's card: the owner's, or "ลดราคา" for a sale. */
@@ -353,6 +361,7 @@ export function cashBuyError(
 export function cashShopChanges(before: CashShopCfg, after: CashShopCfg): string {
   const out: string[] = [];
   if (before.open !== after.open) out.push(after.open ? 'เปิดขาย' : 'ปิดขาย');
+  if (!!before.oldLayout !== !!after.oldLayout) out.push(after.oldLayout ? 'หน้าต่างแบบเดิม' : 'หน้าต่างแบบใหม่');
   const show = (c: CashItemCfg | undefined) => JSON.stringify(c ?? {});
   for (const id of cashItemIds()) {
     if (show(before.items[id]) !== show(after.items[id])) out.push(`${id}: ${show(before.items[id])} → ${show(after.items[id])}`);
