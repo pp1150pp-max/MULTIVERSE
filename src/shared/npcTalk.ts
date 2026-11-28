@@ -41,6 +41,8 @@ export interface NpcTalkConfig {
   cash: Record<CashLineKey, string[]>;
   /** The Seeker's quests open inside the talk window (owner 2026-11-28). Off = the old quest window. */
   seekerPane: boolean;
+  /** A sort button on the bag panel of the grown windows (shop, blacksmith, stash, market; owner 2026-11-28). */
+  paneSort: boolean;
   /** What The Seeker says there. */
   seeker: Record<SeekerLineKey, string[]>;
 }
@@ -162,6 +164,7 @@ export interface NpcTalkTuning {
   cashPane?: boolean;
   cash?: Partial<Record<CashLineKey, string[]>>;
   seekerPane?: boolean;
+  paneSort?: boolean;
   seeker?: Partial<Record<SeekerLineKey, string[]>>;
 }
 
@@ -291,6 +294,7 @@ export function codeNpcTalk(): NpcTalkConfig {
       tryOn: ['{0} เข้ากับเจ้าดีนะ ลองดูตัวเองสิ'],
     },
     seekerPane: true,
+    paneSort: true,
     seeker: {
       open: ['ประตูทุกบานมีผู้เฝ้า… เลือกภารกิจที่เจ้าพร้อมจะรับไป'],
       accept: ['ข้าฝากด้วย ล่าให้ครบแล้วกลับมารับ{0}'],
@@ -321,6 +325,7 @@ export function mergeNpcTalk(t: NpcTalkTuning | undefined): NpcTalkConfig {
   if (t.cashPane !== undefined) c.cashPane = t.cashPane;
   for (const k of CASH_LINE_KEYS) if (t.cash?.[k]) c.cash[k] = [...t.cash[k]!];
   if (t.seekerPane !== undefined) c.seekerPane = t.seekerPane;
+  if (t.paneSort !== undefined) c.paneSort = t.paneSort;
   for (const k of SEEKER_LINE_KEYS) if (t.seeker?.[k]) c.seeker[k] = [...t.seeker[k]!];
   return c;
 }
@@ -347,7 +352,7 @@ export function checkNpcTalkTuning(x: unknown, strict: boolean): { tuning: NpcTa
   if (!isObj(x)) return strict ? { error: 'ค่าหน้าต่างคุย NPC ไม่ถูกต้อง' } : { tuning: undefined };
   const out: NpcTalkTuning = {};
   const fail = (msg: string): { error: string } | null => (strict ? { error: `หน้าต่างคุย NPC: ${msg}` } : null);
-  for (const k of ['on', 'shopPane', 'forgePane', 'stashPane', 'marketPane', 'cashPane', 'seekerPane', 'bubbles'] as const) {
+  for (const k of ['on', 'shopPane', 'forgePane', 'stashPane', 'marketPane', 'cashPane', 'seekerPane', 'paneSort', 'bubbles'] as const) {
     if (x[k] === undefined) continue;
     if (typeof x[k] !== 'boolean') { const f = fail('สวิตช์ไม่ถูกต้อง'); if (f) return f; continue; }
     if (x[k] !== CODE[k]) out[k] = x[k] as boolean;
@@ -405,6 +410,7 @@ export function npcTalkChanges(a: NpcTalkConfig, b: NpcTalkConfig): string[] {
     if (!sameLines(a.chat[id], b.chat[id])) out.push(`คำพูดเหนือหัว ${id}: ${b.chat[id].length} บรรทัด (แก้ข้อความ)`);
   }
   if (a.seekerPane !== b.seekerPane) out.push(`เควส The Seeker ในหน้าต่างคุย ${onOff(a.seekerPane)} → ${onOff(b.seekerPane)}`);
+  if (a.paneSort !== b.paneSort) out.push(`ปุ่มเรียงในแผงกระเป๋า ${onOff(a.paneSort)} → ${onOff(b.paneSort)}`);
   if (a.cashPane !== b.cashPane) out.push(`แคชช็อปในหน้าต่างคุย ${onOff(a.cashPane)} → ${onOff(b.cashPane)}`);
   if (a.marketPane !== b.marketPane) out.push(`ตลาดในหน้าต่างคุย ${onOff(a.marketPane)} → ${onOff(b.marketPane)}`);
   if (a.stashPane !== b.stashPane) out.push(`คลังในหน้าต่างคุย ${onOff(a.stashPane)} → ${onOff(b.stashPane)}`);
