@@ -42,6 +42,11 @@
 - ใช้ภาพของเกมทั้งหมด (ไม่มีภาพสต็อก) · PNG ใน `landing.html` ถูกเปลี่ยนเป็น WebP ตอน build (`tools/vite-sprites-webp.ts`) เช่น login_bg 3.6 MB → ~430 KB · ภาพนอกจอแรกโหลดแบบ lazy
 - **ยังไม่มี (เว้นไว้ได้):** ภาพ key art แนวนอนสำหรับหน้าแรกโดยเฉพาะ (ตอนนี้ใช้ภาพหน้า login) · ภาพหน้าแรกขนาดเล็กสำหรับมือถือ · ภาพ og สำหรับแชร์ลิงก์หน้านี้ (ตอนนี้ใช้ og-image-2.jpg ของเกม) · ภาพแผนที่/ภาพในเกมจริง (screenshot) · วิดีโอตัวอย่าง
 
-## ลิงก์ที่จะเอาขึ้น (ยังไม่ตัดสิน)
+## ลิงก์ (เจ้าของ 2026-11-28)
 
-ตอนนี้หน้าไปกับ build ของเกม เปิดได้ที่ `https://play.multiverse-game.com/landing` เมื่อ merge + deploy โดยไม่ต้องแตะ DNS/Caddy · ทางเลือกอื่นต้องให้เจ้าของเลือก (ดูใน PR)
+- **โดเมนหลัก `multiverse-game.com` และ `www.multiverse-game.com` = หน้าแนะนำเกม** (`LANDING_HOSTS` ใน `src/shared/landing.ts`)
+  - DNS: CNAME ของทั้งสองชื่อชี้เข้า Cloudflare named tunnel `multiverse` ตัวเดียวกับ `play` (Proxied) สร้างด้วย `cloudflared tunnel route dns multiverse <ชื่อ>` บน VPS · tunnel รันแบบ `--url http://127.0.0.1:2567` จึงส่งทุกชื่อที่ผูกไว้เข้า server เดียวกัน ไม่ต้องแก้ Caddy
+  - server ดูจาก Host (`server/main.ts` `mainDomain`): `/` = `landing.html` · `/landing` → `/` · หน้าเกม (`/index.html`, `/admin`, `/privacy`, `/terms`) → 302 ไป `https://play.multiverse-game.com` ที่ path เดิม (ล็อกอินอยู่โดเมนเกมเท่านั้น) · ไฟล์ภาพและ `/api` ตอบตามปกติ
+  - สวิตช์ "เปิดหน้าแนะนำเกมที่โดเมนหลัก" (`apex`, ค่าในโค้ดเปิด) ในการ์ดเดียวกับเวลา: ปิด = โดเมนหลักส่งทุกคนไปหน้าเกม · ใช้ 302 + `no-store` จึงสลับได้ทันที
+  - ภาษาที่เลือกบนโดเมนหลักไม่ติดไปในเกม (คนละโดเมน เก็บในเบราว์เซอร์แยกกัน)
+- `https://play.multiverse-game.com/landing` ยังเปิดได้เหมือนเดิม

@@ -6,8 +6,9 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { request } from 'node:http';
 import { finish, ok } from './check';
-import { LANDING_DEFAULT, LANDING_NEWS, cleanLanding, fromThaiInput, toThaiInput } from '../src/shared/landing';
+import { GAME_ORIGIN, LANDING_DEFAULT, LANDING_NEWS, cleanLanding, fromThaiInput, toThaiInput } from '../src/shared/landing';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dir = mkdtempSync(join(tmpdir(), 'multiverse-landing-test-'));
@@ -115,6 +116,35 @@ async function run(): Promise<void> {
   // ---- the page route (no build in tests: 404 is fine, but never the game's fallback)
   const page = await fetch(`${BASE}/landing`);
   ok(page.status === 200 || page.status === 404, '/landing is a page route');
+
+  // ---- the main domain (multiverse-game.com): "/" = the landing page, the game's pages go to the game's domain
+  const onHost = (path: string, host: string) =>
+    new Promise<{ status: number; location: string }>((done, fail) => {
+      const u = new URL(BASE + path);
+      const r = request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: 'GET', headers: { Host: host } }, (res) => {
+        res.resume();
+        done({ status: res.statusCode ?? 0, location: String(res.headers.location ?? '') });
+      });
+      r.on('error', fail);
+      r.end();
+    });
+  let m = await onHost('/', 'multiverse-game.com');
+  ok(m.status === 200 || m.status === 404, 'main domain "/" serves the landing page (404 = no build in tests, never the game)');
+  ok((await onHost('/', 'WWW.multiverse-game.com:443')).status === m.status, 'www and a port count as the main domain');
+  m = await onHost('/admin', 'multiverse-game.com');
+  ok(m.status === 302 && m.location === GAME_ORIGIN + '/admin', 'main domain /admin → the game domain');
+  m = await onHost('/index.html?x=1', 'multiverse-game.com');
+  ok(m.status === 302 && m.location === GAME_ORIGIN + '/index.html?x=1', 'main domain game page → the game domain, query kept');
+  m = await onHost('/landing', 'multiverse-game.com');
+  ok(m.status === 302 && m.location === '/', 'main domain /landing → "/"');
+  ok((await onHost('/api/landing', 'multiverse-game.com')).status === 200, 'main domain still answers /api/landing');
+  const plain = await onHost('/', 'play.multiverse-game.com');
+  ok(plain.status !== 302, 'the game domain "/" is unchanged');
+  ok((await api('POST', '/admin/landing', { ...LANDING_DEFAULT, apex: 'yes' }, ownerTok)).status === 400, 'apex switch must be true/false');
+  ok((await api('POST', '/admin/landing', { ...LANDING_DEFAULT, apex: false }, ownerTok)).status === 200, 'owner turns the main domain off');
+  m = await onHost('/?ref=fb', 'multiverse-game.com');
+  ok(m.status === 302 && m.location === GAME_ORIGIN + '/?ref=fb', 'switch off: main domain → the game');
+  ok((await api('POST', '/admin/landing', LANDING_DEFAULT, ownerTok)).status === 200 && (await onHost('/', 'multiverse-game.com')).status !== 302, 'switch back on');
 }
 
 try {

@@ -44,10 +44,10 @@ export async function landingAdminApi(req: IncomingMessage, res: ServerResponse,
   const c = cleanLanding(await readJson(req));
   if ('error' in c) throw new HttpError(400, c.error);
   const before = db.landingConfig();
-  if (before.start !== c.start || before.end !== c.end || before.news !== c.news) {
+  if (before.start !== c.start || before.end !== c.end || before.news !== c.news || before.apex !== c.apex) {
     db.setLandingConfig(c);
     const t = (at: number) => toThaiInput(at).replace('T', ' ');
-    log(db, a, 'landing', 'หน้าแนะนำเกม', `${t(before.start)} – ${t(before.end)} → ${t(c.start)} – ${t(c.end)} · ข่าว ${before.news ? 'เปิด' : 'ปิด'} → ${c.news ? 'เปิด' : 'ปิด'}`);
+    log(db, a, 'landing', 'หน้าแนะนำเกม', `${t(before.start)} – ${t(before.end)} → ${t(c.start)} – ${t(c.end)} · ข่าว ${before.news ? 'เปิด' : 'ปิด'} → ${c.news ? 'เปิด' : 'ปิด'} · โดเมนหลัก ${before.apex ? 'เปิด' : 'ปิด'} → ${c.apex ? 'เปิด' : 'ปิด'}`);
   }
   send(res, 200, { config: db.landingConfig(), canEdit: true } satisfies AdminLanding);
   return true;

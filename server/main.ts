@@ -21,6 +21,7 @@ import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
 import { mapsPublicApi } from './admin-maps';
 import { landingPublicApi } from './landing';
+import { GAME_ORIGIN, LANDING_HOSTS } from '../src/shared/landing';
 import { applyMaps } from './maps-live';
 import { googleApi, googleLoginOn } from './google-api';
 import { loadGoogleConfig } from './google';
@@ -334,9 +335,39 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, path: stri
 /** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy, /terms and /landing pages. */
 const PAGES = new Set(['/admin', '/privacy', '/terms', '/landing']);
 
+/** The request came in on the owner's main domain (LANDING_HOSTS), not the game's own (docs/systems/landing.md). */
+function onMainDomain(req: IncomingMessage): boolean {
+  const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
+  return LANDING_HOSTS.includes(host);
+}
+
+/**
+ * The main domain: "/" is the landing page (switch `apex` in /admin, off = the game), /landing goes to "/", and the
+ * game's own pages (the game, /admin, /privacy, /terms) go to the game's domain, so logins stay there. Files and /api
+ * stay (the page loads its pictures and reads /api/landing). True = answered.
+ */
+async function mainDomain(req: IncomingMessage, res: ServerResponse, path: string, search: string): Promise<boolean> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  const to = (loc: string, code = 302) => {
+    res.writeHead(code, { Location: loc, 'Cache-Control': 'no-store' });
+    res.end();
+    return true;
+  };
+  if (path === '/landing' || path === '/landing/' || path === '/landing.html') return to('/' + search);
+  if (path === '/') {
+    if (!db.landingConfig().apex) return to(GAME_ORIGIN + '/' + search);
+    await serveStatic(req, res, '/landing.html');
+    return true;
+  }
+  if (path === '/index.html' || path === '/admin/' || PAGES.has(path) || path === '/admin.html') return to(GAME_ORIGIN + path + search);
+  return false;
+}
+
 const server = createServer(async (req, res) => {
-  const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const path = url.pathname;
   try {
+    if (!path.startsWith('/api/') && onMainDomain(req) && (await mainDomain(req, res, path, url.search))) return;
     if (path.startsWith('/api/')) await api(req, res, path);
     else if ((req.method === 'GET' || req.method === 'HEAD') && PAGES.has(path)) await serveStatic(req, res, path + '.html');
     else if (path === '/landing/') {

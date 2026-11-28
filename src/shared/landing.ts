@@ -13,13 +13,21 @@ export interface LandingConfig {
   end: number;
   /** List the latest notes on the page. */
   news: boolean;
+  /** The main domain (LANDING_HOSTS) opens this page at "/"; off = it sends everyone to the game (owner 2026-11-28). */
+  apex: boolean;
 }
+
+/** The owner's main domain: "/" there is the landing page, the game's other pages go to GAME_ORIGIN (server/main.ts). */
+export const LANDING_HOSTS = ['multiverse-game.com', 'www.multiverse-game.com'];
+/** Where the game lives. */
+export const GAME_ORIGIN = 'https://play.multiverse-game.com';
 
 /** In the code: 28 Nov 2026 18:00 – 5 Dec 2026 18:00 Thai time (UTC+7), news on. The page has the same times built in for when the server can't be reached. */
 export const LANDING_DEFAULT: LandingConfig = {
   start: Date.UTC(2026, 10, 28, 11),
   end: Date.UTC(2026, 11, 5, 11),
   news: true,
+  apex: true,
 };
 
 /** What GET /api/landing answers (public, CORS open: it holds nothing a guest in the game can't already see). */
@@ -42,12 +50,13 @@ const MIN = Date.UTC(2024, 0, 1);
 const MAX = Date.UTC(2100, 0, 1);
 
 /** Checks a window from /admin; returns the config or the Thai reason it is refused. */
-export function cleanLanding(v: { start?: unknown; end?: unknown; news?: unknown }): LandingConfig | { error: string } {
+export function cleanLanding(v: { start?: unknown; end?: unknown; news?: unknown; apex?: unknown }): LandingConfig | { error: string } {
   const ok = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= MIN && n <= MAX;
   if (!ok(v.start) || !ok(v.end)) return { error: 'เวลาเริ่ม/จบไม่ถูกต้อง' };
   if (v.end <= v.start) return { error: 'เวลาจบต้องหลังเวลาเริ่ม' };
   if (typeof v.news !== 'boolean') return { error: 'ค่าสวิตช์ข่าวไม่ถูกต้อง' };
-  return { start: v.start, end: v.end, news: v.news };
+  if (v.apex !== undefined && typeof v.apex !== 'boolean') return { error: 'ค่าสวิตช์โดเมนหลักไม่ถูกต้อง' };
+  return { start: v.start, end: v.end, news: v.news, apex: v.apex ?? LANDING_DEFAULT.apex };
 }
 
 /** "2026-11-28T18:00" in Thai time, for <input type="datetime-local"> on /admin. */
