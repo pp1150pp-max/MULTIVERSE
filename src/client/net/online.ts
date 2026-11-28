@@ -316,6 +316,8 @@ export class OnlineBackend implements Backend {
   private sent: { seq: number; x: number; z: number }[] = [];
   private pendingDash = false;
   private filterPending = false;
+  /** Our stats and buff bonus as last drawn (applyMine), to redraw the bag only when they change. */
+  private statsJson = '';
   private autoSetPending = false;
   /** The server's lootFilter / autoSettings that came while our own change was pending. */
   private heldFilter: LootFilter | null = null;
@@ -1131,7 +1133,12 @@ export class OnlineBackend implements Backend {
       if (this.autoSetPending) this.heldAutoSettings = pv.autoSettings;
       else me.autoSettings = pv.autoSettings;
     }
+    // The bag redraws its numbers when the stats or the buffs' share change (a buff starting or ending).
+    const statsWas = this.statsJson;
     if (pv.stats) me.stats = pv.stats;
+    if (pv.buffBonus) me.buffBonus = pv.buffBonus;
+    this.statsJson = JSON.stringify(me.stats) + JSON.stringify(me.buffBonus);
+    if (statsWas && this.statsJson !== statsWas && !pv.inv) this.events.push({ t: 'inventory', to: me.id });
     me.cd = { ...pv.cd };
     me.charges = pv.ch ? { ...pv.ch } : {};
     if (pv.skills) me.skillBook = cleanSkillBook(me.cls.id, pv.skills);

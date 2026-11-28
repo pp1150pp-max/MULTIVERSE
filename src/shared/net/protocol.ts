@@ -357,6 +357,8 @@ export interface PrivateSnap {
   /** What is left of a skill's damage-soaking shield (missing = none). */
   shield?: number;
   potSel?: PotionSelect; lootFilter?: LootFilter; autoSettings?: AutoSettings; stats?: Stats;
+  /** What buffs add to `stats` (Player.buffBonus); sent like stats. */
+  buffBonus?: Partial<Stats>;
   /** Gate bosses this character has killed (BOSS_GATES). */
   bossKills?: string[];
   /** Ways opened by quests (Player.unlocks, e.g. 'floor2'). */
