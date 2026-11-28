@@ -9,6 +9,9 @@ import { applyBalance, checkBalance, currentBalance } from '../src/shared/balanc
 import { CODE_SKILL_ELEMENT, ELEMENTS, REACTIONS, codeElements, elementChanges, mergeElements, reactionOf } from '../src/shared/elementTuning';
 import { hitElementOf, markOf } from '../src/shared/sim/elements';
 import type { Monster } from '../src/shared/sim/Monster';
+import { markPhrase, reactionPhrases } from '../src/shared/elementChart';
+import { Translator, hasThai } from '../src/shared/i18n/translator';
+import { englishDict } from '../src/shared/i18n/dict';
 
 const texts = (sim: Sim) => sim.drainEvents().filter((e) => e.t === 'text').map((e) => (e as { text: string }).text);
 const fresh = (cls: 'sword' | 'mage' | 'gunslinger' = 'mage') => {
@@ -175,6 +178,26 @@ try {
   ok(checkBalance({ skills: { elements: { markSec: 4, skill: { fireball: 'fire' } } } }, true).tuning?.skills === undefined, 'values equal to the code are not saved');
   ok(elementChanges(codeElements(), mergeElements({ reactions: { 'fire+poison': { dmg: 250 } } }), (id) => id).some((s) => s.includes('ระเบิดพิษ ดาเมจ (% ATK) 200 → 250')), 'changes go to the audit');
   applyBalance({});
+
+  // The players' element chart (owner 2026-11-28): phrases from the live config, every one in the English dictionary.
+  {
+    const c = codeElements();
+    const ph = (id: (typeof REACTIONS)[number]) => reactionPhrases(c.reactions[id]).join(' · ');
+    ok(ph('water+lightning') === 'ดาเมจ 120% ATK · โดนทุกตัวในรัศมี 4 ม.', `chart: Electrocute = ${ph('water+lightning')}`);
+    ok(ph('water+wind') === 'ช้าลง 50% นาน 1 วิ · โดนตัวเดียว', `chart: Freeze = ${ph('water+wind')}`);
+    ok(ph('water+poison') === 'ดาเมจต่อเนื่อง 16% ATK/วิ นาน 5 วิ · โดนตัวเดียว', `chart: poison soak = ${ph('water+poison')}`);
+    ok(ph('poison+lightning') === 'สตัน 0.5 วิ · โดนตัวเดียว · ไม่ใช้กับบอส', `chart: Numbing Shock = ${ph('poison+lightning')}`);
+    ok(ph('lightning+wind') === 'ดาเมจ 100% ATK · ผลักออก 3 ม. · โดนทุกตัวในรัศมี 3 ม.', `chart: Thunder Gale = ${ph('lightning+wind')}`);
+    ok(markPhrase(c, 'water') === 'ช้าลง 15%' && markPhrase(c, 'lightning') === 'รับดาเมจเพิ่ม 10%', 'chart: mark phrases');
+    // /admin values show by themselves.
+    const t = mergeElements({ reactions: { 'fire+poison': { dmg: 250, stun: 1.25 }, 'water+fire': { on: false } }, mark: { wind: 0 } });
+    ok(reactionPhrases(t.reactions['fire+poison']).join(' · ') === 'ดาเมจ 250% ATK · สตัน 1.25 วิ · โดนตัวเดียว · บอสโดนสตันแค่ 30%', 'chart: admin numbers');
+    ok(reactionPhrases(t.reactions['water+fire'])[0] === 'ปิดอยู่ชั่วคราว' && markPhrase(t, 'wind') === 'ไม่มีผลเพิ่ม', 'chart: switched off / zero');
+    const tr = new Translator(englishDict());
+    const all = [...REACTIONS.flatMap((k) => [...reactionPhrases(c.reactions[k]), ...reactionPhrases(t.reactions[k])]), ...ELEMENTS.map((e) => markPhrase(c, e)), 'ไม่มีผลเพิ่ม'];
+    const missing = all.filter((s) => hasThai(tr.tr(s)));
+    ok(missing.length === 0, `chart: English for every phrase (missing: ${missing.join(' | ')})`);
+  }
 } catch (e) {
   ok(false, `threw: ${(e as Error).stack}`);
 }

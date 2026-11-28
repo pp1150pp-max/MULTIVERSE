@@ -7,6 +7,8 @@
 // levels, gold and combat (Sim.learnSkill / refundSkill / resetSkills / wearSkill) and its snapshot redraws this.
 // The sky is `ui/skill_sky.png` (the owner makes it, see art_templates/skills/PROMPTS.md) over a CSS star field.
 import { elementBadge } from './elementBadge';
+import { elementChartHtml } from './elementChart';
+import type { Element, ReactionId } from '../shared/elementTuning';
 import type { Game } from './Game';
 import { KIND_NAME, SLOT_KIND, WEAR_SLOTS, type SkillDef, type WearSlot } from '../shared/data/classes';
 import {
@@ -40,6 +42,11 @@ export class SkillWindow {
   /** "Reset all skills" over the map's corner (owner 2026-11-15). */
   private readonly reset: HTMLButtonElement;
   private readonly detail: HTMLElement;
+  /** The element chart over the map (owner 2026-11-28, client/elementChart.ts): open?, the reaction picked, the element lit up. */
+  private readonly chart: HTMLElement;
+  private chartOpen = false;
+  private chartSel: ReactionId | null = null;
+  private chartHi: Element | null = null;
   /** What the window shows, so it is redrawn only when something changed. */
   private drawn = '';
   /** The skill in the details box. */
@@ -81,7 +88,8 @@ export class SkillWindow {
       b.onclick = f;
       this.zoomBox.append(b);
     }
-    mapBox.append(this.wrap, this.zoomBox, this.reset);
+    this.chart = el('div', 'sk-elchart hidden');
+    mapBox.append(this.wrap, this.zoomBox, this.reset, this.chart);
     this.initZoom();
     body.append(mapBox, this.detail);
     this.win.append(head, this.top, body,
@@ -108,6 +116,7 @@ export class SkillWindow {
       this.drawn = '';
       this.centre = true;
       this.uz = 1;
+      this.chartOpen = false;
       this.update();
     }
   }
@@ -121,7 +130,7 @@ export class SkillWindow {
       this.g.sysMenu.setBadge('สกิล', left);
     }
     if (!this.open) return;
-    const key = JSON.stringify([p.skillBook, p.level, p.gold, this.sel, currentBalance().skills.classPassive]);
+    const key = JSON.stringify([p.skillBook, p.level, p.gold, this.sel, currentBalance().skills.classPassive, currentBalance().skills.elements, this.chartOpen, this.chartSel, this.chartHi]);
     if (key === this.drawn) return;
     this.drawn = key;
     this.render();
@@ -142,7 +151,12 @@ export class SkillWindow {
     this.top.innerHTML =
       `<div class="sk-slots">${slots}</div>` +
       `<div class="sk-points"><span>แต้มคงเหลือ <b>${left}</b> / ${pointsEarned(p.level)}</span>` +
-      `<span class="sk-refund">คืนแต้ม: ${price ? `${price.toLocaleString()} G/แต้ม` : 'ฟรี'}</span></div>`;
+      `<span class="sk-refund">คืนแต้ม: ${price ? `${price.toLocaleString()} G/แต้ม` : 'ฟรี'}</span></div>` +
+      (currentBalance().skills.elements.on ? '<button class="sk-elbtn" data-elchart>📖 ตารางธาตุ</button>' : '');
+    // The element chart covers the map while open (closed by itself when the element system is switched off).
+    if (!currentBalance().skills.elements.on) this.chartOpen = false;
+    this.chart.classList.toggle('hidden', !this.chartOpen);
+    if (this.chartOpen) this.chart.innerHTML = elementChartHtml(this.chartSel, this.chartHi);
     this.reset.disabled = pointsSpent(book) === 0;
     this.renderMap();
     this.renderDetail();
@@ -416,6 +430,23 @@ export class SkillWindow {
     const t = e.target as HTMLElement;
     const b = this.g.backend;
     const p = this.g.player;
+    // The element chart: its button (open / close), an element badge (opens it with that element lit up), a cell, ✕.
+    const badge = t.closest<HTMLElement>('.el-badge[data-elem]');
+    if (t.closest('[data-elchart]') || badge) {
+      this.chartOpen = badge ? true : !this.chartOpen;
+      this.chartHi = (badge?.dataset.elem as Element | undefined) ?? null;
+      this.chartSel = null;
+      return this.update();
+    }
+    const rx = t.closest<HTMLElement>('[data-elrx]');
+    if (rx) {
+      this.chartSel = rx.dataset.elrx as ReactionId;
+      return this.update();
+    }
+    if (t.closest('[data-elchart-close]')) {
+      this.chartOpen = false;
+      return this.update();
+    }
     const learn = t.closest<HTMLElement>('[data-learn]');
     if (learn) {
       this.learnAt = performance.now();
