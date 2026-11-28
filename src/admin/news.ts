@@ -2,7 +2,7 @@
 // them and flips the two switches; GMs only look (the `newsEdit` tool). Notes added by /ship (tools: npm run add-news) show up here too.
 // The server checks every value again (server/admin-news.ts).
 import { NEWS_LINE_MAX, NEWS_LINES_MAX, NEWS_SHOW, NEWS_TITLE_MAX, newsDate, type AdminNews, type AdminNewsNote } from '../shared/news';
-import { LANDING_DEFAULT, LANDING_NEWS, fromThaiInput, toThaiInput, type AdminLanding } from '../shared/landing';
+import { GAME_ORIGIN, LANDING_DEFAULT, LANDING_HOSTS, LANDING_NEWS, fromThaiInput, toThaiInput, type AdminLanding } from '../shared/landing';
 
 type Kids = (Node | string | null | undefined | false)[];
 type H = <K extends keyof HTMLElementTagNameMap>(tag: K, props?: Record<string, unknown>, ...kids: Kids) => HTMLElementTagNameMap[K];
@@ -87,10 +87,12 @@ export async function renderNews(view: HTMLElement, h: H, api: Api): Promise<voi
     const end = h('input', { type: 'datetime-local', value: toThaiInput(l.config.end), disabled: lro }) as HTMLInputElement;
     const news = h('input', { type: 'checkbox', disabled: lro }) as HTMLInputElement;
     news.checked = l.config.news;
+    const apex = h('input', { type: 'checkbox', disabled: lro }) as HTMLInputElement;
+    apex.checked = l.config.apex;
     const lmsg = h('div', { class: done ? 'msg ok' : 'msg' }, done);
     const save = h('button', { class: 'primary', disabled: lro, onclick: async () => {
       try {
-        const r = await api<AdminLanding>('POST', '/admin/landing', { start: fromThaiInput(start.value), end: fromThaiInput(end.value), news: news.checked });
+        const r = await api<AdminLanding>('POST', '/admin/landing', { start: fromThaiInput(start.value), end: fromThaiInput(end.value), news: news.checked, apex: apex.checked });
         drawLanding(r, 'บันทึกแล้ว — หน้าแนะนำเกมใช้ค่าใหม่ภายใน ~30 วินาที');
       } catch (e) {
         lmsg.className = 'msg bad';
@@ -104,6 +106,7 @@ export async function renderNews(view: HTMLElement, h: H, api: Api): Promise<voi
       h('label', { style: 'display:block;margin:6px 0' }, 'เริ่ม ', start),
       h('label', { style: 'display:block;margin:6px 0' }, 'จบ ', end),
       h('label', { style: 'display:block;margin:6px 0' }, news, ` แสดง ${LANDING_NEWS} ประกาศล่าสุดบนหน้าแนะนำเกม (ค่าในโค้ด: เปิด)`),
+      h('label', { style: 'display:block;margin:6px 0' }, apex, ` เปิดหน้าแนะนำเกมที่โดเมนหลัก (${LANDING_HOSTS.join(', ')}) ปิด = ส่งไปหน้าเกม ${GAME_ORIGIN} (ค่าในโค้ด: เปิด)`),
       lmsg, save);
   };
   void api<AdminLanding>('GET', '/admin/landing').then((l) => drawLanding(l), (e: Error) => landingCard.replaceChildren(h('h2', {}, 'หน้าแนะนำเกม (close beta)'), h('div', { class: 'msg bad' }, `โหลดไม่สำเร็จ: ${e.message}`)));

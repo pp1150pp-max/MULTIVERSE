@@ -571,6 +571,7 @@ export class Db {
       if (typeof o.start === 'number' && Number.isFinite(o.start)) out.start = o.start;
       if (typeof o.end === 'number' && Number.isFinite(o.end)) out.end = o.end;
       if (typeof o.news === 'boolean') out.news = o.news;
+      if (typeof o.apex === 'boolean') out.apex = o.apex;
     } catch {
       // damaged value: the code's window
     }
@@ -579,7 +580,7 @@ export class Db {
 
   setLandingConfig(c: LandingConfig): void {
     const diff: Partial<LandingConfig> = {};
-    for (const k of ['start', 'end', 'news'] as const) if (c[k] !== LANDING_DEFAULT[k]) (diff as Record<string, unknown>)[k] = c[k];
+    for (const k of ['start', 'end', 'news', 'apex'] as const) if (c[k] !== LANDING_DEFAULT[k]) (diff as Record<string, unknown>)[k] = c[k];
     this.setSetting('landing', Object.keys(diff).length ? JSON.stringify(diff) : null);
   }
 
