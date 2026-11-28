@@ -141,6 +141,9 @@
 #npc-talk .ns > * { opacity: 0; transition: opacity 0.35s, transform 0.45s cubic-bezier(.2, .8, .2, 1); }
 #npc-talk.shop .ns > * { opacity: 1; }
 #npc-talk .ns > .hidden { display: none; }
+/* `#hud button { pointer-events: auto }` (hud.css) beats the `none` above on buttons, so the see-through tabs of an
+   unopened pane (and the faded answers while one is open) still caught clicks over the NPC's answers. */
+#npc-talk:not(.shop) .ns *, #npc-talk .ns:not(.on) *, #npc-talk.shop .nt-answers *, #npc-talk.shop .nt-box * { pointer-events: none; }
 
 /* Medallion: the portrait's head in a round gold frame, top left. */
 #npc-talk .ns-medal {
