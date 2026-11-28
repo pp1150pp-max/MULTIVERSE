@@ -3,7 +3,7 @@
 // easy to swap for painted art later.
 import { noTranslate as noTr } from './i18n';
 import type { Game } from './Game';
-import type { MailAttachItem, MailFull, MailHead, MailReply } from '../shared/mail';
+import { describeAttach, type MailAttachItem, type MailFull, type MailHead, type MailReply } from '../shared/mail';
 import { playSound } from './audio/sfx';
 import { makeItem } from '../shared/data/items';
 import { isStoneKind, RARITY_COLOR, type BagEntry } from '../shared/types';
@@ -192,14 +192,16 @@ export class MailUI {
     );
   }
 
-  /** Each attachment as a bag cell with its name beside it. m.lines and the cells share one order: gold, then the items. */
+  /** Each attachment as a bag cell with its name beside it. The names and the cells share one order: gold, then the items. */
   private attachRows(m: MailFull): HTMLElement[] {
     const { gold = 0, items = [] } = m.gifts ?? {};
     const cells = [
       ...(gold ? [{ html: `<div class="cell" style="--rc:#d8b45a">${COIN_ICON}</div>` }] : []),
       ...items.map((x) => this.attachCell(x)),
     ];
-    return m.lines.map((line, i) => {
+    // Named here for your class, so a gear name matches its picture (the server's lines use the kind's first name).
+    const names = m.gifts ? describeAttach(m.gifts, this.g.player.cls.id) : m.lines;
+    return names.map((line, i) => {
       const row = el('div', 'mail-item');
       const c: { html: string; entry?: BagEntry } | undefined = cells[i];
       row.innerHTML = c?.html ?? ''; // our own icon markup only, never mail text
