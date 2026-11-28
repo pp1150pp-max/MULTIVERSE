@@ -43,7 +43,17 @@ for (const d of [0.5, 1.2, 4, 20]) {
 }
 
 // Only these three sheets: the other floor 2 monsters' extra moves stay unplayed.
-ok(steps('kraken', 'ink', 1) === null && steps('ghost_sailor', 'fade', 1) === null, 'other sheets only attack');
+ok(steps('ghost_sailor', 'fade', 1) === null && steps('kraken_tentacle_sea', 'grab', 1) === null, 'other sheets only attack');
+
+// The Kraken (owner 2026-11-28 pictures): every move it sends finds its own pictures; its arms coil and hold a grab.
+for (const name of ['arm_slam', 'arm_cut', 'ink', 'dive']) {
+  const s = steps('kraken', name, 0.6);
+  ok(!!s && s.every((x) => meta.kraken.moves![Math.floor(x.col / 4)] === name), `kraken: ${name} plays its own pictures`);
+}
+const grab = steps('kraken_arm', 'grab', 4);
+ok(!!grab && grab.every((x) => meta.kraken_arm.moves![Math.floor(x.col / 4)] === 'grab') && Math.abs(grab.reduce((a, x) => a + x.secs, 0) - 4.15) < 1e-6,
+  'kraken_arm: a grab coils, then holds the coil for as long as it drags');
+ok(steps('kraken_arm', 'attack', 0.9)!.every((x) => meta.kraken_arm.moves![Math.floor(x.col / 4)] === 'slam_tentacle'), 'kraken_arm: its slam is its second move');
 ok(moveSteps('giant_crab', undefined, 'cannon', 1) === null && steps('giant_crab', 'toString', 1) === null, 'no names, no move');
 
 finish('paper-moves');

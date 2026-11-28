@@ -229,5 +229,12 @@
       "idle",
       "slam"
     ]
+  },
+  "kraken_arm": {
+    "moves": [
+      "idle",
+      "slam_tentacle",
+      "grab"
+    ]
   }
 }

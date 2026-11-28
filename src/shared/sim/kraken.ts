@@ -533,8 +533,10 @@ export class KrakenBrain {
         this.grab = null;
         return;
       }
-      // A holding arm does not slam (tentacleTick waits while pinned).
+      // A holding arm does not slam (tentacleTick waits while pinned); it coils and holds (paperMoves.ts kraken_arm.grab).
       arm.pinnedUntil = sim.time + mv('kraken.grabSec') + 1;
+      arm.face(p.x - arm.x, p.z - arm.z);
+      sim.anim(arm.id, 'grab', { duration: mv('kraken.grabSec'), fallback: 'attack' });
       g.arm = arm;
       g.hold = {
         id: sim.nextHazardId(), k: 'suction', x: arm.x, z: arm.z, r: ROOM_ISLAND * 2 + 4, speed: mv('kraken.grabSpeed'), pid: p.id,
