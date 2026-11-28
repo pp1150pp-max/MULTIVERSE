@@ -153,7 +153,7 @@ for (const id of CHEST_MAP_IDS) {
   ok(chestGround(d.sim.zone, d.sim.terrain) === chestGround(c.sim.zone, c.sim.terrain), 'and it is not searched again');
   changed = true;
   rebuilt.sweep();
-  ok(JSON.stringify(rebuilt.ensure(zone.id, 1)!.sim.chests) !== was, 'a changed layout: new spots');
+  ok(JSON.stringify(rebuilt.ensure(zone.id, 1)!.sim.chests) === was, 'a changed layout that leaves their spots good: they stay (tests/chest-respawn.test.ts)');
 }
 
 // ---- map files and /admin

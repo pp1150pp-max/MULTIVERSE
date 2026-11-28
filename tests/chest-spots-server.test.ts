@@ -1,6 +1,7 @@
 // Where chests stand reaches the browser (docs/systems/chests-shrines.md): the snapshot lists the chests near the player only when
 // that list changes, an opened one drops out, and it all comes again after changing map. A published layout with a chest by the camp
-// and random spots switched off puts one in reach. Runs its own game server on a free port with a throwaway database.
+// and random spots switched off puts one in reach. A restarted server keeps the opened one shut (its keepOnRestart switch off:
+// all back). Runs its own game server on a free port with a throwaway database.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -23,11 +24,29 @@ const PORT = await new Promise<number>((res, rej) => {
   });
 });
 const BASE = `http://localhost:${PORT}`;
-const server: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
+const start = (): ChildProcess => spawn(process.execPath, ['--import', 'tsx', 'server/main.ts'], {
   cwd: ROOT,
   env: { ...process.env, PORT: String(PORT), DB_FILE },
   stdio: ['ignore', 'ignore', 'inherit'],
 });
+let server = start();
+async function stop(): Promise<void> {
+  if (server.exitCode !== null || server.signalCode !== null) return;
+  const gone = new Promise((r) => server.once('exit', r));
+  server.kill();
+  await gone;
+}
+async function up(): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      await fetch(`${BASE}/api/me`);
+      return;
+    } catch {
+      if (i > 100) throw new Error('test server did not start');
+      await sleep(100);
+    }
+  }
+}
 
 async function api(method: string, path: string, body?: unknown, token?: string) {
   const r = await fetch(`${BASE}/api${path}`, {
@@ -42,15 +61,7 @@ async function until(cond: () => unknown): Promise<void> {
 }
 
 async function run(): Promise<void> {
-  for (let i = 0; ; i++) {
-    try {
-      await fetch(`${BASE}/api/me`);
-      break;
-    } catch {
-      if (i > 100) throw new Error('test server did not start');
-      await sleep(100);
-    }
-  }
+  await up();
   const tok = (await api('POST', '/register', { username: 'chestowner', password: 'secret123' })).data.token as string;
   const cli = spawnSync(process.execPath, ['--import', 'tsx', 'server/admin-role.ts', 'chestowner', 'owner'], { cwd: ROOT, env: { ...process.env, DB_FILE }, encoding: 'utf8' });
   ok(cli.status === 0, 'chestowner is owner');
@@ -110,6 +121,34 @@ async function run(): Promise<void> {
   await until(() => lists().length > m);
   ok(lists().length > m && !here().some((c) => c.id === 'c1'), 'back in the forest: the list again, the opened chest not in it');
   ws.close(4000);
+
+  // A restart (killed without a countdown: the chests are saved the moment they change), then in to the forest again.
+  const afterRestart = async (): Promise<{ id: string }[]> => {
+    await stop();
+    server = start();
+    await up();
+    const w = new WebSocket(`${BASE.replace('http', 'ws')}/ws`);
+    const got: any[] = [];
+    w.onopen = () => w.send(JSON.stringify({ t: 'join', token: tok, characterId: char }));
+    w.onmessage = (e) => got.push(JSON.parse(String(e.data)));
+    const seen = () => got.filter((x) => x.t === 'snap' && x.chests).map((x) => x.chests as { id: string }[]);
+    await until(() => seen().length);
+    // Into town first (a rejoin may put it straight back in the forest), so the forest's list is a fresh one.
+    await warp('nexus_city');
+    await until(() => seen().at(-1)?.length === 0);
+    const k = seen().length;
+    await warp('emerald_forest');
+    await until(() => seen().length > k);
+    await sleep(300);
+    const list = seen().length > k ? seen().at(-1)! : [{ id: 'no list' }];
+    w.close(4000);
+    return list;
+  };
+  const kept = await afterRestart();
+  ok(!kept.some((c) => c.id === 'c1' || c.id === 'no list'), `restarted: the opened chest is still gone (${JSON.stringify(kept)})`);
+  ok((await api('POST', '/admin/balance', { tuning: { treasure: { randomSpots: false, openSec: 0, keepOnRestart: false } }, part: 'rest' }, tok)).status === 200, 'keepOnRestart off');
+  const fresh = await afterRestart();
+  ok(fresh.some((c) => c.id === 'c1'), `restarted with it off: the chest is back (${JSON.stringify(fresh)})`);
 }
 
 try {
@@ -117,10 +156,7 @@ try {
 } catch (e) {
   ok(false, `test crashed: ${e instanceof Error ? e.message : e}`);
 } finally {
-  if (server.exitCode === null) {
-    server.kill();
-    await new Promise((r) => server.once('exit', r));
-  }
+  await stop();
   rmSync(dir, { recursive: true, force: true });
 }
 finish('chest-spots-server');

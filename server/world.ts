@@ -374,7 +374,17 @@ const clamp = (v: unknown, max: number): number | undefined =>
 
 export class GameWorld {
   /** Every open map's Sims, one per channel (server/channels.ts). */
-  readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z, (id) => ZONES[id]);
+  readonly channels = new Channels(Object.values(ZONES), Date.now, undefined, (z) => ZONES[z.id] ?? z, (id) => ZONES[id], {
+    load: (key) => this.db.chestState(key),
+    // A failed write only costs the chests their places after a restart: it must not break the tick that opened one.
+    save: (key, state) => {
+      try {
+        this.db.setChestState(key, state);
+      } catch (e) {
+        console.warn(`[chests] ${key} not saved: ${e instanceof Error ? e.message : e}`);
+      }
+    },
+  });
   private readonly sessions = new Set<Session>();
   /** The private Sims of map-editor previews (one per preview session), ticked with the others. */
   private readonly previews = new Set<Sim>();

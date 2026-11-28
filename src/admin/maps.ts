@@ -57,6 +57,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
   const msg = h('div', { class: 'msg' });
   const chestsOn = h('input', { type: 'checkbox', checked: cur.chests });
   const randomOn = h('input', { type: 'checkbox', checked: cur.randomSpots });
+  const keepOn = h('input', { type: 'checkbox', checked: cur.keepOnRestart });
   const shrinesOn = h('input', { type: 'checkbox', checked: cur.shrines });
   const auraOn = h('input', { type: 'checkbox', checked: cur.aura });
   const keys = Object.keys(TREASURE_NUMS) as (keyof typeof TREASURE_NUMS)[];
@@ -112,6 +113,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
     const t: TreasureTuning = {};
     if (chestsOn.checked !== code.chests) t.chests = chestsOn.checked;
     if (randomOn.checked !== code.randomSpots) t.randomSpots = randomOn.checked;
+    if (keepOn.checked !== code.keepOnRestart) t.keepOnRestart = keepOn.checked;
     if (shrinesOn.checked !== code.shrines) t.shrines = shrinesOn.checked;
     if (auraOn.checked !== code.aura) t.aura = auraOn.checked;
     for (const k of keys) {
@@ -141,6 +143,7 @@ async function renderTreasure(view: HTMLElement, h: H, api: Api, onSaved: (tunin
     h('div', { class: 'row bal-line' },
       h('label', { title: `ค่าในโค้ด: ${code.chests ? 'เปิด' : 'ปิด'}` }, chestsOn, ' เปิดหีบสมบัติ (ปิด = หีบไม่แสดง เปิดไม่ได้)'),
       h('label', { title: `ค่าในโค้ด: ${code.randomSpots ? 'เปิด' : 'ปิด'}` }, randomOn, ' หีบเกิดจุดสุ่มใหม่ทุกครั้ง ทั่วแมพ (ปิด = อยู่ที่หมุดในตัวแก้แมพ)'),
+      h('label', { title: `ค่าในโค้ด: ${code.keepOnRestart ? 'เปิด' : 'ปิด'}` }, keepOn, ' จำหีบข้ามการรีสตาร์ท server (หีบอยู่ที่เดิม ที่เปิดแล้วนับเวลาต่อ · ปิด = รีสตาร์ทแล้วหีบกลับมาครบ สุ่มจุดใหม่)'),
       h('label', { title: `ค่าในโค้ด: ${code.shrines ? 'เปิด' : 'ปิด'}` }, shrinesOn, ' เปิดศาลเจ้า (ปิด = ใช้ไม่ได้ บัฟที่ได้ไปแล้วอยู่จนหมดเวลา)'),
       h('label', { title: `ค่าในโค้ด: ${code.aura ? 'เปิด' : 'ปิด'}` }, auraOn, ' ออร่ารอบหีบ/ศาล (แสงบนพื้น วงหมุน ประกายลอยขึ้น สีตามบัฟ หีบสีทอง)')),
     h('div', { class: 'me-grid2' }, ...keys.map((k) => h('label', { title: `${TREASURE_NUMS[k].range[0]}–${TREASURE_NUMS[k].range[1]}` }, `${TREASURE_NUMS[k].name} (${code[k]}) `, inputs[k]))),

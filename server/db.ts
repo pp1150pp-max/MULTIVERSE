@@ -29,6 +29,7 @@ import { LANDING_DEFAULT, type LandingConfig } from '../src/shared/landing';
 import type { TradeLogRow } from '../src/shared/trade';
 import type { AdminReportRow } from '../src/shared/reports';
 import type { FriendChar } from '../src/shared/friends';
+import type { ChestSave } from './channels';
 import { cleanAlbum } from '../src/shared/cardAlbum';
 import type { CardId } from '../src/shared/data/cards';
 import { ADMIN_FEATURES, BUILTIN_ROLE_NAME, BUILTIN_ROLES, isAdminFeature, OWNER_ROLE, roleFeatures, type AdminFeature, type AdminRole, type AuditRow, type FeatureOverrides, type RoleDef, type ChatLogRow, type PlaySessionRow, type RoleRow, type SessionQuery, type SessionSort } from '../src/shared/admin';
@@ -199,6 +200,13 @@ export class Db {
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      -- Treasure chests per channel (key '<zone>:<ch>', state = ChestSave JSON, server/channels.ts): a restart keeps where they
+      -- stand and how long the opened ones still wait (docs/systems/chests-shrines.md).
+      CREATE TABLE IF NOT EXISTS chest_state (
+        key TEXT PRIMARY KEY,
+        state TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
       -- "มีอะไรใหม่" (docs/systems/news.md): update notes the players read. lines is a JSON array of strings; key makes a
@@ -538,6 +546,28 @@ export class Db {
   setSetting(key: string, value: string | null): void {
     if (value === null) this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
     else this.db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at').run(key, value, Date.now());
+  }
+
+  // ------------------------------------------------------------ treasure chests (server/channels.ts)
+
+  /** One channel's saved chests (undefined: none, or a row that can't be read; bad entries are dropped). */
+  chestState(key: string): ChestSave | undefined {
+    const r = this.db.prepare('SELECT state FROM chest_state WHERE key = ?').get(key) as { state: string } | undefined;
+    if (!r) return undefined;
+    try {
+      const o = JSON.parse(r.state) as ChestSave;
+      return {
+        gone: o.gone.filter(([id, at]) => typeof id === 'string' && Number.isFinite(at)),
+        spots: o.spots.filter(([id, s]) => typeof id === 'string' && Number.isFinite(s?.x) && Number.isFinite(s.z) && typeof s.opened === 'boolean'),
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  setChestState(key: string, state: ChestSave): void {
+    this.db.prepare('INSERT INTO chest_state (key, state, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at')
+      .run(key, JSON.stringify(state), Date.now());
   }
 
   // ------------------------------------------------------------ news (server/news.ts, tools/add-news.ts)
