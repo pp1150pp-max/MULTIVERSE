@@ -1,17 +1,111 @@
 import type { Game } from '../Game';
-import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, type AutoSkill } from '../../shared/sim/Player';
+import { AUTO_PX_PER_UNIT, AUTO_RANGE_MAX, AUTO_RANGE_MIN, cleanAutoSettings, lootPick, lootPots, type AutoSkill } from '../../shared/sim/Player';
+import { LOOT_CAT_NAME, LOOT_CATS, LOOT_LV_MAX, LOOT_TIER_ANY, type LootCat, type PickupDefaults } from '../../shared/autoTuning';
+import { RARITIES, RARITY_COLOR, RARITY_LABEL, type StoneKind } from '../../shared/types';
+import { CARD_IDS } from '../../shared/data/cards';
 import { MONSTERS } from '../../shared/data/monsters';
 import { currentBalance } from '../../shared/balance';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDER_NAME, AUTO_LOOT_ORDERS, AUTO_OUT_ACTION_NAME, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, AUTO_TARGET_NAME } from '../../shared/autoTuning';
-import { skillIcon } from '../icons';
+import { cardIcon, iconImg, potionIcon, skillIcon, stoneIcon } from '../icons';
 import { $, chkRow, syncPots } from './hudShared';
+
+/** The small paper icon of each pickup category: the picture of an item of that kind (owner 2026-11-28). */
+function catIcon(c: LootCat): string {
+  const stone = (k: StoneKind) => stoneIcon(k);
+  switch (c) {
+    case 'gear': return iconImg('item_helm');
+    case 'potion': return potionIcon('hp');
+    case 'stone': return stone('enhance');
+    case 'card': return CARD_IDS.length ? cardIcon(CARD_IDS[0]) : stone('enhance');
+    case 'key': return stone('key_bear');
+    case 'scroll': return stone('return_scroll');
+    case 'box': return stone('mystery_box');
+    case 'other': return stone('phoenix');
+  }
+}
 
 /** The Auto Play settings window (range, potions %, skills and their order, loot and target options). */
 export class AutoSettingsWindow {
   constructor(private readonly g: Game) {
     $('btn-auto-set').onclick = () => this.toggleAutoSettings();
     $('auto-set-close').onclick = () => this.toggleAutoSettings(false);
+    this.buildPickup();
     for (const id of ['aset-range', 'aset-hp', 'aset-mp', 'aset-loot', 'aset-lootorder', 'aset-others', 'aset-nohp', 'aset-nomp', 'aset-bagfull', 'aset-target', 'aset-skillsonly', 'aset-skillgap']) $(id).addEventListener('change', () => this.applyAutoSettings());
+  }
+
+  // ------------------------------------------------------------ pickup filter
+
+  /** Category ticks (with icons) and the gear detail box: rarity, best stat tier, level range. */
+  private buildPickup(): void {
+    const cats = $('aset-cats');
+    const gear = $('aset-gear');
+    const tiers = Array.from({ length: LOOT_TIER_ANY }, (_, i) => i + 1)
+      .map((n) => `<option value="${n}">${n === LOOT_TIER_ANY ? 'ทุกเทียร์' : `มี T${n} ขึ้นไป`}</option>`).join('');
+    gear.innerHTML =
+      chkRow('เกรด', RARITIES.map((r) => `<label style="color:${RARITY_COLOR[r]}"><input type="checkbox" data-rarity="${r}">${RARITY_LABEL[r]}</label>`).join('')) +
+      `<label class="aset-row">เทียร์ค่าสถานะ <select id="aset-gtier">${tiers}</select></label>` +
+      `<label class="aset-row">เลเวลอุปกรณ์ <span><input id="aset-glo" type="number" min="1" max="${LOOT_LV_MAX}" step="1"> – ` +
+      `<input id="aset-ghi" type="number" min="1" max="${LOOT_LV_MAX}" step="1"></span></label>` +
+      '<div class="hint">T1 ดีที่สุด · "มี T2 ขึ้นไป" = เก็บเมื่อมีค่าสถานะอย่างน้อย 1 บรรทัดเป็น T1 หรือ T2 · อุปกรณ์เก่าที่ไม่มีเทียร์เก็บเสมอ</div>';
+    $('aset-gear-more').onclick = () => {
+      const open = $('aset-gear').classList.toggle('hidden') === false;
+      $('aset-gear-more').textContent = open ? 'รายละเอียดอุปกรณ์ ▴' : 'รายละเอียดอุปกรณ์ ▾';
+    };
+    cats.addEventListener('change', () => this.sendPickup());
+    gear.addEventListener('change', () => this.sendPickup());
+  }
+
+  /** Put the player's pickup filter into the ticks. */
+  private fillPickup(): void {
+    const f = this.g.player.lootFilter;
+    const pick = lootPick(f);
+    // Built on first open, not in the constructor: the paper icon paths are only known once the HUD art is set up.
+    const box = $('aset-cats');
+    if (!box.querySelector('[data-cat]')) {
+      box.innerHTML = chkRow('', LOOT_CATS.map((c) =>
+        `<label class="aset-cat"><input type="checkbox" data-cat="${c}">${catIcon(c)}<span>${LOOT_CAT_NAME[c]}</span></label>`).join(''));
+    }
+    for (const cb of $('aset-cats').querySelectorAll<HTMLInputElement>('[data-cat]')) cb.checked = pick.cats.includes(cb.dataset.cat as LootCat);
+    for (const cb of $('aset-gear').querySelectorAll<HTMLInputElement>('[data-rarity]')) cb.checked = f.rarities.includes(cb.dataset.rarity as (typeof RARITIES)[number]);
+    $<HTMLSelectElement>('aset-gtier').value = String(pick.gearTier);
+    $<HTMLInputElement>('aset-glo').value = String(pick.gearLvMin);
+    $<HTMLInputElement>('aset-ghi').value = String(pick.gearLvMax);
+    // Without potions, the size ticks mean nothing.
+    $('aset-pots').classList.toggle('aset-off', !pick.cats.includes('potion'));
+    $('aset-gear-more').classList.toggle('aset-off', !pick.cats.includes('gear'));
+  }
+
+  /** Send the whole filter with the ticks as they are now (the server cleans it). */
+  private sendPickup(): void {
+    const f = this.g.player.lootFilter;
+    const gear = $('aset-gear');
+    const num = (id: string, def: number) => {
+      const v = Math.round(Number($<HTMLInputElement>(id).value));
+      return Number.isFinite(v) && v >= 1 ? Math.min(LOOT_LV_MAX, v) : def;
+    };
+    let lo = num('aset-glo', 1);
+    let hi = num('aset-ghi', LOOT_LV_MAX);
+    if (lo > hi) [lo, hi] = [hi, lo];
+    const pick: PickupDefaults = {
+      cats: LOOT_CATS.filter((c) => $('aset-cats').querySelector<HTMLInputElement>(`[data-cat="${c}"]`)?.checked),
+      gearTier: Number($<HTMLSelectElement>('aset-gtier').value) || LOOT_TIER_ANY,
+      gearLvMin: lo,
+      gearLvMax: hi,
+    };
+    const pots = lootPots(f);
+    this.g.backend.setLootFilter({
+      rarities: RARITIES.filter((r) => gear.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`)?.checked),
+      potions: pots.hp.length + pots.mp.length > 0,
+      pots,
+      pick,
+    });
+    this.fillPickup();
+    // The bag window shows the same rarity ticks.
+    const lf = $('loot-filter');
+    for (const r of RARITIES) {
+      const cb = lf.querySelector<HTMLInputElement>(`[data-rarity="${r}"]`);
+      if (cb) cb.checked = this.g.player.lootFilter.rarities.includes(r);
+    }
   }
 
   // ------------------------------------------------------------ auto settings
@@ -83,6 +177,7 @@ export class AutoSettingsWindow {
       skipOpts.append(label);
     }
     syncPots($('aset-pots'), p.lootFilter);
+    this.fillPickup();
     const box = $('aset-skills');
     box.innerHTML = '';
     s.order.forEach((slot, i) => {

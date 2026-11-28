@@ -3,6 +3,8 @@
 // the "balanced" loot order's distances, and server-wide switches that turn player options off.
 // Saved inside the balance tuning (`BalanceTuning.auto`), only what differs from the code.
 
+import { MAX_LEVEL } from './formulas';
+
 /** When Auto picks up drops. 'fight' = kill whatever attacks first; 'balanced' = the old way; 'loot' = drops first. */
 export type AutoLootOrder = 'fight' | 'balanced' | 'loot';
 export const AUTO_LOOT_ORDERS: readonly AutoLootOrder[] = ['fight', 'balanced', 'loot'];
@@ -29,6 +31,30 @@ export interface AutoDefaults {
   target: AutoTargetMode;
   /** Skills only: Auto never uses the basic attack and waits for a skill instead (owner 2026-11-22). */
   skillsOnly: boolean;
+}
+
+/**
+ * Pickup filter categories (owner 2026-11-28): which kinds of drops a player picks up, for Auto, walking over loot,
+ * and the pet. Gold is always picked up. Sorting a drop into one is Loot.lootCat.
+ */
+export type LootCat = 'card' | 'potion' | 'stone' | 'gear' | 'key' | 'scroll' | 'box' | 'other';
+export const LOOT_CATS: readonly LootCat[] = ['gear', 'potion', 'stone', 'card', 'key', 'scroll', 'box', 'other'];
+export const LOOT_CAT_NAME: Record<LootCat, string> = {
+  gear: 'อุปกรณ์', potion: 'ยา', stone: 'หินตีบวก', card: 'การ์ด', key: 'กุญแจ', scroll: 'ม้วน', box: 'กล่อง', other: 'อื่น ๆ',
+};
+/** Stat line tiers: 1 is the best. "Pick up gear with a line of tier X or better"; 5 = any gear. */
+export const LOOT_TIER_ANY = 5;
+/** Highest level the gear level range can be set to: the level cap. */
+export const LOOT_LV_MAX = MAX_LEVEL;
+/**
+ * The pickup filter of a player who hasn't set it themselves (LootFilter.cats missing), tunable on /admin.
+ * `gearTier` = pick up gear with a stat line of this tier or better (gear without tiers always passes).
+ */
+export interface PickupDefaults {
+  cats: LootCat[];
+  gearTier: number;
+  gearLvMin: number;
+  gearLvMax: number;
 }
 
 /** Server-wide switches: an option switched off can't be chosen, and Auto uses the safe one instead. */
@@ -87,6 +113,8 @@ export interface AutoConfig {
   summaryMin: number;
   /** The newest pieces of gear the summary keeps as pictures per Auto run (owner 2026-11-28); more = a "+N" cell. */
   summaryGear: number;
+  /** Pickup filter defaults for players who haven't set their own (owner 2026-11-28). */
+  pickup: PickupDefaults;
 }
 
 /** What is saved: only what differs from the code. */
@@ -107,6 +135,7 @@ export interface AutoTuning {
   summary?: boolean;
   summaryMin?: number;
   summaryGear?: number;
+  pickup?: Partial<PickupDefaults>;
 }
 
 export const AUTO_RANGE = {
@@ -136,8 +165,8 @@ export const AUTO_SUMMARY_NAME = 'หน้าสรุปผล Auto ตอน�
 /** Name of the "keep farming after a dropped connection" switch. */
 /** Name of the "only cast a skill that reaches" switch (key `aoeGuard`, kept from the mage-only version). */
 export const AUTO_AOE_GUARD_NAME = 'Auto กดสกิลเมื่อสกิลถึงเป้าเท่านั้น (ทุกอาชีพ)';
-/** Name of the "fetch stones / boxes / cards first" switch. */
-export const AUTO_PRIORITY_LOOT_NAME = 'Auto เก็บหิน กล่อง กุญแจ ม้วน การ์ด (ของที่ไม่มีตัวกรอง ไม่รวมทอง) ก่อนเสมอ แม้มอนตีอยู่';
+/** Name of the "fetch stones / boxes / cards first" switch (categories the player unticked are still skipped). */
+export const AUTO_PRIORITY_LOOT_NAME = 'Auto เก็บหิน กล่อง กุญแจ ม้วน การ์ด (ไม่รวมทอง ยา อุปกรณ์ · ข้ามหมวดที่ผู้เล่นติ๊กออก) ก่อนเสมอ แม้มอนตีอยู่';
 export const AUTO_OFFLINE_NAME = 'Auto ฟาร์มต่อหลังหลุดการเชื่อมต่อ (ไม่ใช่ Guest)';
 /** Name of the "no monster in the circle = wait at the Auto start spot" switch. */
 export const AUTO_HOME_WAIT_NAME = 'ไม่มีมอนในวง = กลับไปรอที่จุดกด Auto';
@@ -162,9 +191,33 @@ export function codeAuto(): AutoConfig {
     summary: true,
     summaryMin: 3,
     summaryGear: 100,
+    pickup: { cats: [...LOOT_CATS], gearTier: LOOT_TIER_ANY, gearLvMin: 1, gearLvMax: LOOT_LV_MAX },
   };
 }
 const CODE = codeAuto();
+const CODE_PICKUP: PickupDefaults = CODE.pickup;
+
+/** A whole number clamped to lo..hi, or `def` when it isn't a number. */
+const wholeIn = (v: unknown, def: number, lo: number, hi: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(lo, Math.min(hi, v))) : def;
+
+/**
+ * Any pickup settings (a save, a client, a tuning) made safe: known categories once each in LOOT_CATS order, tier 1..5,
+ * levels 1..LOOT_LV_MAX with min <= max. Missing fields take `def`.
+ */
+export function cleanPickup(raw: Partial<Record<keyof PickupDefaults, unknown>>, def: PickupDefaults = CODE_PICKUP): PickupDefaults {
+  const cats = Array.isArray(raw.cats) ? LOOT_CATS.filter((c) => (raw.cats as unknown[]).includes(c)) : [...def.cats];
+  let lo = wholeIn(raw.gearLvMin, def.gearLvMin, 1, LOOT_LV_MAX);
+  let hi = wholeIn(raw.gearLvMax, def.gearLvMax, 1, LOOT_LV_MAX);
+  if (lo > hi) [lo, hi] = [hi, lo];
+  return { cats, gearTier: wholeIn(raw.gearTier, def.gearTier, 1, LOOT_TIER_ANY), gearLvMin: lo, gearLvMax: hi };
+}
+
+/** Thai text of pickup defaults, for the audit log. */
+export function pickupText(p: PickupDefaults): string {
+  const cats = p.cats.length ? p.cats.map((c) => LOOT_CAT_NAME[c]).join(', ') : 'ไม่เก็บเลย';
+  return `${cats} · อุปกรณ์ ${p.gearTier === LOOT_TIER_ANY ? 'ทุกเทียร์' : `T${p.gearTier} ขึ้นไป`} · Lv.${p.gearLvMin}–${p.gearLvMax}`;
+}
 
 export function mergeAuto(t: AutoTuning | undefined): AutoConfig {
   const c = codeAuto();
@@ -177,6 +230,7 @@ export function mergeAuto(t: AutoTuning | undefined): AutoConfig {
   if (t.aoeGuard !== undefined) c.aoeGuard = t.aoeGuard;
   if (t.priorityLoot !== undefined) c.priorityLoot = t.priorityLoot;
   if (t.summary !== undefined) c.summary = t.summary;
+  if (t.pickup) c.pickup = cleanPickup(t.pickup, c.pickup);
   return c;
 }
 
@@ -215,7 +269,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuning | undefined } | { error: string } {
   if (x === undefined) return { tuning: undefined };
   if (!isObj(x)) return strict ? { error: 'ค่า Auto ไม่ถูกต้อง' } : { tuning: undefined };
-  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'homeWait', 'aoeGuard', 'priorityLoot', 'summary'];
+  const TOP = ['defaults', ...NUMS, 'allow', 'offline', 'homeWait', 'aoeGuard', 'priorityLoot', 'summary', 'pickup'];
   if (strict) {
     const extra = Object.keys(x).find((k) => !TOP.includes(k));
     if (extra) return { error: `Auto: ไม่รู้จักค่า "${extra.slice(0, 20)}"` };
@@ -301,6 +355,30 @@ export function checkAutoTuning(x: unknown, strict: boolean): { tuning: AutoTuni
       if (strict) return { error: `${AUTO_SUMMARY_NAME} ต้องเป็นเปิด/ปิด` };
     } else if (x.summary !== CODE.summary) out.summary = x.summary;
   }
+  if (x.pickup !== undefined) {
+    if (!isObj(x.pickup)) {
+      if (strict) return { error: 'ค่าเริ่มต้นตัวกรองเก็บของไม่ถูกต้อง' };
+    } else {
+      const g = x.pickup;
+      if (strict) {
+        const extra = Object.keys(g).find((k) => !['cats', 'gearTier', 'gearLvMin', 'gearLvMax'].includes(k));
+        if (extra) return { error: `ตัวกรองเก็บของ: ไม่รู้จัก "${extra.slice(0, 20)}"` };
+        if (g.cats !== undefined && (!Array.isArray(g.cats) || g.cats.some((c) => !(LOOT_CATS as unknown[]).includes(c)))) {
+          return { error: 'ตัวกรองเก็บของ: หมวดไม่ถูกต้อง' };
+        }
+        const intIn = (v: unknown, hi: number) => v === undefined || (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= hi);
+        if (!intIn(g.gearTier, LOOT_TIER_ANY)) return { error: `ตัวกรองเก็บของ: เทียร์ต้องเป็น 1–${LOOT_TIER_ANY}` };
+        if (!intIn(g.gearLvMin, LOOT_LV_MAX) || !intIn(g.gearLvMax, LOOT_LV_MAX)) return { error: `ตัวกรองเก็บของ: เลเวลต้องเป็น 1–${LOOT_LV_MAX}` };
+      }
+      const c = cleanPickup(g);
+      const p: Partial<PickupDefaults> = {};
+      if (c.cats.join() !== CODE_PICKUP.cats.join()) p.cats = c.cats;
+      if (c.gearTier !== CODE_PICKUP.gearTier) p.gearTier = c.gearTier;
+      if (c.gearLvMin !== CODE_PICKUP.gearLvMin) p.gearLvMin = c.gearLvMin;
+      if (c.gearLvMax !== CODE_PICKUP.gearLvMax) p.gearLvMax = c.gearLvMax;
+      if (Object.keys(p).length) out.pickup = p;
+    }
+  }
   return { tuning: Object.keys(out).length ? out : undefined };
 }
 
@@ -319,5 +397,6 @@ export function autoChanges(a: AutoConfig, b: AutoConfig): string[] {
   if (a.priorityLoot !== b.priorityLoot) out.push(`${AUTO_PRIORITY_LOOT_NAME} ${a.priorityLoot ? 'เปิด' : 'ปิด'} → ${b.priorityLoot ? 'เปิด' : 'ปิด'}`);
   if (a.aoeGuard !== b.aoeGuard) out.push(`${AUTO_AOE_GUARD_NAME} ${a.aoeGuard ? 'เปิด' : 'ปิด'} → ${b.aoeGuard ? 'เปิด' : 'ปิด'}`);
   if (a.summary !== b.summary) out.push(`${AUTO_SUMMARY_NAME} ${a.summary ? 'เปิด' : 'ปิด'} → ${b.summary ? 'เปิด' : 'ปิด'}`);
+  if (pickupText(a.pickup) !== pickupText(b.pickup)) out.push(`ค่าเริ่มต้นตัวกรองเก็บของ ${pickupText(a.pickup)} → ${pickupText(b.pickup)}`);
   return out;
 }

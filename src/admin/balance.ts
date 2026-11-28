@@ -20,6 +20,7 @@ import {
 } from '../shared/balance';
 import { DROP_GOLD_MULT, type MonsterDef } from '../shared/data/monsters';
 import {
+  LOOT_CAT_NAME, LOOT_CATS, LOOT_LV_MAX, LOOT_TIER_ANY,
   AUTO_ALLOW_NAME, AUTO_ALLOWS, AUTO_HOME_WAIT_NAME, AUTO_OFFLINE_NAME, AUTO_PRIORITY_LOOT_NAME, AUTO_SUMMARY_NAME, AUTO_AOE_GUARD_NAME, AUTO_DEFAULT_NAME, AUTO_LOOT_ORDERS, AUTO_NUM_NAME, AUTO_OUT_ACTIONS, AUTO_RANGE, AUTO_TARGET_MODES, autoDefaultValueName,
   type AutoAllow, type AutoDefaults,
 } from '../shared/autoTuning';
@@ -1233,6 +1234,25 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
       h('h3', {}, 'สวิตช์ทั้งเซิร์ฟ: ตัวเลือกที่ผู้เล่นเลือกได้'),
       h('div', { class: 'muted' }, 'สวิตช์ทั้งเซิร์ฟ (ติ๊กออก = ผู้เล่นเลือกไม่ได้ Auto ใช้แบบปลอดภัยแทน: เก็บของก่อน→สมดุล, ของคนอื่น→ของตัวเอง, ม้วน→หยุด Auto, ชนิดมอนที่ไม่ตี→ตีทุกชนิด)'),
       h('div', { class: 'row bal-line' }, ...AUTO_ALLOWS.map(allow)),
+      h('h3', {}, 'ตัวกรองเก็บของ: ค่าเริ่มต้นของผู้เล่น'),
+      h('div', { class: 'row bal-line' }, ...LOOT_CATS.map((c) =>
+        h('label', { title: 'ค่าในโค้ด: เก็บ' }, h('input', {
+          type: 'checkbox', checked: a.pickup.cats.includes(c),
+          onchange: (e: Event) => {
+            const on = (e.target as HTMLInputElement).checked;
+            a.pickup.cats = LOOT_CATS.filter((k) => (k === c ? on : a.pickup.cats.includes(k)));
+            refresh();
+          },
+        }), ` ${LOOT_CAT_NAME[c]}`))),
+      h('div', { class: 'row bal-line' },
+        h('label', { title: `ค่าในโค้ด: ทุกเทียร์` }, 'อุปกรณ์: เทียร์ ', h('select', {
+          onchange: (e: Event) => { a.pickup.gearTier = (e.target as HTMLSelectElement).selectedIndex + 1; refresh(); },
+        }, ...Array.from({ length: LOOT_TIER_ANY }, (_, i) => i + 1).map((n) =>
+          h('option', { selected: n === a.pickup.gearTier }, n === LOOT_TIER_ANY ? 'ทุกเทียร์' : `มี T${n} ขึ้นไป`)))),
+        h('label', {}, 'เลเวลต่ำสุด', numBox(() => a.pickup.gearLvMin, (n) => { a.pickup.gearLvMin = n; }, ca.pickup.gearLvMin, 1, LOOT_LV_MAX, 1, refresh)),
+        h('label', {}, 'เลเวลสูงสุด', numBox(() => a.pickup.gearLvMax, (n) => { a.pickup.gearLvMax = n; }, ca.pickup.gearLvMax, 1, LOOT_LV_MAX, 1, refresh)),
+      ),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-28: ใช้กับผู้เล่นที่ยังไม่เคยติ๊กตัวกรองเก็บของเองในหน้าต่างตั้งค่า Auto (มีผลทันที) · ใช้ทั้งตอน Auto เดินเก็บเอง และสัตว์เลี้ยงช่วยเก็บ · ของที่ไม่เก็บอยู่บนพื้นให้คนอื่นเก็บได้ · ทองเก็บเสมอ · เกรดอุปกรณ์และขนาดยาตั้งแยกโดยผู้เล่น (ค่าเริ่มต้นเก็บทั้งหมด) · เทียร์: T1 ดีสุด "มี T2 ขึ้นไป" = มีค่าสถานะอย่างน้อย 1 บรรทัดเป็น T1/T2 · เลเวลต่ำสุดมากกว่าสูงสุด = สลับให้เอง'),
       h('h3', {}, 'ฟาร์มต่อหลังหลุด · รอที่จุดกด · ระยะสกิล'),
       h('div', { class: 'row bal-line' },
         h('label', {}, h('input', { type: 'checkbox', checked: a.offline, onchange: (e: Event) => { a.offline = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_OFFLINE_NAME}`),
@@ -1250,7 +1270,7 @@ export async function renderBalance(view: HTMLElement, h: H, api: Api, onSaved: 
           ` ${AUTO_PRIORITY_LOOT_NAME}`),
         num('priorityDist', 1),
       ),
-      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-25: กล่องปริศนา หินทุกชนิด กุญแจ ม้วน และของชนิดใหม่ที่ไม่มีตัวกรองในกระเป๋า (เช่นการ์ด) Auto เดินไปเก็บก่อนทุกอย่าง แม้มอนกำลังตีและแม้ผู้เล่นตั้ง "ตีก่อน" · ยังอยู่ในวง Auto ต้องมีช่องว่าง และทำตามสวิตช์เก็บของคนอื่น · ทองกับไอเทม/ยาเก็บตามลำดับเดิม · ระยะ 0 = ทั้งวง Auto'),
+      h('div', { class: 'muted' }, 'เจ้าของ 2026-11-25: กล่องปริศนา หินทุกชนิด กุญแจ ม้วน และการ์ด และของชนิดใหม่ (ข้ามหมวดที่ผู้เล่นติ๊กออกในตัวกรองเก็บของ) Auto เดินไปเก็บก่อนทุกอย่าง แม้มอนกำลังตีและแม้ผู้เล่นตั้ง "ตีก่อน" · ยังอยู่ในวง Auto ต้องมีช่องว่าง และทำตามสวิตช์เก็บของคนอื่น · ทองกับไอเทม/ยาเก็บตามลำดับเดิม · ระยะ 0 = ทั้งวง Auto'),
       h('div', { class: 'row bal-line' },
         h('label', { title: 'ค่าในโค้ด: เปิด' }, h('input', { type: 'checkbox', checked: a.aoeGuard, onchange: (e: Event) => { a.aoeGuard = (e.target as HTMLInputElement).checked; refresh(); } }), ` ${AUTO_AOE_GUARD_NAME}`),
         num('aoeMargin', 0.1),

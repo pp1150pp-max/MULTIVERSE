@@ -35,6 +35,8 @@ import { classBalance, currentBalance, finishStats } from '../balance';
 import { CHARGE_SKILLS, chargeMax, skipsAttackRoot } from '../skillTuning';
 import { attackRootTime } from '../attackRootTuning';
 import { classPassiveOn } from '../classPassives';
+import { cleanPickup, LOOT_TIER_ANY, type PickupDefaults } from '../autoTuning';
+import { lootCat } from './Loot';
 import { AUTO_DEFAULT_KEYS, AUTO_LOOT_ORDERS, AUTO_OUT_ACTIONS, AUTO_TARGET_MODES, type AutoDefaults, type AutoLootOrder, type AutoOutAction, type AutoTargetMode } from '../autoTuning';
 import { MONSTERS } from '../data/monsters';
 import type { ShrineBuff } from '../mapSchema';
@@ -76,7 +78,14 @@ export type PotionSelect = Record<PotionKind, PotionSize>;
  * `pots` = which potion sizes to take, per kind. Saves from before it existed only have `potions`
  * (take all or none); `potions` is kept true while any size is picked so they still read sensibly.
  */
-export interface LootFilter { rarities: Rarity[]; potions: boolean; pots?: Record<PotionKind, PotionSize[]> }
+export interface LootFilter {
+  rarities: Rarity[]; potions: boolean; pots?: Record<PotionKind, PotionSize[]>;
+  /**
+   * Categories, gear tier and gear level range (owner 2026-11-28). Missing = the player never set them: the server's
+   * default applies (admin "ปรับสมดุล" → Auto Play), even after the owner changes it.
+   */
+  pick?: PickupDefaults;
+}
 export const DEFAULT_LOOT_FILTER: LootFilter = { rarities: [...RARITIES], potions: true, pots: { hp: [...POTION_SIZES], mp: [...POTION_SIZES] } };
 
 /** Potion sizes to pick up, filling in old saves (and anything a client sends) safely. */
@@ -85,6 +94,20 @@ export function lootPots(f: Partial<LootFilter> | undefined): Record<PotionKind,
   if (f?.pots && typeof f.pots === 'object') return { hp: clean(f.pots.hp), mp: clean(f.pots.mp) };
   const all = f?.potions !== false;
   return { hp: all ? [...POTION_SIZES] : [], mp: all ? [...POTION_SIZES] : [] };
+}
+
+/** Categories, gear tier and level range in effect: the player's own, else the server's default. */
+export function lootPick(f: Partial<LootFilter> | undefined): PickupDefaults {
+  const def = currentBalance().auto.pickup;
+  return f?.pick && typeof f.pick === 'object' ? cleanPickup(f.pick, def) : { ...def, cats: [...def.cats] };
+}
+
+/** Whether a piece of gear passes the gear detail filter: rarity, best stat line tier, level range. */
+export function gearPasses(item: Item, rarities: readonly Rarity[], pick: PickupDefaults): boolean {
+  if (!rarities.includes(item.rarity)) return false;
+  if (item.level < pick.gearLvMin || item.level > pick.gearLvMax) return false;
+  if (pick.gearTier >= LOOT_TIER_ANY || !item.lines?.length) return true;
+  return Math.min(...item.lines.map((l) => l.tier)) <= pick.gearTier;
 }
 
 /** The player's Auto Play options. `range` is in fixed pixels (AUTO_PX_PER_UNIT per world unit). */
@@ -658,7 +681,10 @@ export class Player extends Unit {
     this.unlocks = cleanUnlocks(data.unlocks);
     this.potSel = { hp: 's', mp: 's', ...data.potSel };
     this.lootFilter = data.lootFilter
-      ? { ...data.lootFilter, rarities: [...data.lootFilter.rarities], pots: lootPots(data.lootFilter) }
+      ? {
+        ...data.lootFilter, rarities: [...data.lootFilter.rarities], pots: lootPots(data.lootFilter),
+        pick: data.lootFilter.pick && typeof data.lootFilter.pick === 'object' ? cleanPickup(data.lootFilter.pick) : undefined,
+      }
       : { ...DEFAULT_LOOT_FILTER, rarities: [...RARITIES], pots: lootPots(DEFAULT_LOOT_FILTER) };
     this.autoSettings = cleanAutoSettings(data.autoSettings);
     this.buyback = Array.isArray(data.buyback)
@@ -974,12 +1000,18 @@ export class Player extends Unit {
     return tabAt(this.bagSlots, i);
   }
 
-  /** Whether the loot filter lets this player pick it up (gold always; a thrown-away item always). */
+  /**
+   * Whether the loot filter lets this player pick it up (gold always; a thrown-away item always). Used by Auto, walking
+   * over loot and the pet alike; anything filtered out stays on the ground for others.
+   */
   wantsLoot(kind: LootKind, dropped: boolean): boolean {
-    if (kind.type === 'gold' || dropped) return true;
+    const cat = lootCat(kind);
+    if (!cat || dropped) return true;
+    const pick = lootPick(this.lootFilter);
+    if (!pick.cats.includes(cat)) return false;
     if (kind.type === 'potion') return lootPots(this.lootFilter)[kind.pot].includes(kind.size);
-    if (kind.type === 'stone') return true;
-    return this.lootFilter.rarities.includes(kind.item.rarity);
+    if (kind.type === 'item') return gearPasses(kind.item, this.lootFilter.rarities, pick);
+    return true;
   }
 
   /** Whether there is bag room for it right now. */

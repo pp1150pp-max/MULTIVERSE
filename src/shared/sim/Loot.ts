@@ -1,6 +1,7 @@
 import type { Sim } from './Sim';
 import type { Player } from './Player';
-import type { Item, PotionKind, PotionSize, StoneKind } from '../types';
+import { BLACKSMITH_STONES, isBossKey, isBuffScroll, isCardStone, isQuestKey, type Item, type PotionKind, type PotionSize, type StoneKind } from '../types';
+import type { LootCat } from '../autoTuning';
 
 export type LootKind =
   | { type: 'gold'; amount: number }
@@ -10,10 +11,39 @@ export type LootKind =
   /** Blacksmith stones (boss drops, or a stack a player threw away). */
   | { type: 'stone'; stone: StoneKind; count: number };
 
+/** The pickup filter category of a drop (owner 2026-11-28); null for gold, which is always picked up. */
+export function lootCat(kind: LootKind): LootCat | null {
+  switch (kind.type) {
+    case 'gold':
+      return null;
+    case 'item':
+      return 'gear';
+    case 'potion':
+      return 'potion';
+    case 'stone':
+      return stoneCat(kind.stone);
+    default: {
+      const unsorted: never = kind;
+      return unsorted ? 'other' : null;
+    }
+  }
+}
+
+/** Which pickup category a stone-stack kind belongs to. */
+export function stoneCat(k: StoneKind): LootCat {
+  if (isCardStone(k)) return 'card';
+  if ((BLACKSMITH_STONES as StoneKind[]).includes(k)) return 'stone';
+  if (isBossKey(k) || isQuestKey(k)) return 'key';
+  if (k === 'return_scroll' || isBuffScroll(k)) return 'scroll';
+  if (k === 'mystery_box') return 'box';
+  return 'other';
+}
+
 /**
- * Drops Auto fetches first, even mid-fight and whatever the loot order (owner 2026-11-25): anything the loot filter has no
- * setting for (stones, the mystery box, keys, scrolls, and any new kind such as cards), but not gold (it drops from nearly every
+ * Drops Auto fetches first, even mid-fight and whatever the loot order (owner 2026-11-25): stones, the mystery box, keys,
+ * scrolls, cards and anything else stacked like a stone, but not gold (it drops from nearly every
  * monster). A new loot kind fails the typecheck here until it is sorted into one side (AutoConfig.priorityLoot switches it off).
+ * Categories the player unticked in the pickup filter are still skipped (autoMayTake → Player.wantsLoot).
  */
 export function isPriorityLoot(kind: LootKind): boolean {
   switch (kind.type) {
