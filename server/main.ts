@@ -20,6 +20,8 @@ import { GameWorld } from './world';
 import { bearer, HttpError, readJson, send, str } from './http';
 import { adminApi } from './admin';
 import { mapsPublicApi } from './admin-maps';
+import { landingPublicApi } from './landing';
+import { GAME_ORIGIN, LANDING_HOSTS } from '../src/shared/landing';
 import { applyMaps } from './maps-live';
 import { warmChestGround } from '../src/shared/chestSpots';
 import { ZONES } from '../src/shared/data/zones';
@@ -132,6 +134,8 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
 
   // The browser reads these before it loads pictures (src/client/mapSync.ts).
   if (mapsPublicApi(res, path, method, new URL(req.url ?? '/', 'http://localhost'), db)) return;
+  // The landing page (landing.html, docs/systems/landing.md): close beta window + latest notes, no login.
+  if (landingPublicApi(res, path, method, db)) return;
 
   if (await googleApi(req, res, path, { db, world, startSession })) return;
   if (await accountApi(req, res, path, { db, world, startSession, googleOn: () => googleLoginOn(db) && !!loadGoogleConfig(ROOT) })) return;
@@ -140,7 +144,7 @@ async function api(req: IncomingMessage, res: ServerResponse, path: string): Pro
   if (method === 'GET' && path === `/api${NET_ROUTE_PATH}`) return send(res, 200, { direct: world.directUrl() } satisfies NetRouteResponse);
 
   // May players pick English? (/admin switch, read before the title screen: src/client/i18n.ts, docs/systems/i18n.md)
-  if (method === 'GET' && path === `/api${LANG_CONFIG_PATH}`) return send(res, 200, { english: currentBalance().english } satisfies LangConfigResponse);
+  if (method === 'GET' && path === `/api${LANG_CONFIG_PATH}`) return send(res, 200, { english: currentBalance().english, loginLook: currentBalance().loginLook } satisfies LangConfigResponse);
 
   if (method === 'POST' && path === '/api/register') {
     const ip = clientIp(req);
@@ -332,14 +336,48 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, path: stri
 
 // ------------------------------------------------------------ server
 
-/** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy and /terms pages. */
-const PAGES = new Set(['/admin', '/privacy', '/terms']);
+/** Pages served without `.html`: the admin page (its data comes from /api/admin, which checks the role) and the public /privacy, /terms and /landing pages. */
+const PAGES = new Set(['/admin', '/privacy', '/terms', '/landing']);
+
+/** The request came in on the owner's main domain (LANDING_HOSTS), not the game's own (docs/systems/landing.md). */
+function onMainDomain(req: IncomingMessage): boolean {
+  const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
+  return LANDING_HOSTS.includes(host);
+}
+
+/**
+ * The main domain: "/" is the landing page (switch `apex` in /admin, off = the game), /landing goes to "/", and the
+ * game's own pages (the game, /admin, /privacy, /terms) go to the game's domain, so logins stay there. Files and /api
+ * stay (the page loads its pictures and reads /api/landing). True = answered.
+ */
+async function mainDomain(req: IncomingMessage, res: ServerResponse, path: string, search: string): Promise<boolean> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  const to = (loc: string, code = 302) => {
+    res.writeHead(code, { Location: loc, 'Cache-Control': 'no-store' });
+    res.end();
+    return true;
+  };
+  if (path === '/landing' || path === '/landing/' || path === '/landing.html') return to('/' + search);
+  if (path === '/') {
+    if (!db.landingConfig().apex) return to(GAME_ORIGIN + '/' + search);
+    await serveStatic(req, res, '/landing.html');
+    return true;
+  }
+  if (path === '/index.html' || path === '/admin/' || PAGES.has(path) || path === '/admin.html') return to(GAME_ORIGIN + path + search);
+  return false;
+}
 
 const server = createServer(async (req, res) => {
-  const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const path = url.pathname;
   try {
+    if (!path.startsWith('/api/') && onMainDomain(req) && (await mainDomain(req, res, path, url.search))) return;
     if (path.startsWith('/api/')) await api(req, res, path);
     else if ((req.method === 'GET' || req.method === 'HEAD') && PAGES.has(path)) await serveStatic(req, res, path + '.html');
+    else if (path === '/landing/') {
+      res.writeHead(301, { Location: '/landing' });
+      res.end();
+    }
     else if (path === '/admin/') {
       // The page loads its files by relative paths (Vite base './'), which only work from /admin.
       res.writeHead(301, { Location: '/admin' });

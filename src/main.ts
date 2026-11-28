@@ -10,6 +10,7 @@ import type { OnlineBackend } from './client/net/online';
 import { audioEngine } from './client/audio/engine';
 import { loadPublishedMaps } from './client/mapSync';
 import { checkLangAllowed, startTranslator } from './client/i18n';
+import { startLoginLook } from './client/loginLook';
 import { hudMockParam, runHudMock } from './client/hudMock';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -70,6 +71,7 @@ function revealLogoWhenLoaded(): void {
 async function boot(): Promise<void> {
   // English mode: translate the page before anything else is drawn (docs/systems/i18n.md).
   startTranslator();
+  startLoginLook();
   void checkLangAllowed(() => 'game' in window);
   // Papercraft art everywhere (maps, characters, NPCs, monsters, UI), set before anything loads.
   usePaperArt();

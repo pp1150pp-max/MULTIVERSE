@@ -189,4 +189,6 @@ export function fill(text: string, vars?: Record<string, string | number> | (str
 export const LANG_CONFIG_PATH = '/lang';
 export interface LangConfigResponse {
   english: boolean;
+  /** The /admin switch "หน้า login แบบใหม่" (Balance.loginLook), also needed before login (src/client/loginLook.ts). */
+  loginLook?: boolean;
 }

@@ -84,6 +84,8 @@ export const CODE_FLOOR_GATE_QUEST = true;
 export const CODE_SHOP_NO_EQUIP = true;
 /** Confirm boxes: Enter = the gold confirm button, Esc = cancel (owner 2026-11-28). Browser side only. */
 export const CODE_CONFIRM_KEYS = true;
+/** The title / login screens in the landing page's look (src/styles/login-new.css); off = the old look. */
+export const CODE_LOGIN_LOOK = true;
 /** Trying cosmetics on (cash shop, dress window) only in a town / safe area (owner 2026-11-25). Browser side only. */
 export const CODE_TRY_ON_TOWN_ONLY = true;
 /** Item links in chat: Ctrl+click an item to put a clickable [name] into a message (owner 2026-11-23: on). */
@@ -271,6 +273,8 @@ export interface Balance {
   shopNoEquip: boolean;
   /** Confirm boxes answer Enter (confirm) and Esc (cancel). Browser side only. */
   confirmKeys: boolean;
+  /** The title / login screens in the landing page's look; read before login from GET /api/lang. Browser side only. */
+  loginLook: boolean;
   /** Trying cosmetics on only in a town / safe area; stepping out takes the try-on off (src/client/cosLook.ts). Browser side only. */
   tryOnTownOnly: boolean;
   /** Item links in chat and the megaphone (src/shared/chatLinks.ts); off = the server sends no links, Ctrl+click does nothing. */
@@ -418,6 +422,8 @@ export interface BalanceTuning {
   shopNoEquip?: boolean;
   /** Enter/Esc in confirm boxes, when not the code's (on). */
   confirmKeys?: boolean;
+  /** New login look, when not the code's (on). */
+  loginLook?: boolean;
   /** Try-on in town only, when not the code's (on). */
   tryOnTownOnly?: boolean;
   /** Item links in chat, when not the code's (on). */
@@ -581,6 +587,7 @@ export function codeBalance(): Balance {
     gear: codeGear(),
     shopNoEquip: CODE_SHOP_NO_EQUIP,
     confirmKeys: CODE_CONFIRM_KEYS,
+    loginLook: CODE_LOGIN_LOOK,
     tryOnTownOnly: CODE_TRY_ON_TOWN_ONLY,
     chatLinks: CODE_CHAT_LINKS,
     hubChannels: CODE_HUB_CHANNELS,
@@ -696,6 +703,7 @@ export function mergeBalance(t: BalanceTuning): Balance {
   b.gear = mergeGear(t.gear);
   if (t.shopNoEquip !== undefined) b.shopNoEquip = t.shopNoEquip;
   if (t.confirmKeys !== undefined) b.confirmKeys = t.confirmKeys;
+  if (t.loginLook !== undefined) b.loginLook = t.loginLook;
   if (t.tryOnTownOnly !== undefined) b.tryOnTownOnly = t.tryOnTownOnly;
   if (t.chatLinks !== undefined) b.chatLinks = t.chatLinks;
   if (t.hubChannels !== undefined) b.hubChannels = t.hubChannels;
@@ -859,7 +867,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
   const bad = (error: string): Checked | null => (strict ? { error } : null);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return strict ? { error: 'ค่าสมดุลไม่ถูกต้อง' } : { tuning: {} };
   const o = v as Record<string, unknown>;
-  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade', 'bossShout'];
+  const TOP = ['classes', 'hpRegenMult', 'mpRegenMult', 'tierWeight', 'tierWidth', 'rangeFloor', 'bossTierBoost', 'statTiers', 'bandTiers', 'itemStatMult', 'affixWeight', 'cdrCap', 'critCap', 'moveCap', 'moveGrowth', 'monsters', 'mobPack', 'spawnRadius', 'farmSpots', 'expMult', 'potions', 'bossSwitchSec', 'mobGiveUpSec', 'mobReturnIgnoreHits', 'confirmKeys', 'loginLook', 'buffTotal', 'mobDropOnSafe', 'mobRoam', 'mobRoamReach', 'mapFromDb', 'buffDurSummons', 'forgeAuto', 'english', 'forge', 'walkHidden', 'floorGateOpen', 'floorGateQuest', 'floorGate', 'gear', 'shopNoEquip', 'tryOnTownOnly', 'chatLinks', 'hubChannels', 'bossWipeKeepHp', 'roomWipeSec', 'roomBossDelay', 'roomLoadWait', 'reviveGuard', 'reviveGuardSec', 'auto', 'waves', 'treasure', 'bagExpand', 'tutorial', 'npcTalk', 'skills', 'fxLayer', 'rigLook', 'attackRoot', 'dodge', 'audio', 'menuLayout', 'bossLootSpread', 'bossLootBase', 'bossLootK', 'bossLootMax', 'vipExpPct', 'vipDropPct', 'heartBlastRandom', 'heartBlastSpots', 'heartBlastMinDist', 'heartBlastReach', 'hudLayout', 'sets', 'moves', 'petLoot', 'sceneGrade', 'bossShout'];
   if (strict) {
     const extra = Object.keys(o).find((k) => !TOP.includes(k));
     if (extra) return { error: `ไม่รู้จักค่า "${extra.slice(0, 30)}"` };
@@ -1026,6 +1034,13 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     if (x === undefined) return null;
     if (typeof x !== 'boolean') return strict ? 'สวิตช์ Enter/Esc ในหน้าต่างยืนยันต้องเป็นเปิด/ปิด' : null;
     if (x !== CODE.confirmKeys) out.confirmKeys = x;
+    return null;
+  };
+  const loginLook = (): string | null => {
+    const x = o.loginLook;
+    if (x === undefined) return null;
+    if (typeof x !== 'boolean') return strict ? 'สวิตช์หน้า login แบบใหม่ต้องเป็นเปิด/ปิด' : null;
+    if (x !== CODE.loginLook) out.loginLook = x;
     return null;
   };
   const tryOnTown = (): string | null => {
@@ -1583,6 +1598,7 @@ export function checkBalance(v: unknown, strict: boolean): Checked {
     gear() ??
     shopNoEquip() ??
     confirmKeys() ??
+    loginLook() ??
     tryOnTown() ??
     chatLinks() ??
     hubChannels() ??
@@ -1757,6 +1773,7 @@ export function balanceChanges(before: BalanceTuning, after: BalanceTuning): str
   if (a.hubChannels !== b.hubChannels) out.push(`แบ่งห้องเมืองกลาง ${a.hubChannels ? 'เปิด' : 'ปิด'} → ${b.hubChannels ? 'เปิด' : 'ปิด'}`);
   if (a.tryOnTownOnly !== b.tryOnTownOnly) out.push(`ลองสวมของแต่งตัวได้เฉพาะในเมือง ${a.tryOnTownOnly ? 'เปิด' : 'ปิด'} → ${b.tryOnTownOnly ? 'เปิด' : 'ปิด'}`);
   if (a.shopNoEquip !== b.shopNoEquip) out.push(`ห้ามถอด/สวมขณะเปิดร้าน ${a.shopNoEquip ? 'เปิด' : 'ปิด'} → ${b.shopNoEquip ? 'เปิด' : 'ปิด'}`);
+  if (a.loginLook !== b.loginLook) out.push(`หน้า login แบบใหม่ ${a.loginLook ? 'เปิด' : 'ปิด'} → ${b.loginLook ? 'เปิด' : 'ปิด'}`);
   if (a.confirmKeys !== b.confirmKeys) out.push(`Enter/Esc ในหน้าต่างยืนยัน ${a.confirmKeys ? 'เปิด' : 'ปิด'} → ${b.confirmKeys ? 'เปิด' : 'ปิด'}`);
   if (a.chatLinks !== b.chatLinks) out.push(`ลิงก์ไอเทมในแชท ${a.chatLinks ? 'เปิด' : 'ปิด'} → ${b.chatLinks ? 'เปิด' : 'ปิด'}`);
   if (a.walkHidden !== b.walkHidden) out.push(`เดินต่อเมื่อสลับแท็บ ${a.walkHidden ? 'เปิด' : 'ปิด'} → ${b.walkHidden ? 'เปิด' : 'ปิด'}`);

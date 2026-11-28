@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>แบบ A · ภาพเต็มจอ — MULTIVERSE</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Kanit:wght@300;400;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg:#14121c; --panel:#1f1b2b; --line:#3a3350; --ink:#ece6d6; --muted:#a89f8c; --gold:#f2d58a; --gold2:#c99a3c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 'Kanit','Leelawadee UI',Tahoma,sans-serif; }
+  a { color:inherit; }
+  .wrap { width:min(1160px, 100% - 32px); margin-inline:auto; }
+  .A { --ASSET: ''; }
+  /* nav */
+  header { position:fixed; inset:0 0 auto; z-index:10; background:linear-gradient(#14121ce6,#14121c00); }
+  header .wrap { display:flex; align-items:center; gap:24px; height:68px; }
+  header img { height:22px; }
+  header nav { display:flex; gap:22px; margin-left:auto; font-size:15px; }
+  header nav a { text-decoration:none; color:var(--muted); }
+  header nav a:hover { color:var(--gold); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:10px; border:0; border-radius:10px; text-decoration:none; font-weight:600; cursor:pointer;
+    background:linear-gradient(#ffe7a6,#e0b45a 55%,#b98a32); color:#2a1a05; box-shadow:0 2px 0 #7a5718, 0 8px 24px #f2d58a33; transition:transform .15s, filter .15s; }
+  .btn:hover { transform:translateY(-2px); filter:brightness(1.06); }
+  .btn:active { transform:translateY(1px); }
+  .btn.sm { padding:8px 18px; font-size:15px; }
+  .btn.xl { padding:18px 56px; font-size:24px; border-radius:14px; }
+  /* hero */
+  .hero { position:relative; min-height:100svh; display:grid; place-items:center; text-align:center; overflow:hidden;
+    background:url(../../../public/assets/sprites/paper/ui/login_bg.png) center/cover; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 45%, #14121c55, #14121cdd 75%), linear-gradient(#0000 60%, var(--bg)); }
+  .hero-in { position:relative; z-index:1; padding:100px 16px 60px; }
+  .hero h1 { margin:0; }
+  .hero h1 img { width:min(640px, 88vw); display:block; margin:0 auto; filter:drop-shadow(0 4px 12px #000a); }
+  .tag { margin:14px 0 0; font-size:clamp(16px,2.2vw,20px); color:var(--ink); }
+  .tag b { color:var(--gold); font-weight:600; }
+  .cd { margin:36px auto 30px; }
+  .cd-label { font-size:18px; color:var(--gold); letter-spacing:.02em; }
+  .cd-row { display:flex; justify-content:center; gap:12px; margin-top:10px; }
+  .cd-cell { min-width:86px; padding:10px 8px 6px; background:#14121ccc; border:1px solid var(--line); border-radius:12px; }
+  .cd-cell b { display:block; font:800 44px/1 Cinzel, serif; color:#fff; font-variant-numeric:tabular-nums; }
+  .cd-cell span { font-size:13px; color:var(--muted); }
+  .cd[data-state=ended] .cd-row { display:none; }
+  .cd-dates { margin-top:12px; font-size:14px; color:var(--muted); }
+  .free { margin-top:16px; font-size:14px; color:var(--muted); }
+  /* sections */
+  section.s { padding:96px 0; }
+  .eyebrow { font:600 13px/1 Cinzel, serif; letter-spacing:.2em; color:var(--gold2); text-transform:uppercase; }
+  h2 { font-size:clamp(26px,3.4vw,38px); line-height:1.2; margin:8px 0 28px; }
+  .two { display:grid; grid-template-columns:1.6fr 1fr; gap:24px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; }
+  .news li { list-style:none; padding:14px 0; border-top:1px solid var(--line); }
+  .news ul { margin:0; padding:0; }
+  .news li:first-child { border-top:0; }
+  .news time { font-size:13px; color:var(--muted); }
+  .news h3 { margin:2px 0 0; font-size:17px; font-weight:600; }
+  .sample { font-size:12px; color:#e08a6a; }
+  .play h3 { margin:0 0 8px; font-size:20px; }
+  .play ul { margin:0 0 18px; padding-left:1.2em; color:var(--muted); }
+  .play .btn { width:100%; padding:14px; font-size:19px; }
+  .classes { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  .cls { position:relative; border-radius:14px; overflow:hidden; aspect-ratio:3/4; background:var(--panel) center/cover; border:1px solid var(--line); transition:transform .2s; }
+  .cls:hover { transform:translateY(-2px); }
+  .cls::after { content:''; position:absolute; inset:0; background:linear-gradient(#0000 45%, #14121cf2); }
+  .cls div { position:absolute; inset:auto 18px 18px; z-index:1; }
+  .cls h3 { margin:0; font-size:24px; color:var(--gold); }
+  .cls p { margin:4px 0 0; font-size:15px; color:var(--ink); }
+  .floors { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .floor { border-radius:14px; overflow:hidden; background:var(--panel); border:1px solid var(--line); }
+  .floor img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; }
+  .floor div { padding:18px 20px 22px; }
+  .floor h3 { margin:0 0 6px; font-size:22px; }
+  .floor ol { margin:0; padding-left:1.2em; color:var(--muted); }
+  .bosses { display:grid; grid-template-columns:repeat(8,1fr); gap:12px; }
+  .boss img { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:10px; border:1px solid var(--line); display:block; }
+  .boss b { display:block; font-size:14px; margin-top:6px; line-height:1.3; }
+  .boss span { font-size:12px; color:var(--muted); }
+  .sys { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .sys .card h3 { margin:0 0 4px; font-size:17px; color:var(--gold); }
+  .sys .card p { margin:0; font-size:14px; color:var(--muted); }
+  .close { text-align:center; padding:110px 16px; background:linear-gradient(#14121c, #14121cdd), url(../../../public/assets/sprites/paper/ui/loading/portal_2.webp) center/cover; }
+  footer { padding:28px 0 40px; color:var(--muted); font-size:14px; border-top:1px solid var(--line); }
+  footer .wrap { display:flex; gap:20px; flex-wrap:wrap; }
+  @media (max-width: 900px) {
+    header nav { display:none; }
+    .two, .floors { grid-template-columns:1fr; }
+    .classes { grid-template-columns:1fr; }
+    .cls { aspect-ratio:16/10; }
+    .bosses { grid-template-columns:repeat(4,1fr); }
+    .sys { grid-template-columns:1fr 1fr; }
+    .cd-cell { min-width:68px; } .cd-cell b { font-size:34px; }
+    .btn.xl { width:100%; padding:16px; }
+  }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <img src="../../../public/assets/sprites/paper/ui/logo.png" alt="MULTIVERSE" />
+  <nav><a href="#">หน้าแรก</a><a href="#news">ข่าวสาร</a><a href="#classes">อาชีพ</a><a href="#world">โลกของเกม</a><a href="#systems">ระบบเด่น</a></nav>
+  <a class="btn sm" href="https://play.multiverse-game.com">เข้าเกม</a>
+</div></header>
+
+<section class="hero"><div class="hero-in">
+  <h1><img src="../../../public/assets/sprites/paper/ui/logo.png" alt="MULTIVERSE" /></h1>
+  <p class="tag">เกม Action RPG ออนไลน์ ภาพกระดาษตัดแปะ · <b>เล่นฟรีบนเบราว์เซอร์</b> ทั้ง PC และมือถือ</p>
+  <div class="cd" data-cd>
+    <div class="cd-label" data-cd-label>Close Beta เริ่มในอีก</div>
+    <div class="cd-row">
+      <div class="cd-cell"><b data-cd-d>0</b><span>วัน</span></div>
+      <div class="cd-cell"><b data-cd-h>00</b><span>ชั่วโมง</span></div>
+      <div class="cd-cell"><b data-cd-m>00</b><span>นาที</span></div>
+      <div class="cd-cell"><b data-cd-s>00</b><span>วินาที</span></div>
+    </div>
+    <div class="cd-dates">28 พ.ย. – 5 ธ.ค. 2569 · 18:00 น. ทั้งสองวัน (เวลาไทย)</div>
+  </div>
+  <a class="btn xl" href="https://play.multiverse-game.com">เข้าเกม</a>
+  <div class="free">ไม่ต้องดาวน์โหลด · เล่นแบบ Guest ได้ทันที</div>
+</div></section>
+
+<section class="s" id="news"><div class="wrap">
+  <div class="eyebrow">News</div><h2>ข่าวและอัปเดตล่าสุด</h2>
+  <div class="two">
+    <div class="card news"><span class="sample">ตัวอย่างข่าว (จากชื่อ PR ล่าสุด) ของจริงจะดึงจากตารางข่าวในเกม</span><ul>
+      <li><time>28 พ.ย. 2569</time><h3>นักดาบได้พาสซีฟ "ฟันทะลวง" แดชฟันมอนที่พุ่งผ่าน</h3></li>
+      <li><time>28 พ.ย. 2569</time><h3>ปุ่มเรียงของในหน้าต่างร้าน ช่างตีเหล็ก คลัง และตลาด</h3></li>
+      <li><time>27 พ.ย. 2569</time><h3>กัปตันขาไม้ตะโกนเป็นข้อความเหนือหัว</h3></li>
+      <li><time>27 พ.ย. 2569</time><h3>หน้าสรุปผล Auto แบบใหม่ ตัวเลขใหญ่ + ตารางไอเทม</h3></li>
+    </ul></div>
+    <div class="card play">
+      <h3>เริ่มเล่นใน 1 นาที</h3>
+      <ul><li>เปิดในเบราว์เซอร์ ไม่ต้องลงโปรแกรม</li><li>เข้าแบบ Guest หรือเข้าสู่ระบบด้วย Google</li><li>เล่นกับเพื่อนใน server เดียวกัน</li></ul>
+      <a class="btn" href="https://play.multiverse-game.com">เข้าเกม</a>
+    </div>
+  </div>
+</div></section>
+
+<section class="s" id="classes"><div class="wrap">
+  <div class="eyebrow">Classes</div><h2>เลือก 1 ใน 3 อาชีพ</h2>
+  <div class="classes">
+    <a class="cls" href="#" style="background-image:url(../../../public/assets/sprites/paper/ui/loading/sword.webp)"><div><h3>นักดาบ</h3><p>ประชิดตัว ทนทาน พาสซีฟ "ฟันทะลวง" แดชผ่านมอนแล้วฟัน</p></div></a>
+    <a class="cls" href="#" style="background-image:url(../../../public/assets/sprites/paper/ui/loading/gunslinger.webp)"><div><h3>มือปืน</h3><p>ยิงระยะไกล วางกับระเบิด พาสซีฟ "ยิงแล้ววิ่ง"</p></div></a>
+    <a class="cls" href="#" style="background-image:url(../../../public/assets/sprites/paper/ui/loading/mage.webp)"><div><h3>เมจ</h3><p>เวทธาตุวงกว้าง พาสซีฟ "ก้าวมิติ" วาร์ปถึงปลายทางทันที</p></div></a>
+  </div>
+</div></section>
+
+<section class="s" id="world"><div class="wrap">
+  <div class="eyebrow">World</div><h2>สองชั้นของมิติ Lv 1–80</h2>
+  <div class="floors">
+    <div class="floor"><img src="../../../public/assets/sprites/paper/ui/loading/portal_1.webp" alt="" /><div><h3>ชั้น 1 · เมืองศูนย์กลางมิติ</h3><ol><li>ป่ามรกต Lv 1–10</li><li>หนองน้ำหมอก Lv 11–20</li><li>ดินแดนหิมะ Lv 21–30</li><li>เกาะภูเขาไฟ Lv 31–40</li></ol></div></div>
+    <div class="floor"><img src="../../../public/assets/sprites/paper/ui/loading/floor2_1.webp" alt="" /><div><h3>ชั้น 2 · ท่าเรือมิติ</h3><ol><li>หาดเรือแตก Lv 41–50</li><li>อ่าวลักลอบ Lv 51–60</li><li>สุสานเรือผี Lv 61–70</li><li>วังวนกลางทะเล Lv 71–80</li></ol></div></div>
+  </div>
+</div></section>
+
+<section class="s"><div class="wrap">
+  <div class="eyebrow">Bosses</div><h2>บอส 8 ตัว ใส่กุญแจเรียก ยิ่งใส่มาก ยิ่งโหด ยิ่งได้มาก</h2>
+  <div class="bosses">
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_forest_bear.webp" alt="" /><b>หมี</b><span>Lv 10</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_bog_witch.webp" alt="" /><b>แม่มดหนอง</b><span>Lv 20</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_yeti.webp" alt="" /><b>เยติ</b><span>Lv 30</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_volcano_heart.webp" alt="" /><b>หัวใจภูเขาไฟ</b><span>Lv 40</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_cannon_crab.webp" alt="" /><b>ปูยักษ์กระดองปืนใหญ่</b><span>Lv 50</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_pegleg_captain.webp" alt="" /><b>กัปตันขาไม้</b><span>Lv 60</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_ghost_captain.webp" alt="" /><b>กัปตันผีเรือคนตาย</b><span>Lv 70</span></div>
+    <div class="boss"><img src="../../../public/assets/sprites/paper/cards/card_art_kraken.webp" alt="" /><b>คราเคน</b><span>Lv 80</span></div>
+  </div>
+</div></section>
+
+<section class="s" id="systems"><div class="wrap">
+  <div class="eyebrow">Features</div><h2>ระบบเด่น</h2>
+  <div class="sys">
+    <div class="card"><h3>ปาร์ตี้ 3 คน</h3><p>ของดรอปแชร์ทั้งทีม EXP แบ่งให้คนในแมพ</p></div>
+    <div class="card"><h3>ธาตุ 5 ธาตุ</h3><p>น้ำ ไฟ พิษ สายฟ้า ลม ผสมกันเกิดปฏิกิริยา 10 แบบ</p></div>
+    <div class="card"><h3>ตีบวก + การ์ด</h3><p>ตีบวกอุปกรณ์ เจาะรู เสียบการ์ดจากมอนทุกตัว</p></div>
+    <div class="card"><h3>ตลาดและเทรด</h3><p>ฝากขายของ 48 ชม. หรือแลกกับเพื่อนตรง ๆ</p></div>
+    <div class="card"><h3>Auto Play</h3><p>ฟาร์มต่อบน server แม้เน็ตหลุด สรุปผลให้ดู</p></div>
+    <div class="card"><h3>Perfect Dodge</h3><p>แดชหลบจังหวะพอดี อมตะต่อ + ดาเมจแรงขึ้น</p></div>
+    <div class="card"><h3>เซ็ตไอเทมชั้น 2</h3><p>4 เซ็ต โบนัสที่ 3/6/9 ชิ้น</p></div>
+    <div class="card"><h3>ของแต่งตัว</h3><p>ปีก สัตว์ขี่ สัตว์เลี้ยง ออร่า เอฟเฟกต์แดช</p></div>
+  </div>
+</div></section>
+
+<section class="close">
+  <h2>พร้อมเข้ามิติหรือยัง</h2>
+  <a class="btn xl" href="https://play.multiverse-game.com">เข้าเกม</a>
+</section>
+<footer><div class="wrap"><span>© 2569 MULTIVERSE</span><a href="#">นโยบายความเป็นส่วนตัว</a><a href="#">ข้อตกลงการใช้งาน</a></div></footer>
+<script src="countdown.js"></script>
+</body>
+</html>
